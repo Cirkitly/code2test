@@ -1,0 +1,5 @@
+pocketflow
+openai
+faiss-cpu
+pyyaml
+pytest
