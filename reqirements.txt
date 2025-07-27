@@ -1,5 +1,12 @@
+# Core application and flow management
 pocketflow
+
+# LLM and AI services
 openai
+requests
+python-dotenv
 faiss-cpu
-pyyaml
-pytest
+numpy
+
+# Patching for the HealNode
+unidiff

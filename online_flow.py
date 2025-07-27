@@ -45,7 +45,11 @@ def create_online_flow():
     verify_node - "success" >> finalize_node
     verify_node - "failure" >> heal_node
     
-    heal_node >> generate_node
+    # --- UPDATED HEALING LOOP ---
+    # If the HealNode successfully applies a patch, it goes back to Verify.
+    # If it fails to create or apply a patch, it gives up and goes to Finalize.
+    heal_node - "patched" >> verify_node
+    heal_node - "unpatchable" >> finalize_node
 
     online_flow = AsyncFlow(start=load_context_node)
     return online_flow

@@ -39,14 +39,20 @@ class GenerateSummariesNode(AsyncParallelBatchNode):
     for each "code unit" (e.g., function, class) within them. This runs in parallel
     for maximum speed.
     """
+    concurrency = 5
+
     async def prep_async(self, shared):
         source_files = shared["project_analysis"]["source_files"]
         
+        # --- FIX: Filter out __init__.py files from being summarized ---
+        files_to_summarize = [f for f in source_files if not f.endswith('__init__.py')]
+        
         all_units = []
-        for file_path in source_files:
+        for file_path in files_to_summarize:
             all_units.extend(extract_code_units(file_path))
             
-        print(f"Found {len(all_units)} code units to summarize across all files.")
+        print(f"Found {len(all_units)} code units to summarize (excluding __init__.py files).")
+        print(f"Running summarization with a concurrency limit of {self.concurrency} to avoid rate limiting.")
         return all_units
 
     async def exec_async(self, code_unit):
@@ -74,17 +80,21 @@ Your task is to provide a concise, natural language summary that includes:
         return code_unit
 
     async def post_async(self, shared, prep_res, exec_res_list):
-        shared["code_summaries"] = exec_res_list
-        print(f"Generated summaries for {len(exec_res_list)} code units.")
+        successful_summaries = [res for res in exec_res_list if isinstance(res, dict) and 'summary' in res]
+        shared["code_summaries"] = successful_summaries
+        print(f"Generated summaries for {len(successful_summaries)} out of {len(exec_res_list)} code units.")
 
 
 class BuildKnowledgeGraphNode(AsyncParallelBatchNode):
     """
     Embeds all generated code summaries and adds them to the knowledge graph (vector database).
     """
+    concurrency = 10
+    
     async def prep_async(self, shared):
-        embedding_dim = 1024  # For mxbai-embed-large
+        embedding_dim = 1024
         initialize_index(dimension=embedding_dim)
+        print(f"Building knowledge graph with a concurrency limit of {self.concurrency}.")
         return shared["code_summaries"]
     
     async def exec_async(self, code_summary):
@@ -93,7 +103,6 @@ class BuildKnowledgeGraphNode(AsyncParallelBatchNode):
 
     async def post_async(self, shared, prep_res, exec_res_list):
         print(f"Knowledge Graph built successfully with {len(exec_res_list)} entries.")
-        # FIX: Also store the project_analysis data in the file to be saved.
         kg_data = get_knowledge_graph_data_for_saving()
-        kg_data["project_analysis"] = shared.get("project_analysis", {})  # Add project analysis
+        kg_data["project_analysis"] = shared.get("project_analysis", {})
         shared["knowledge_graph_data"] = kg_data
