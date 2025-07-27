@@ -4,6 +4,8 @@ import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
+# --- ADDED IMPORT ---
+import tempfile
 
 load_dotenv()
 
@@ -62,14 +64,23 @@ async def main():
             return
 
         print("\n--- Starting Phase 2: Online Test Generation ---")
-        online_flow = create_online_flow()
-        # FIX: Pass the repo_path and KG path as params. The flow handles loading.
-        online_flow.set_params({
-            "repo_path": args.repo_path,
-            "knowledge_graph_path": KG_FILE_PATH,
-            "project_analysis": shared.get("project_analysis", {}) # Pass analysis data
-        })
-        await online_flow.run_async(shared)
+        
+        # --- CHANGE: CREATE THE PERSISTENT SANDBOX ---
+        # The `with` block ensures this directory is cleaned up automatically
+        # only after the entire online flow (including all healing loops) is complete.
+        with tempfile.TemporaryDirectory() as sandbox_path:
+            print(f"Created persistent sandbox for this run at: {sandbox_path}")
+            
+            online_flow = create_online_flow()
+            online_flow.set_params({
+                "repo_path": args.repo_path,
+                "knowledge_graph_path": KG_FILE_PATH,
+                "sandbox_path": sandbox_path  # Pass the path to the flow
+            })
+            
+            # The run is now inside the `with` block
+            await online_flow.run_async(shared)
+            
         print("--- Online Generation Complete ---")
 
 if __name__ == "__main__":
