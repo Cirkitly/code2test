@@ -207,3 +207,22 @@ graph TD
 5. **Extensibility**: Plugin architecture for different languages and test frameworks
 
 This architecture is much more suitable for production use and can handle enterprise-scale codebases while maintaining the core AI-driven test generation capabilities.
+
+
+## **Current Architecture: Code-Based Generation**
+
+**What we're doing:**
+- Analyzing existing code structure, dependencies, and behavior
+- Generating tests that verify "what the code currently does"
+- Creating **characterization tests** and **regression tests**
+
+**Pros:**
+- Works with legacy codebases that have no specs
+- Captures actual implementation behavior
+- Good for preventing regressions
+
+**Cons:**
+- Tests the implementation, not the intent
+- Can perpetuate bugs (if code is wrong, tests will be wrong too)
+- Doesn't catch missing features
+- Limited to current code paths
