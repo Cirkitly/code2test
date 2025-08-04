@@ -1,6 +1,6 @@
 from pocketflow import AsyncFlow, Node
-from nodes.generation_nodes import PlanTestsNode, GenerateSingleTestNode
-from nodes.verification_nodes import VerifySingleTestNode
+from nodes.generation_nodes import PlanTestsNode, GenerateSingleTestNode, HealNode
+from nodes.verification_nodes import VerifySingleTestNode, FinalizeAndOrganizeNode
 import json
 
 class LoadContextNode(Node):
@@ -48,17 +48,28 @@ def create_planning_flow():
 
 def create_single_test_execution_flow():
     """
-    --- PHASE 1 NEW FLOW ---
-    Creates the workflow for generating and verifying a single test case.
-    In Phase 2, this flow will be expanded to include the healing loop.
+    --- PHASE 2 EVOLUTION ---
+    Creates the workflow for generating, verifying, AND HEALING a single test case.
+    This flow now contains the core autonomous `Verify -> Heal -> Verify` loop.
     """
     generate_node = GenerateSingleTestNode()
     verify_node = VerifySingleTestNode()
+    heal_node = HealNode(max_retries=1) # Give the LLM one shot to generate a valid patch format
 
+    # Define the main execution path
     generate_node >> verify_node
+    
+    # --- The Healing Loop ---
+    # If verification fails, engage the healing agent.
+    verify_node - "failure" >> heal_node
+    
+    # If the healing agent applies a patch, loop back to verification.
+    heal_node - "patched" >> verify_node
 
-    # In Phase 2, the 'failure' branch from verify_node will go to a HealNode.
-    # For now, failures are handled by the main.py orchestration loop.
-
+    # The flow will end naturally if:
+    # 1. verify_node returns "success".
+    # 2. heal_node returns "unpatchable".
+    # The main.py orchestrator will then inspect the final status.
+    
     execution_flow = AsyncFlow(start=generate_node)
     return execution_flow

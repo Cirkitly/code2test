@@ -16,6 +16,7 @@ from nodes.verification_nodes import FinalizeAndOrganizeNode
 
 KG_FILE_PATH = "knowledge_graph.json"
 STATE_FILE_PATH = "test_execution_state.yaml"
+MAX_HEAL_ATTEMPTS = 2 # Allow the agent to try fixing a test twice before giving up
 
 def validate_environment():
     print("Validating environment configuration...")
@@ -46,7 +47,6 @@ async def main():
     parser.add_argument("--run-phase", choices=['offline', 'online'], required=True, help="Which phase to run.")
     args = parser.parse_args()
 
-    # The shared dictionary now holds all state across the entire run.
     shared = {
         "repo_path": args.repo_path,
         "source_files_content": {},
@@ -77,7 +77,6 @@ async def main():
         with tempfile.TemporaryDirectory() as sandbox_path:
             print(f"Created persistent sandbox for this run at: {sandbox_path}")
 
-            # --- State Management: Load existing state or create a new plan ---
             if os.path.exists(STATE_FILE_PATH):
                 print(f"Found existing state file at '{STATE_FILE_PATH}'. Resuming...")
                 with open(STATE_FILE_PATH, 'r', encoding='utf-8') as f:
@@ -97,7 +96,6 @@ async def main():
             total_cases = len(test_cases)
             print(f"Loaded {total_cases} test cases to process.")
 
-            # --- Orchestration Loop: Process each test case ---
             for i, test_case in enumerate(test_cases):
                 print("-" * 50)
                 print(f"Processing case {i+1}/{total_cases}: {test_case['id']} (Priority: {test_case.get('priority', 'N/A')})")
@@ -105,44 +103,52 @@ async def main():
                 if test_case.get("status") == "PASSED":
                     print("Status is already PASSED. Skipping.")
                     continue
+                
+                # --- PHASE 2.1 ADDITION: HEALING ATTEMPT LOOP ---
+                heal_attempts = test_case.get("heal_attempts", 0)
+                is_passed = False
 
-                shared["current_test_case"] = test_case
+                while heal_attempts < MAX_HEAL_ATTEMPTS:
+                    shared["current_test_case"] = test_case
+                    
+                    execution_flow = create_single_test_execution_flow()
+                    execution_flow.set_params({
+                        "repo_path": args.repo_path,
+                        "sandbox_path": sandbox_path
+                    })
 
-                execution_flow = create_single_test_execution_flow()
-                execution_flow.set_params({
-                    "repo_path": args.repo_path,
-                    "sandbox_path": sandbox_path
-                })
+                    if "project_analysis" not in shared:
+                        load_context_node = LoadContextNode()
+                        load_context_node.set_params({"knowledge_graph_path": KG_FILE_PATH})
+                        load_context_node.run(shared)
 
-                # The execution flow needs access to the project analysis data loaded earlier
-                if "project_analysis" not in shared:
-                    load_context_node = LoadContextNode()
-                    load_context_node.set_params({"knowledge_graph_path": KG_FILE_PATH})
-                    load_context_node.run(shared)
+                    await execution_flow.run_async(shared)
+                    
+                    result = shared.get("current_test_case_result", {})
+                    is_passed = result.get("passed", False)
+                    
+                    if is_passed:
+                        test_case["status"] = "PASSED"
+                        break # Exit the healing loop on success
+                    else:
+                        heal_attempts += 1
+                        test_case["heal_attempts"] = heal_attempts
+                        test_case["last_error"] = result.get("stderr", "Unknown error")
+                        print(f"Heal attempt {heal_attempts}/{MAX_HEAL_ATTEMPTS} failed. Retrying if possible.")
+                
+                if not is_passed:
+                    print(f"Max heal attempts reached for {test_case['id']}. Marking as FAILED.")
+                    test_case["status"] = "FAILED_UNFIXABLE"
+                # --- END OF HEALING LOOP ---
 
-
-                await execution_flow.run_async(shared)
-
-                # Update the test case status based on the result from the shared dict
-                result = shared.get("current_test_case_result", {})
-                if result.get("passed"):
-                    test_case["status"] = "PASSED"
-                else:
-                    test_case["status"] = "FAILED"
-                    # In phase 2, we can add more detail like the error message
-                    test_case["last_error"] = result.get("stderr", "Unknown error")
-
-                # Save state after each test case
                 with open(STATE_FILE_PATH, 'w', encoding='utf-8') as f:
                     yaml.dump(test_plan, f, indent=2, default_flow_style=False, sort_keys=False)
                 print(f"Saved progress to {STATE_FILE_PATH}. Current Status: {test_case['status']}")
 
             print("\n--- All test cases processed. Finalizing... ---")
-
-            # Final step: write all generated files to disk
+            
             finalize_node = FinalizeAndOrganizeNode()
             finalize_node.set_params({"repo_path": args.repo_path})
-            # Pass the final shared state to the node for finalization
             finalize_node.run(shared)
 
         print("--- Online Generation Complete ---")

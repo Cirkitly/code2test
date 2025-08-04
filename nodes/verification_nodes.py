@@ -37,7 +37,7 @@ class VerifySingleTestNode(Node):
         files_to_write = {}
 
         if not source_files_content:
-            print("First verification run: Loading source files from disk into memory...")
+            print("First verification run: Loading source files and project configs from disk into memory...")
             project_analysis = prep_res.get("project_analysis", {})
             source_paths = project_analysis.get("source_files", [])
             for path_str in source_paths:
@@ -47,9 +47,14 @@ class VerifySingleTestNode(Node):
                         source_files_content[relative_path] = f.read()
                 except (FileNotFoundError, ValueError) as e:
                     print(f"Warning: Could not process source file {path_str}: {e}")
-            
-            # The logic to copy individual config files is no longer needed here,
-            # as the sandbox_executor will perform a full clone on first run.
+
+            config_files_to_check = ["pyproject.toml", "setup.py"]
+            for config_file in config_files_to_check:
+                config_path = Path(repo_path) / config_file
+                if config_path.exists():
+                    print(f"Found project config file: {config_file}. Adding to sandbox.")
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        source_files_content[config_file] = f.read()
 
         files_to_write.update(source_files_content)
         files_to_write.update(generated_files)
@@ -58,8 +63,6 @@ class VerifySingleTestNode(Node):
 
         print(f"Writing {len(files_to_write)} in-memory files to sandbox and running command: '{test_command}'")
         
-        # --- CRITICAL FIX ---
-        # Pass the repo_path to the executor so it can clone the project on the first run.
         result = run_tests_in_sandbox(files_to_write, test_command, sandbox_path, repo_path)
 
         result["source_files_content"] = source_files_content
@@ -80,6 +83,10 @@ class VerifySingleTestNode(Node):
             return "success"
         else:
             print(f"❌ FAILED: {exec_res['test_case_id']}")
+            # --- PHASE 2 CHANGE ---
+            # Store the detailed failure context for the HealNode
+            print("Capturing context for the healing agent.")
+            shared["failure_context"] = exec_res
             return "failure"
 
 
