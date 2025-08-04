@@ -1,33 +1,38 @@
 from pocketflow import Node
 from utils.sandbox_executor import run_tests_in_sandbox
 from pathlib import Path
+import os
 
-class VerifyTestsNode(Node):
+class VerifySingleTestNode(Node):
     """
-    Runs the full suite of generated tests in a secure, isolated sandbox
-    environment and checks the results. This node also manages the in-memory
-    state of all source and test files for the healing loop.
+    --- PHASE 1 NEW NODE ---
+    Runs a single, specific test case in the secure sandbox environment.
     """
     def prep(self, shared):
-        # --- CHANGE: GET THE PERSISTENT SANDBOX PATH ---
         return {
-            "project_analysis": shared.get("project_analysis", {}),
+            "test_case": shared.get("current_test_case", {}),
             "repo_path": shared.get("repo_path"),
             "generated_files": shared.get("generated_files", {}),
             "source_files_content": shared.get("source_files_content", {}),
-            "sandbox_path": self.params.get("sandbox_path") # Get from params
+            "sandbox_path": self.params.get("sandbox_path"),
+            "project_analysis": shared.get("project_analysis", {})
         }
 
     def exec(self, prep_res):
-        print("\n--- Verifying test suite in sandboxed environment ---")
-        
+        test_case = prep_res.get("test_case")
+        if not test_case:
+            return {"passed": False, "stdout": "", "stderr": "VerifySingleTestNode was run without a current_test_case."}
+
+        test_id = test_case.get("id")
+        print(f"\n--- Verifying single test case: {test_id} ---")
+
         repo_path = prep_res.get("repo_path")
         generated_files = prep_res.get("generated_files", {})
         source_files_content = prep_res.get("source_files_content", {})
         sandbox_path = prep_res.get("sandbox_path")
 
         if not sandbox_path:
-            raise ValueError("VerifyTestsNode requires a 'sandbox_path' in its parameters.")
+            raise ValueError("VerifySingleTestNode requires a 'sandbox_path' in its parameters.")
 
         files_to_write = {}
 
@@ -42,58 +47,75 @@ class VerifyTestsNode(Node):
                         source_files_content[relative_path] = f.read()
                 except (FileNotFoundError, ValueError) as e:
                     print(f"Warning: Could not process source file {path_str}: {e}")
-        else:
-            print("Subsequent verification run: Using in-memory source files (may include patches).")
+            
+            # The logic to copy individual config files is no longer needed here,
+            # as the sandbox_executor will perform a full clone on first run.
 
         files_to_write.update(source_files_content)
         files_to_write.update(generated_files)
 
-        if not generated_files:
-            print("Warning: No test files were generated to verify. Marking as successful.")
-            return {"passed": True, "stdout": "No tests to run.", "stderr": "", "source_files_content": {}}
+        test_command = f"pytest -k {test_id}"
 
-        print(f"Writing {len(files_to_write)} files to sandbox for testing...")
-        test_command = "pytest"
+        print(f"Writing {len(files_to_write)} in-memory files to sandbox and running command: '{test_command}'")
         
-        # --- CHANGE: PASS THE SANDBOX PATH TO THE EXECUTOR ---
-        result = run_tests_in_sandbox(files_to_write, test_command, sandbox_path)
-        
+        # --- CRITICAL FIX ---
+        # Pass the repo_path to the executor so it can clone the project on the first run.
+        result = run_tests_in_sandbox(files_to_write, test_command, sandbox_path, repo_path)
+
         result["source_files_content"] = source_files_content
+        result["test_case_id"] = test_id
         return result
 
     def post(self, shared, prep_res, exec_res):
         shared["source_files_content"] = exec_res["source_files_content"]
-        
+
+        shared["current_test_case_result"] = {
+            "passed": exec_res["passed"],
+            "stdout": exec_res.get("stdout", ""),
+            "stderr": exec_res.get("stderr", "")
+        }
+
         if exec_res["passed"]:
-            print("✅ Verification successful! All tests passed.")
-            shared["final_result"] = exec_res["stdout"]
-            shared["generated_files"].update(shared["source_files_content"])
+            print(f"✅ PASSED: {exec_res['test_case_id']}")
             return "success"
         else:
-            print("❌ Verification failed. Capturing context for the healing agent.")
-            print("\n--- SANDBOX STDOUT ---")
-            print(exec_res.get("stdout", "No STDOUT captured."))
-            print("--- SANDBOX STDERR ---")
-            print(exec_res.get("stderr", "No STDERR captured."))
-            print("----------------------\n")
-            
-            shared["failure_context"] = exec_res
+            print(f"❌ FAILED: {exec_res['test_case_id']}")
             return "failure"
 
+
 class FinalizeAndOrganizeNode(Node):
-    # ... (No changes in this class)
+    """
+    This node now runs at the very end of the entire process to write all
+    successfully generated and verified files to disk.
+    """
     def prep(self, shared):
         return {
             "repo_path": shared.get("repo_path"),
             "files_to_write": shared.get("generated_files", {}),
-            "final_result_message": shared.get("final_result", "Flow completed without a final result message.")
+            "final_result_message": shared.get("final_result", "Flow completed.")
         }
+
     def exec(self, prep_res):
-        print("\n--- Finalizing and organizing the project files ---")
+        print("\n--- Finalizing and writing all generated files to disk ---")
         repo_path = prep_res.get("repo_path")
         files_to_write = prep_res.get("files_to_write", {})
+
         if not repo_path or not files_to_write:
-            return "Nothing to finalize."
+            return "Nothing to finalize. No files were generated."
+
+        init_files_to_add = set()
+        for path_str in files_to_write.keys():
+            p = Path(path_str).parent
+            while p != Path('.') and 'tests' in p.parts:
+                init_file = p / "__init__.py"
+                init_files_to_add.add(str(init_file))
+                if p.name == 'tests': break
+                p = p.parent
+        for init_file in init_files_to_add:
+            if init_file not in files_to_write:
+                files_to_write[init_file] = "# Auto-generated by AI Software Foundry\n"
+
+        print(f"Writing {len(files_to_write)} total files...")
         for relative_path_str, content in files_to_write.items():
             destination_path = Path(repo_path) / relative_path_str
             try:
@@ -104,6 +126,21 @@ class FinalizeAndOrganizeNode(Node):
             except Exception as e:
                 print(f"  - FAILED to write file to {destination_path}: {e}")
         return prep_res.get("final_result_message")
+
     def post(self, shared, prep_res, exec_res):
         shared["final_result"] = exec_res
         print(f"\n🎉 Flow Complete. Final Status:\n{exec_res}")
+
+
+# ==================================================================
+# The node below is now considered LEGACY and is not used by the
+# new Phase 1 orchestration logic.
+# ==================================================================
+
+class VerifyTestsNode(Node):
+    """
+    [LEGACY] Runs the full suite of generated tests.
+    """
+    def prep(self, shared): return {}
+    def exec(self, prep_res): return {"passed": True, "source_files_content": {}}
+    def post(self, shared, prep_res, exec_res): return "success"

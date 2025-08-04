@@ -9,3 +9,4 @@ llm_cache.json
 .ipynb_checkpoints/
 # Ignore virtual environment directories
 knowledge_graph.json
+test_execution_state.yaml
