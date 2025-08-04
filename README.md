@@ -1,61 +1,197 @@
-# The AI Software Foundry
+# code2test
 
-An autonomous software engineering platform that continuously analyzes, tests, and improves your codebase. It acts as an integrated AI team member, ensuring code quality and reliability across the entire development lifecycle.
+## **Core Philosophy: "Pragmatic Intelligence with Zero Waste"**
 
-## Features
+This architecture combines:
+- **Specification-driven generation** (tests what SHOULD happen)
+- **Code-aware validation** (understands what DOES happen)
+- **Incremental healing** (fixes only what's broken)
+- **Tool orchestration** (leverages existing solutions)
+- **Fact-based generation** (zero hallucination)
 
--   **Continuous Integration & Learning**: Hooks directly into your Git repository, learning from every commit and keeping its understanding of your code perpetually up-to-date.
--   **Scales to Any Size**: Built on a Retrieval-Augmented Generation (RAG) and micro-agent architecture, it handles million-line codebases with ease.
--   **Intelligent Impact Analysis**: When a change is made, it precisely identifies the affected parts of the system and intelligently scopes its work, saving massive amounts of time and compute.
--   **Autonomous Generate-Verify-Heal Loop**: It doesn't just write code; it compiles it, runs it in a secure sandbox, analyzes failures, and autonomously fixes bugs in either the tests or the source code itself.
--   **Multi-Agent Specialization**: Employs a team of specialized AI agents for testing, debugging, refactoring, and documentation to ensure expert-level quality at every step.
--   **Seamless SDLC Integration**: Interacts with developers through GitHub pull requests, Slack notifications, and a powerful CLI.
+---
 
-## How It Works: The Foundry Lifecycle
-
-The Foundry operates as a collection of persistent, communicating services that integrate directly into your development workflow.
+## **System Architecture**
 
 ```mermaid
 graph TD
-    subgraph Interfaces
+    %% === STYLES ===
+    classDef input fill:#e8f5e8,stroke:#4caf50,stroke-width:3px;
+    classDef intelligent fill:#e3f2fd,stroke:#2196f3,stroke-width:3px;
+    classDef existing fill:#fff3e0,stroke:#ff9800,stroke-width:2px;
+    classDef novel fill:#f3e5f5,stroke:#9c27b0,stroke-width:3px;
+    classDef healing fill:#ffebee,stroke:#f44336,stroke-width:2px;
+    classDef output fill:#e0f2f1,stroke:#009688,stroke-width:3px;
+    classDef state fill:#fce4ec,stroke:#e91e63,stroke-width:2px;
+
+    %% === INPUT LAYER ===
+    subgraph "📝 Multi-Source Truth"
+        UserStories["📋 Business Requirements<br/>• User stories<br/>• Acceptance criteria<br/>• Business rules"]:::input
+        TechnicalSpecs["📄 Technical Specifications<br/>• API contracts (OpenAPI)<br/>• Type definitions<br/>• Integration contracts"]:::input
+        ExistingAssets["💻 Existing Assets<br/>• Source code<br/>• Current tests<br/>• Git history<br/>• Documentation"]:::input
+    end
+
+    %% === INTELLIGENCE LAYER ===
+    subgraph "🧠 Multi-Modal Intelligence Engine"
+        FactExtractor["Fact Extraction Engine<br/>🎯 Zero-interpretation parsing<br/>🎯 Structured requirement analysis<br/>🎯 Code behavior mapping<br/>🎯 Historical pattern mining"]:::intelligent
+        
+        CrossValidator["Cross-Source Validator<br/>🔍 Spec ↔ Code alignment<br/>🔍 Requirement coverage gaps<br/>🔍 Implementation contradictions<br/>🔍 Missing functionality detection"]:::intelligent
+        
+        StrategyOrchestrator["Intelligent Strategy Orchestrator<br/>⚡ Risk-based prioritization<br/>⚡ Tool-to-task matching<br/>⚡ Resource optimization<br/>⚡ Failure prediction"]:::intelligent
+    end
+
+    %% === PROVEN TOOLS LAYER ===
+    subgraph "🛠️ Best-in-Class Tool Ecosystem"
         direction LR
-        U1[GitHub App]
-        U2[CLI]
+        
+        subgraph Generation Tools
+            Copilot["GitHub Copilot<br/>💰 $20/month<br/>⭐ 70% unit test success"]:::existing
+            Cursor["Cursor IDE<br/>💰 $20/month<br/>⭐ Best for refactoring"]:::existing
+            Hypothesis["Hypothesis PBT<br/>💰 Free<br/>⭐ 95% edge case coverage"]:::existing
+        end
+        
+        subgraph Validation Tools
+            MutationTest["Mutation Testing<br/>mutmut/Stryker<br/>💰 Free<br/>⭐ Test quality validation"]:::existing
+            StaticAnalysis["Static Analysis<br/>SonarQube/Semgrep<br/>💰 $30/month<br/>⭐ Code quality"]:::existing
+            ContractTest["Contract Testing<br/>Pact/WireMock<br/>💰 Free<br/>⭐ API validation"]:::existing
+        end
     end
 
-    subgraph Foundry Services
-        direction TB
-        Orchestrator(Orchestration Service)
-        KnowledgeGraph[(Knowledge Graph)]
-        AgentCore{Agent Core}
-        Sandbox(Execution Sandbox)
-        Indexer(Indexing Service)
+    %% === INCREMENTAL STATE LAYER ===
+    subgraph "📊 Stateful Execution Engine"
+        TestChecklist["Smart Test Checklist<br/>📋 Individual test states<br/>📋 Failure categorization<br/>📋 Patch history<br/>📋 Success patterns"]:::state
+        
+        ExecutionEngine["Incremental Execution Engine<br/>🎯 Run only failed tests<br/>🎯 Parallel execution<br/>🎯 Resource monitoring<br/>🎯 State persistence"]:::novel
+        
+        PatchDatabase["Patch Knowledge Base<br/>🧠 Error → Fix mappings<br/>🧠 Success patterns<br/>🧠 Cross-project learning<br/>🧠 Confidence scoring"]:::state
     end
 
-    subgraph Agent Core
-        direction LR
-        Ag1[Testing Agent]
-        Ag2[Debugging Agent]
-        Ag3[Refactoring Agent]
+    %% === HEALING LAYER ===
+    subgraph "🏥 Surgical Healing System"
+        ErrorAnalyzer["AI-Powered Error Analyzer<br/>🔍 Error categorization<br/>🔍 Root cause analysis<br/>🔍 Historical pattern matching<br/>🔍 Fix confidence scoring"]:::healing
+        
+        SurgicalHealer["Surgical Patch Generator<br/>🔧 Minimal impact patches<br/>🔧 Targeted fixes only<br/>🔧 Rollback capability<br/>🔧 Human escalation"]:::healing
+        
+        LearningEngine["Continuous Learning Engine<br/>🧠 Pattern recognition<br/>🧠 Success optimization<br/>🧠 Failure prediction<br/>🧠 Strategy improvement"]:::healing
     end
 
-    %% Connections
-    GitRepo([Git Repository]) -- Webhook: on-push --> Indexer
-    Indexer -- Updates --> KnowledgeGraph
-    U1 & U2 -- Request Task --> Orchestrator
-    Orchestrator -- Dispatches Job --> AgentCore
-    AgentCore -- Retrieves Context --> KnowledgeGraph
-    AgentCore -- Verifies Code --> Sandbox
-    Sandbox -- Returns Results --> Orchestrator
-    Orchestrator -- Reports Status --> U1 & U2
+    %% === NOVEL COORDINATION LAYER ===
+    subgraph "🎭 Smart Orchestration (Our Secret Sauce)"
+        MultiToolRouter["Multi-Tool Smart Router<br/>🎯 Context-aware tool selection<br/>🎯 Parallel execution coordination<br/>🎯 Fallback strategies<br/>🎯 Cost optimization"]:::novel
+        
+        QualityGate["Multi-Layer Quality Gate<br/>✅ Citation requirement<br/>✅ Business logic validation<br/>✅ Performance benchmarks<br/>✅ Security checks"]:::novel
+        
+        HumanLoop["Human-in-the-Loop Controller<br/>👨‍💻 Approval workflows<br/>👨‍💻 Expert escalation<br/>👨‍💻 Quality oversight<br/>👨‍💻 Manual overrides"]:::novel
+    end
+
+    %% === OUTPUT LAYER ===
+    subgraph "📦 Production-Ready Deliverables"
+        TestSuite["Self-Documenting Test Suite<br/>✅ Citation-backed assertions<br/>✅ Requirement traceability<br/>✅ Maintenance instructions<br/>✅ Business value mapping"]:::output
+        
+        QualityReport["Comprehensive Quality Report<br/>📊 Coverage analysis<br/>📊 Risk assessment<br/>📊 Gap identification<br/>📊 Improvement recommendations"]:::output
+        
+        AuditTrail["Complete Audit Trail<br/>📝 Generation decisions<br/>📝 Patch applications<br/>📝 Quality validations<br/>📝 Human approvals"]:::output
+    end
+
+    %% === CONNECTIONS ===
+    
+    %% Input to Intelligence
+    UserStories --> FactExtractor
+    TechnicalSpecs --> FactExtractor
+    ExistingAssets --> FactExtractor
+    
+    FactExtractor --> CrossValidator
+    CrossValidator --> StrategyOrchestrator
+    
+    %% Intelligence to Tools
+    StrategyOrchestrator --> MultiToolRouter
+    MultiToolRouter --> Copilot
+    MultiToolRouter --> Cursor
+    MultiToolRouter --> Hypothesis
+    
+    %% Tools to Quality
+    Copilot --> QualityGate
+    Cursor --> QualityGate
+    Hypothesis --> QualityGate
+    
+    QualityGate --> MutationTest
+    QualityGate --> StaticAnalysis
+    QualityGate --> ContractTest
+    
+    %% Quality to Execution
+    MutationTest --> ExecutionEngine
+    StaticAnalysis --> ExecutionEngine
+    ContractTest --> ExecutionEngine
+    
+    ExecutionEngine --> TestChecklist
+    TestChecklist --> ErrorAnalyzer
+    
+    %% Healing Loop
+    ErrorAnalyzer --> SurgicalHealer
+    SurgicalHealer --> PatchDatabase
+    PatchDatabase --> ExecutionEngine
+    
+    %% Learning Loop
+    TestChecklist --> LearningEngine
+    LearningEngine --> StrategyOrchestrator
+    LearningEngine --> MultiToolRouter
+    
+    %% Human Oversight
+    QualityGate --> HumanLoop
+    SurgicalHealer --> HumanLoop
+    HumanLoop --> TestSuite
+    
+    %% Final Outputs
+    ExecutionEngine --> TestSuite
+    CrossValidator --> QualityReport
+    LearningEngine --> AuditTrail
+
+    %% State Persistence
+    TestChecklist -.->|"Persistent State"| PatchDatabase
+    ExecutionEngine -.->|"Execution History"| TestChecklist
+    SurgicalHealer -.->|"Patch Results"| PatchDatabase
 ```
 
-1.  **Continuous Learning**: The **Indexing Service** listens for `git push` events. On every commit, it performs an *incremental* analysis, updating a vector-based **Knowledge Graph** that serves as the Foundry's central memory.
-2.  **Task Initiation**: A developer initiates a task, for example by commenting `@AIFoundry test this PR` on a pull request.
-3.  **Intelligent Orchestration**: The **Orchestration Service** receives the request. It first performs an **Impact Analysis** by querying the Knowledge Graph to determine exactly what needs to be tested.
-4.  **Specialized Agent Execution**: The Orchestrator dispatches sub-tasks to the appropriate agent in the **Agent Core**. The **Testing Agent** uses RAG to retrieve necessary context and generate test code.
-5.  **Sandboxed Verification**: The generated code is sent to the **Execution Sandbox**, a secure, scalable environment where it is compiled and run.
-6.  **The Heal Loop**: If verification fails, a "debug" task is created. The **Debugging Agent** analyzes the failure, queries the Knowledge Graph for context, and generates a code patch. The patched code is then sent back for re-verification. This loop continues until the suite passes.
-7.  **Reporting**: The final result—a passed test suite, a code review with suggestions, or an updated documentation file—is reported back to the developer through the original interface (e.g., a comment on the PR).
+---
 
-This architecture ensures that the Foundry is not just a one-shot tool, but a true, scalable, and reliable AI partner in the software development process.
+## **Expected Performance Metrics**
+
+```yaml
+Technical Success Rates:
+  unit_tests: 
+    target: 90%
+    market_baseline: 70% (Copilot alone)
+    our_hybrid: 90% (multi-tool + healing)
+    
+  integration_tests:
+    target: 75%
+    market_baseline: 45%
+    our_hybrid: 75%
+    
+  edge_case_coverage:
+    target: 95%
+    market_baseline: 60%
+    our_hybrid: 95% (property-based testing)
+
+Quality Metrics:
+  false_positive_rate: <3%
+  test_maintenance_overhead: <10%
+  citation_coverage: 100%
+  business_requirement_coverage: >90%
+
+Business Impact:
+  time_to_80_percent_coverage:
+    manual: 2-4 weeks
+    our_system: 4-6 hours
+    
+  developer_productivity_gain: 400%
+  bug_escape_rate_reduction: 60%
+  test_maintenance_cost_reduction: 75%
+
+Cost Efficiency:
+  infrastructure_cost: $800/month
+  developer_time_saved: $80K/month (10-person team)
+  roi: 12,000% within 6 months
+```
+
+---
