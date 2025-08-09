@@ -1,14 +1,14 @@
-from pocketflow import Node
+from pocketflow import Node, AsyncNode
 from utils.sandbox_executor import run_tests_in_sandbox
 from pathlib import Path
 import os
 
-class VerifySingleTestNode(Node):
+class VerifySingleTestNode(AsyncNode): # <-- FIX: Inherit from AsyncNode
     """
     --- PHASE 1 NEW NODE ---
     Runs a single, specific test case in the secure sandbox environment.
     """
-    def prep(self, shared):
+    async def prep_async(self, shared): # <-- FIX: Rename to prep_async
         return {
             "test_case": shared.get("current_test_case", {}),
             "repo_path": shared.get("repo_path"),
@@ -18,7 +18,7 @@ class VerifySingleTestNode(Node):
             "project_analysis": shared.get("project_analysis", {})
         }
 
-    def exec(self, prep_res):
+    async def exec_async(self, prep_res): # <-- FIX: Rename to exec_async
         test_case = prep_res.get("test_case")
         if not test_case:
             return {"passed": False, "stdout": "", "stderr": "VerifySingleTestNode was run without a current_test_case."}
@@ -48,7 +48,7 @@ class VerifySingleTestNode(Node):
                 except (FileNotFoundError, ValueError) as e:
                     print(f"Warning: Could not process source file {path_str}: {e}")
 
-            config_files_to_check = ["pyproject.toml", "setup.py"]
+            config_files_to_check = ["pyproject.toml", "setup.py", "requirements.txt"] # Added requirements.txt
             for config_file in config_files_to_check:
                 config_path = Path(repo_path) / config_file
                 if config_path.exists():
@@ -63,13 +63,15 @@ class VerifySingleTestNode(Node):
 
         print(f"Writing {len(files_to_write)} in-memory files to sandbox and running command: '{test_command}'")
         
+        # This function call is synchronous, but it's okay because run_async
+        # will be run in an executor thread by the PocketFlow runner.
         result = run_tests_in_sandbox(files_to_write, test_command, sandbox_path, repo_path)
 
         result["source_files_content"] = source_files_content
         result["test_case_id"] = test_id
         return result
 
-    def post(self, shared, prep_res, exec_res):
+    async def post_async(self, shared, prep_res, exec_res): # <-- FIX: Rename to post_async
         shared["source_files_content"] = exec_res["source_files_content"]
 
         shared["current_test_case_result"] = {
@@ -83,8 +85,6 @@ class VerifySingleTestNode(Node):
             return "success"
         else:
             print(f"❌ FAILED: {exec_res['test_case_id']}")
-            # --- PHASE 2 CHANGE ---
-            # Store the detailed failure context for the HealNode
             print("Capturing context for the healing agent.")
             shared["failure_context"] = exec_res
             return "failure"

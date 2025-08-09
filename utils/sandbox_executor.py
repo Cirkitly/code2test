@@ -8,8 +8,8 @@ from pathlib import Path
 def run_tests_in_sandbox(files_to_write: dict, test_command: str, sandbox_path: str, repo_path: str) -> dict:
     """
     Uses a persistent sandbox directory. On first run, it creates a venv,
-    clones the entire source repository into it, installs dependencies,
-    and then runs tests. On subsequent runs, it just updates files.
+    clones the repo, installs dependencies from requirements.txt, and then runs tests.
+    On subsequent runs, it just updates files.
     """
     tmpdir_path = Path(sandbox_path)
     venv_path = tmpdir_path / "venv"
@@ -23,8 +23,7 @@ def run_tests_in_sandbox(files_to_write: dict, test_command: str, sandbox_path: 
     if not venv_path.exists():
         print("Sandbox venv not found. Performing first-time setup...")
         try:
-            # 1. --- CRITICAL FIX: Clone the entire repository into the sandbox ---
-            # This ensures all necessary files (README.md, etc.) are present for the build.
+            # 1. Clone the repository into the sandbox
             print(f"  - Cloning repository from {repo_path} to {sandbox_path}...")
             ignore_patterns = shutil.ignore_patterns('.git', '__pycache__', 'venv', '.venv', '*_cache')
             shutil.copytree(repo_path, sandbox_path, dirs_exist_ok=True, ignore=ignore_patterns)
@@ -37,18 +36,32 @@ def run_tests_in_sandbox(files_to_write: dict, test_command: str, sandbox_path: 
             subprocess.run([pip_executable, "install", "--upgrade", "pip"], check=True, capture_output=True, text=True, timeout=60)
             subprocess.run([pip_executable, "install", "pytest"], check=True, capture_output=True, text=True, timeout=120)
 
-            # 4. Install the project itself in editable mode
+            # --- START OF FIX: INSTALL PROJECT DEPENDENCIES ---
+            requirements_path = tmpdir_path / 'requirements.txt'
+            if requirements_path.exists():
+                print(f"  - Found requirements.txt. Installing project dependencies...")
+                install_deps_result = subprocess.run(
+                    [pip_executable, "install", "-r", str(requirements_path)],
+                    capture_output=True, text=True, timeout=300
+                )
+                if install_deps_result.returncode != 0:
+                    print(f"    - WARNING: Dependency installation failed. Tests may still fail.")
+                    print(f"    - PIP STDERR: {install_deps_result.stderr}")
+            else:
+                print("  - No requirements.txt found. Skipping dependency installation.")
+            # --- END OF FIX ---
+
+            # 5. Install the project itself in editable mode (if applicable)
             is_installable = (tmpdir_path / 'pyproject.toml').exists() or (tmpdir_path / 'setup.py').exists()
             if is_installable:
                 print("  - Found pyproject.toml or setup.py, installing project in editable mode...")
-                install_result = subprocess.run(
+                install_proj_result = subprocess.run(
                     [pip_executable, "install", "-e", "."],
                     cwd=tmpdir_path, capture_output=True, text=True, timeout=300
                 )
-                if install_result.returncode != 0:
-                    print("    - WARNING: Project installation failed. Tests may fail due to missing dependencies.")
-                    print(f"    - PIP STDOUT: {install_result.stdout}")
-                    print(f"    - PIP STDERR: {install_result.stderr}")
+                if install_proj_result.returncode != 0:
+                    print("    - WARNING: Project installation failed. Tests may fail.")
+                    print(f"    - PIP STDERR: {install_proj_result.stderr}")
             else:
                  print("  - No pyproject.toml or setup.py found. Skipping project installation.")
 
@@ -61,9 +74,7 @@ def run_tests_in_sandbox(files_to_write: dict, test_command: str, sandbox_path: 
         except Exception as e:
             return {"passed": False, "stdout": "", "stderr": f"An unexpected error occurred during sandbox setup: {e}"}
 
-    # On every run (including first), write the in-memory files (source + generated tests)
-    # to the sandbox. This overwrites the cloned files with any potential patches
-    # and adds the newly generated test files.
+    # On every run, write/overwrite in-memory files to the sandbox
     for rel_path, content in files_to_write.items():
         abs_path = tmpdir_path / rel_path
         abs_path.parent.mkdir(parents=True, exist_ok=True)

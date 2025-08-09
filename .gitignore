@@ -10,3 +10,6 @@ llm_cache.json
 # Ignore virtual environment directories
 knowledge_graph.json
 test_execution_state.yaml
+log.txt
+game_test/tests
+game_test/game

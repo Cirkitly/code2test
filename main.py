@@ -10,8 +10,13 @@ import tempfile
 load_dotenv()
 
 from offline_flow import create_offline_flow
-from online_flow import create_planning_flow, create_single_test_execution_flow
-from nodes.verification_nodes import FinalizeAndOrganizeNode
+from online_flow import create_planning_flow
+# --- START OF FIX ---
+# Import the node classes directly so we can instantiate them
+from nodes.generation_nodes import GenerateSingleTestNode, HealNode
+from nodes.verification_nodes import VerifySingleTestNode, FinalizeAndOrganizeNode
+from online_flow import LoadContextNode 
+# --- END OF FIX ---
 
 
 KG_FILE_PATH = "knowledge_graph.json"
@@ -92,9 +97,25 @@ async def main():
                 print("Error: Test plan is invalid or empty. Exiting.")
                 return
 
+            # Load project context once at the beginning
+            if "project_analysis" not in shared:
+                load_context_node = LoadContextNode()
+                load_context_node.set_params({"knowledge_graph_path": KG_FILE_PATH})
+                load_context_node.run(shared)
+
             test_cases = test_plan["test_cases"]
             total_cases = len(test_cases)
             print(f"Loaded {total_cases} test cases to process.")
+
+            # Create single instances of nodes to be reused
+            generate_node = GenerateSingleTestNode()
+            generate_node.set_params({"repo_path": args.repo_path})
+            
+            verify_node = VerifySingleTestNode()
+            verify_node.set_params({"sandbox_path": sandbox_path})
+            
+            heal_node = HealNode()
+            heal_node.set_params({"max_retries": 1})
 
             for i, test_case in enumerate(test_cases):
                 print("-" * 50)
@@ -103,43 +124,44 @@ async def main():
                 if test_case.get("status") == "PASSED":
                     print("Status is already PASSED. Skipping.")
                     continue
-                
-                # --- PHASE 2.1 ADDITION: HEALING ATTEMPT LOOP ---
-                heal_attempts = test_case.get("heal_attempts", 0)
-                is_passed = False
 
-                while heal_attempts < MAX_HEAL_ATTEMPTS:
+                # Step 1: Generate the test code ONCE.
+                if not test_case.get("generated", False):
                     shared["current_test_case"] = test_case
-                    
-                    execution_flow = create_single_test_execution_flow()
-                    execution_flow.set_params({
-                        "repo_path": args.repo_path,
-                        "sandbox_path": sandbox_path
-                    })
-
-                    if "project_analysis" not in shared:
-                        load_context_node = LoadContextNode()
-                        load_context_node.set_params({"knowledge_graph_path": KG_FILE_PATH})
-                        load_context_node.run(shared)
-
-                    await execution_flow.run_async(shared)
-                    
-                    result = shared.get("current_test_case_result", {})
-                    is_passed = result.get("passed", False)
-                    
-                    if is_passed:
-                        test_case["status"] = "PASSED"
-                        break # Exit the healing loop on success
-                    else:
-                        heal_attempts += 1
-                        test_case["heal_attempts"] = heal_attempts
-                        test_case["last_error"] = result.get("stderr", "Unknown error")
-                        print(f"Heal attempt {heal_attempts}/{MAX_HEAL_ATTEMPTS} failed. Retrying if possible.")
+                    await generate_node.run_async(shared)
+                    test_case["generated"] = True 
                 
-                if not is_passed:
+                # Step 2: Initial Verification
+                shared["current_test_case"] = test_case
+                verify_result = await verify_node.run_async(shared)
+                
+                is_passed = (verify_result == "success")
+
+                # Step 3: Enter the Healing Loop if initial verification fails
+                heal_attempts = test_case.get("heal_attempts", 0)
+                while not is_passed and heal_attempts < MAX_HEAL_ATTEMPTS:
+                    print(f"Entering healing attempt {heal_attempts + 1}/{MAX_HEAL_ATTEMPTS}...")
+                    
+                    heal_result = await heal_node.run_async(shared)
+
+                    if heal_result == "patched":
+                        verify_result = await verify_node.run_async(shared)
+                        is_passed = (verify_result == "success")
+                    else:
+                        print("Agent determined the issue is unpatchable.")
+                        break
+
+                    heal_attempts += 1
+                    test_case["heal_attempts"] = heal_attempts
+                
+                # Step 4: Final Status Update
+                if is_passed:
+                    test_case["status"] = "PASSED"
+                else:
                     print(f"Max heal attempts reached for {test_case['id']}. Marking as FAILED.")
                     test_case["status"] = "FAILED_UNFIXABLE"
-                # --- END OF HEALING LOOP ---
+                    result = shared.get("current_test_case_result", {})
+                    test_case["last_error"] = result.get("stderr", "Unknown error")
 
                 with open(STATE_FILE_PATH, 'w', encoding='utf-8') as f:
                     yaml.dump(test_plan, f, indent=2, default_flow_style=False, sort_keys=False)
@@ -152,6 +174,7 @@ async def main():
             finalize_node.run(shared)
 
         print("--- Online Generation Complete ---")
+        print("All test cases processed. Final state saved to:", STATE_FILE_PATH)
 
 if __name__ == "__main__":
     asyncio.run(main())
