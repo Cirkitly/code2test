@@ -242,6 +242,65 @@ IMPORTANT INSTRUCTIONS:
 
 
 
+class LearningEngineNode(AsyncNode):
+    """
+    The Continuous Learning Engine that updates the strategy based on the outcome
+    of the test case execution (success, failure, healing success, escalation).
+    
+    For now, this is a placeholder for a more complex learning mechanism.
+    """
+    async def prep_async(self, shared):
+        test_case = shared.get("current_test_case")
+        test_result = shared.get("current_test_case_result")
+        
+        if not test_case or not test_result:
+            return None
+            
+        # Extract relevant data for learning
+        learning_data = {
+            "test_id": test_case.get("id"),
+            "final_status": test_case.get("status"),
+            "initial_generation_strategy": shared.get("generation_context", {}).get("strategy", {}).get("name"),
+            "initial_generation_confidence": shared.get("generation_context", {}).get("strategy", {}).get("confidence_target"),
+            "test_passed": test_result.get("passed"),
+            "healing_attempted": shared.get("generated_patch") is not None,
+            "escalated": test_case.get("status") == "ESCALATED",
+            "error_category": test_case.get("escalation_reason") # Re-using escalation reason for error categorization
+        }
+        
+        return learning_data
+
+    async def exec_async(self, prep_res):
+        if prep_res is None:
+            return {"status": "SKIPPED", "reason": "No test case data for learning."}
+            
+        print(f"\n--- LEARNING ENGINE: Processing outcome for {prep_res['test_id']} ---")
+        
+        # Placeholder for complex learning logic (e.g., updating weights, refining RAG query, adjusting confidence)
+        # For this implementation, we just log the outcome and simulate a strategy update.
+        
+        if prep_res["test_passed"]:
+            print(f"Outcome: SUCCESS. Strategy '{prep_res['initial_generation_strategy']}' was effective.")
+            # In a real system: reinforce the strategy
+        elif prep_res["escalated"]:
+            print(f"Outcome: ESCALATED. Strategy '{prep_res['initial_generation_strategy']}' failed to resolve issue: {prep_res['error_category']}.")
+            # In a real system: penalize the strategy, or refine the planning for this type of module
+        elif prep_res["healing_attempted"]:
+            print(f"Outcome: HEALING FAILED. Patch did not fix the issue.")
+            # In a real system: refine the healing prompt/logic
+        else:
+            print(f"Outcome: INITIAL FAILURE. Strategy '{prep_res['initial_generation_strategy']}' failed immediately.")
+            # In a real system: penalize the strategy
+            
+        # Simulate a strategy update for the next run (e.g., update a persistent config file)
+        # For now, this is a no-op, but the structure is in place.
+        
+        return {"status": "LEARNING_COMPLETE"}
+
+    async def post_async(self, shared, prep_res, exec_res):
+        print(f"Learning Engine finished with status: {exec_res['status']}")
+        return "success"
+
 class HealNode(AsyncNode):
     """
     An autonomous agent that attempts to fix failing tests by generating a patch.
