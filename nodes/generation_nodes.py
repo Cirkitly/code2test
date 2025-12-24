@@ -170,40 +170,152 @@ IMPORTANT INSTRUCTIONS:
         print(f"Appended test case {exec_res['test_case_id']} to in-memory file {test_file_path}")
 
 
-# ==================================================================
-# The nodes below are now considered LEGACY and are not used by the
-# new Phase 1 orchestration logic. They will be removed or replaced
-# in Phase 2 (Healing).
-# ==================================================================
 
-class GenerateUnitTestsNode(AsyncParallelBatchNode):
-    """
-    [LEGACY] Generates unit tests for each module defined in the test plan.
-    """
-    concurrency = 5
-    
-    async def prep_async(self, shared): 
-        return []
-    
-    async def exec_async(self, item): 
-        return {}
-    
-    async def post_async(self, shared, prep_res, exec_res_list): 
-        pass
 
 
 class HealNode(AsyncNode):
     """
-    [LEGACY] An autonomous agent that attempts to fix failing tests.
+    An autonomous agent that attempts to fix failing tests by generating a patch.
     """
-    def _extract_focused_error(self, stdout: str, stderr: str) -> str: 
-        return ""
     
-    async def prep_async(self, shared): 
-        return None
-    
-    async def exec_async(self, prep_res): 
-        return {}
-    
-    async def post_async(self, shared, prep_res, exec_res): 
-        return "unpatchable"
+    async def prep_async(self, shared):
+        test_case = shared.get("current_test_case")
+        test_result = shared.get("current_test_case_result")
+        project_analysis = shared.get("project_analysis", {})
+        
+        if not test_case or not test_result or test_result.get("passed"):
+            return None # Skip if no failed test case is present
+
+        # Get the source file content that needs fixing
+        module_path = test_case.get("module_path")
+        repo_path = self.params.get("repo_path")
+        
+        # Read the actual source file content from disk
+        try:
+            full_path = Path(repo_path) / module_path
+            with open(full_path, 'r', encoding='utf-8') as f:
+                source_code = f.read()
+        except FileNotFoundError:
+            print(f"Error: Source file not found at {full_path}. Cannot heal.")
+            return None
+        
+        return {
+            "test_case": test_case,
+            "test_result": test_result,
+            "source_code": source_code,
+            "module_path": module_path,
+            "project_analysis": project_analysis
+        }
+
+    async def exec_async(self, prep_res):
+        if prep_res is None:
+            return {"status": "SKIPPED", "reason": "No failed test case to heal."}
+            
+        test_case = prep_res["test_case"]
+        test_result = prep_res["test_result"]
+        source_code = prep_res["source_code"]
+        module_path = prep_res["module_path"]
+        
+        print(f"Attempting to heal module: {module_path} for test: {test_case['id']}")
+        
+        # RAG step: Get context for the specific module
+        context_summaries = await query_index(f"all function and class summaries for file {module_path}", top_k=5)
+        context_str = "\n---\n".join([f"Path: {s['file_path']}\nUnit: {s['unit_name']}\nSummary: {s['summary']}" for s in context_summaries]) if context_summaries else "No specific context found."
+
+        prompt = f"""
+You are an expert AI software engineer. A test case has failed, and your task is to generate a minimal, surgical patch to fix the bug in the source code.
+
+Test Case ID: {test_case['id']}
+Test Description: {test_case['description']}
+Target Module: {module_path}
+
+Relevant Context from Knowledge Graph:
+{context_str}
+
+Source Code to Fix ({module_path}):
+--- START SOURCE CODE ---
+{source_code}
+--- END SOURCE CODE ---
+
+Test Execution Error (stderr):
+--- START STDERR ---
+{test_result.get('stderr', 'No stderr available.')}
+--- END STDERR ---
+
+INSTRUCTIONS:
+1. Analyze the error and the source code.
+2. Generate a unified diff patch that fixes the bug in the file '{module_path}'.
+3. The patch MUST be minimal and only contain the necessary changes.
+4. The patch MUST be a valid unified diff format.
+5. Respond ONLY with the patch content, enclosed in a single markdown code block with the language set to 'diff'. Do not include any other text, explanation, or markdown formatting outside of the code block.
+
+Example of expected output:
+```diff
+--- a/src/my_module.py
++++ b/src/my_module.py
+@@ -10,7 +10,7 @@
+ def calculate(a, b):
+-    return a + b
++    return a * b
+```
+"""
+        patch_response = await call_llm(prompt)
+        
+        # Extract the patch from the LLM response
+        patch = ""
+        if "```diff" in patch_response:
+            patch = patch_response.split("```diff")[1].split("```")[0].strip()
+        elif patch_response.strip().startswith("```"):
+            patch = patch_response.strip()[3:-3].strip()
+            
+        # Basic validation: check if it looks like a patch
+        if not patch.startswith("--- a/"):
+            print("Warning: LLM did not return a valid unified diff patch.")
+            return {"status": "FAILED_PATCH_GEN", "patch": None}
+            
+        return {"status": "PATCH_GENERATED", "patch": patch}
+
+    async def post_async(self, shared, prep_res, exec_res):
+        if exec_res.get("status") == "PATCH_GENERATED":
+            patch_str = exec_res["patch"]
+            module_path = prep_res['module_path']
+            repo_path = self.params.get("repo_path")
+            
+            try:
+                # 1. Parse the patch
+                patch_set = PatchSet(patch_str)
+                if not patch_set:
+                    raise ValueError("Patch set is empty or invalid.")
+                
+                # We expect a patch for a single file, which is the target module
+                patch_file = patch_set[0]
+                
+                # 2. Apply the patch to the file on disk
+                full_path = Path(repo_path) / module_path
+                original_content = full_path.read_text(encoding='utf-8')
+                
+                # Apply the patch in memory first to get the new content
+                patched_content = original_content
+                for hunk in patch_file:
+                    patched_content = hunk.apply(patched_content)
+                
+                # 3. Write the patched content back to the file on disk
+                full_path.write_text(patched_content, encoding='utf-8')
+                
+                # 4. Update the shared state for the next verification node
+                # The key for source files in shared["source_files_content"] is the relative path
+                relative_module_path = str(Path(module_path).relative_to(repo_path))
+                shared["source_files_content"][relative_module_path] = patched_content
+                
+                shared["generated_patch"] = patch_str
+                print(f"✅ Patch successfully applied to {module_path}. Re-verification initiated.")
+                return "patch_ready"
+                
+            except Exception as e:
+                print(f"❌ Failed to apply patch to {module_path}: {e}")
+                shared["generated_patch"] = None
+                return "unpatchable"
+        else:
+            shared["generated_patch"] = None
+            print(f"Healing skipped or failed: {exec_res.get('reason', 'Unknown reason')}")
+            return "unpatchable"
