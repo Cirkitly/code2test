@@ -132,15 +132,3 @@ class FinalizeAndOrganizeNode(Node):
         print(f"\n🎉 Flow Complete. Final Status:\n{exec_res}")
 
 
-# ==================================================================
-# The node below is now considered LEGACY and is not used by the
-# new Phase 1 orchestration logic.
-# ==================================================================
-
-class VerifyTestsNode(Node):
-    """
-    [LEGACY] Runs the full suite of generated tests.
-    """
-    def prep(self, shared): return {}
-    def exec(self, prep_res): return {"passed": True, "source_files_content": {}}
-    def post(self, shared, prep_res, exec_res): return "success"

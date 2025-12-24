@@ -1,5 +1,5 @@
 from pocketflow import AsyncFlow, Node
-from nodes.generation_nodes import PlanTestsNode, GenerateSingleTestNode
+from nodes.generation_nodes import PlanTestsNode, GenerateSingleTestNode, HealNode
 from nodes.verification_nodes import VerifySingleTestNode
 import json
 
@@ -48,17 +48,27 @@ def create_planning_flow():
 
 def create_single_test_execution_flow():
     """
-    --- PHASE 1 NEW FLOW ---
-    Creates the workflow for generating and verifying a single test case.
-    In Phase 2, this flow will be expanded to include the healing loop.
+    --- PHASE 2 HEALING FLOW ---
+    Creates the workflow for generating, verifying, and healing a single test case.
+    The flow is: Generate -> Verify (Success) -> End
+    or: Generate -> Verify (Failure) -> Heal -> Verify (Success/Failure) -> End
     """
     generate_node = GenerateSingleTestNode()
-    verify_node = VerifySingleTestNode()
+    verify_node_initial = VerifySingleTestNode(name="verify_initial")
+    heal_node = HealNode()
+    verify_node_healed = VerifySingleTestNode(name="verify_healed")
 
-    generate_node >> verify_node
+    # 1. Generate the test
+    generate_node >> verify_node_initial
 
-    # In Phase 2, the 'failure' branch from verify_node will go to a HealNode.
-    # For now, failures are handled by the main.py orchestration loop.
+    # 2. If initial verification fails, go to heal
+    verify_node_initial.on_failure >> heal_node
+
+    # 3. If heal is successful, re-verify the test
+    heal_node.on_success >> verify_node_healed
+
+    # 4. If heal is unsuccessful, the flow ends (failure is handled by main.py)
+    # 5. If initial verification succeeds, the flow ends (success is handled by main.py)
 
     execution_flow = AsyncFlow(start=generate_node)
     return execution_flow
