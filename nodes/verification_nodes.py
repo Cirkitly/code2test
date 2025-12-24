@@ -209,15 +209,82 @@ class FinalizeAndOrganizeNode(Node):
         return {
             "repo_path": shared.get("repo_path"),
             "files_to_write": shared.get("generated_files", {}),
-            "final_result_message": shared.get("final_result", "Flow completed.")
+            "final_result_message": shared.get("final_result", "Flow completed."),
+            "test_plan": shared.get("test_plan", {}).get("test_cases", [])
         }
+
+    def _generate_quality_report(self, test_plan):
+        total_tests = len(test_plan)
+        passed_tests = sum(1 for t in test_plan if t.get("status") == "PASSED")
+        escalated_tests = sum(1 for t in test_plan if t.get("status") == "ESCALATED")
+        failed_tests = total_tests - passed_tests - escalated_tests
+        
+        report = f"# Test Generation Quality Report\n\n"
+        report += f"## Summary\n\n"
+        report += f"| Metric | Value |\n"
+        report += f"| :--- | :--- |\n"
+        report += f"| Total Test Cases Planned | {total_tests} |\n"
+        report += f"| **Tests Successfully Generated & Verified** | **{passed_tests}** |\n"
+        report += f"| Tests Escalated for Human Review | {escalated_tests} |\n"
+        report += f"| Tests Failed (Unresolved) | {failed_tests} |\n\n"
+        
+        report += f"## Escalated Test Cases\n\n"
+        escalated_cases = [t for t in test_plan if t.get("status") == "ESCALATED"]
+        if escalated_cases:
+            report += f"| ID | Module | Reason | Last Error |\n"
+            report += f"| :--- | :--- | :--- | :--- |\n"
+            for t in escalated_cases:
+                reason = t.get("escalation_reason", "N/A")
+                last_error = t.get("last_error", "N/A")[:50] + "..." if len(t.get("last_error", "")) > 50 else t.get("last_error", "N/A")
+                report += f"| {t['id']} | {t['module_path']} | {reason} | {last_error} |\n"
+        else:
+            report += "No test cases were escalated for human review. The automated flow was fully successful.\n"
+            
+        return report
+
+    def _generate_audit_trail(self, test_plan):
+        trail = f"# Test Generation Audit Trail\n\n"
+        trail += f"This document details the full lifecycle of each test case, including generation strategy, verification results, and any healing or escalation attempts.\n\n"
+        
+        for t in test_plan:
+            trail += f"## Test Case: {t['id']}\n\n"
+            trail += f"| Detail | Value |\n"
+            trail += f"| :--- | :--- |\n"
+            trail += f"| **Final Status** | **{t.get('status', 'PENDING')}** |\n"
+            trail += f"| Module Targeted | {t.get('module_path', 'N/A')} |\n"
+            trail += f"| Description | {t.get('description', 'N/A')} |\n"
+            trail += f"| Priority | {t.get('priority', 'N/A')} |\n"
+            
+            if t.get('escalation_reason'):
+                trail += f"| Escalation Reason | {t['escalation_reason']} |\n"
+            
+            if t.get('last_error'):
+                trail += f"\n### Last Error Log\n\n```\n{t['last_error']}\n```\n"
+            
+            trail += "\n---\n"
+            
+        return trail
 
     def exec(self, prep_res):
         print("\n--- Finalizing and writing all generated files to disk ---")
         repo_path = prep_res.get("repo_path")
         files_to_write = prep_res.get("files_to_write", {})
+        test_plan = prep_res.get("test_plan", [])
 
-        if not repo_path or not files_to_write:
+        if not repo_path:
+            return "Nothing to finalize. Repository path is missing."
+
+        # 1. Generate Quality Report
+        quality_report_content = self._generate_quality_report(test_plan)
+        files_to_write["quality_report.md"] = quality_report_content
+        print("Generated quality_report.md")
+        
+        # 2. Generate Audit Trail
+        audit_trail_content = self._generate_audit_trail(test_plan)
+        files_to_write["audit_trail.md"] = audit_trail_content
+        print("Generated audit_trail.md")
+
+        if not files_to_write:
             return "Nothing to finalize. No files were generated."
 
         init_files_to_add = set()
