@@ -83,6 +83,65 @@ class VerifySingleTestNode(Node):
             return "failure"
 
 
+class QualityGateNode(Node):
+    """
+    A multi-layer quality gate that validates the generated test code
+    against various criteria (e.g., length, complexity, confidence target).
+    """
+    def prep(self, shared):
+        test_case = shared.get("current_test_case", {})
+        generated_code = shared.get("generated_files", {}).get(test_case.get("test_file_path"))
+        
+        return {
+            "test_case": test_case,
+            "generated_code": generated_code,
+            "confidence_target": test_case.get("confidence_target", 0.85)
+        }
+
+    def exec(self, prep_res):
+        test_case = prep_res["test_case"]
+        generated_code = prep_res["generated_code"]
+        confidence_target = prep_res["confidence_target"]
+        
+        test_id = test_case.get("id")
+        print(f"\n--- Running Quality Gate for test case: {test_id} ---")
+        
+        # 1. Basic Code Length Check (Proxy for complexity/bloat)
+        code_lines = len(generated_code.splitlines()) if generated_code else 0
+        max_lines = 50 # Arbitrary limit for a single unit test
+        
+        if code_lines > max_lines:
+            print(f"❌ Quality Gate Failed: Code too long ({code_lines} lines > {max_lines} max).")
+            return {"passed": False, "reason": "Code complexity too high (length check failed)."}
+
+        # 2. Confidence Check (Placeholder for future LLM-based confidence scoring)
+        # For now, we'll assume the LLM-generated code has a fixed high confidence
+        # unless a specific strategy was used.
+        assumed_confidence = 0.90 # Placeholder for actual LLM confidence score
+        
+        if assumed_confidence < confidence_target:
+            print(f"❌ Quality Gate Failed: Assumed confidence ({assumed_confidence}) below target ({confidence_target}).")
+            return {"passed": False, "reason": "Generation confidence too low."}
+            
+        # 3. Syntax Check (Already implicitly handled by the sandbox executor, but a quick check is good)
+        # We'll skip a full static analysis for this simple implementation.
+        
+        print(f"✅ Quality Gate Passed for test case: {test_id}")
+        return {"passed": True, "reason": "All checks passed."}
+
+    def post(self, shared, prep_res, exec_res):
+        if exec_res["passed"]:
+            return "success"
+        else:
+            # If Quality Gate fails, we don't proceed to verification
+            shared["current_test_case_result"] = {
+                "passed": False,
+                "stdout": "",
+                "stderr": f"Quality Gate Failed: {exec_res['reason']}"
+            }
+            # This will cause the main loop to mark the test as FAILED and move on
+            return "failure"
+
 class FinalizeAndOrganizeNode(Node):
     """
     This node now runs at the very end of the entire process to write all

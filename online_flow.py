@@ -1,6 +1,6 @@
 from pocketflow import AsyncFlow, Node
-from nodes.generation_nodes import PlanTestsNode, GenerateSingleTestNode, HealNode
-from nodes.verification_nodes import VerifySingleTestNode
+from nodes.generation_nodes import PlanTestsNode, GenerateSingleTestNode, HealNode, MultiToolRouterNode
+from nodes.verification_nodes import VerifySingleTestNode, QualityGateNode
 import json
 
 class LoadContextNode(Node):
@@ -48,18 +48,20 @@ def create_planning_flow():
 
 def create_single_test_execution_flow():
     """
-    --- PHASE 2 HEALING FLOW ---
-    Creates the workflow for generating, verifying, and healing a single test case.
-    The flow is: Generate -> Verify (Success) -> End
-    or: Generate -> Verify (Failure) -> Heal -> Verify (Success/Failure) -> End
+    --- PHASE 3 QUALITY GATE FLOW ---
+    Creates the workflow for generating, validating, verifying, and healing a single test case.
+    The flow is: Route -> Generate -> QualityGate -> Verify (Success) -> End
+    or: Route -> Generate -> QualityGate -> Verify (Failure) -> Heal -> Verify (Success/Failure) -> End
     """
+    router_node = MultiToolRouterNode()
     generate_node = GenerateSingleTestNode()
+    quality_gate_node = QualityGateNode()
     verify_node_initial = VerifySingleTestNode(name="verify_initial")
     heal_node = HealNode()
     verify_node_healed = VerifySingleTestNode(name="verify_healed")
 
-    # 1. Generate the test
-    generate_node >> verify_node_initial
+    # 1. Route, Generate, and Validate the test
+    router_node >> generate_node >> quality_gate_node >> verify_node_initial
 
     # 2. If initial verification fails, go to heal
     verify_node_initial.on_failure >> heal_node
@@ -67,8 +69,9 @@ def create_single_test_execution_flow():
     # 3. If heal is successful, re-verify the test
     heal_node.on_success >> verify_node_healed
 
-    # 4. If heal is unsuccessful, the flow ends (failure is handled by main.py)
-    # 5. If initial verification succeeds, the flow ends (success is handled by main.py)
+    # 4. If Quality Gate fails, the flow ends (failure is handled by main.py)
+    # 5. If heal is unsuccessful, the flow ends (failure is handled by main.py)
+    # 6. If initial verification succeeds, the flow ends (success is handled by main.py)
 
-    execution_flow = AsyncFlow(start=generate_node)
+    execution_flow = AsyncFlow(start=router_node)
     return execution_flow

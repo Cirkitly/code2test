@@ -8,6 +8,77 @@ import io
 import re
 
 
+class MultiToolRouterNode(AsyncNode):
+    """
+    Selects the optimal test generation strategy (e.g., prompt, toolchain)
+    based on the current test case context.
+    
+    For now, this will simply select a prompt template for the LLM.
+    In the future, it will select a full toolchain.
+    """
+    async def prep_async(self, shared):
+        test_case = shared.get("current_test_case")
+        project_analysis = shared.get("project_analysis", {})
+        
+        if not test_case:
+            return None
+            
+        # For a simple implementation, we'll use the priority to select a strategy
+        priority = test_case.get("priority", "MEDIUM")
+        
+        # RAG step: Get context for the specific module
+        module_path = test_case.get("module_path")
+        context_summaries = await query_index(f"all function and class summaries for file {module_path}", top_k=10)
+        context_str = "\n---\n".join([f"Path: {s['file_path']}\nUnit: {s['unit_name']}\nSummary: {s['summary']}" for s in context_summaries]) if context_summaries else "No specific context found."
+        
+        framework = project_analysis.get("test_framework", "pytest")
+        
+        # Define different strategies based on priority
+        if priority == "HIGH":
+            strategy = {
+                "name": "High-Priority Strategy (Detailed)",
+                "prompt_modifier": "Focus heavily on edge cases, security, and performance. Use property-based testing principles where applicable.",
+                "confidence_target": 0.95
+            }
+        elif priority == "LOW":
+            strategy = {
+                "name": "Low-Priority Strategy (Basic)",
+                "prompt_modifier": "Focus only on the main happy path and basic functionality.",
+                "confidence_target": 0.70
+            }
+        else: # MEDIUM
+            strategy = {
+                "name": "Medium-Priority Strategy (Standard)",
+                "prompt_modifier": "Focus on happy path, one edge case, and one error condition.",
+                "confidence_target": 0.85
+            }
+            
+        return {
+            "test_case": test_case,
+            "context_str": context_str,
+            "framework": framework,
+            "strategy": strategy
+        }
+
+    async def exec_async(self, prep_res):
+        if prep_res is None:
+            return {"status": "SKIPPED", "reason": "No current_test_case in shared store."}
+            
+        print(f"Selected strategy: {prep_res['strategy']['name']}")
+        return prep_res
+
+    async def post_async(self, shared, prep_res, exec_res):
+        if exec_res.get("status") == "SKIPPED":
+            return
+            
+        # Pass the selected strategy and context to the next node (GenerateSingleTestNode)
+        shared["generation_context"] = {
+            "context_str": exec_res["context_str"],
+            "framework": exec_res["framework"],
+            "strategy": exec_res["strategy"]
+        }
+        shared["current_test_case"]["confidence_target"] = exec_res["strategy"]["confidence_target"]
+
 class PlanTestsNode(AsyncNode):
     """
     An intelligent agent that queries the KG to create a high-level,
@@ -87,17 +158,14 @@ class GenerateSingleTestNode(AsyncNode):
     --- PHASE 1 NEW NODE ---
     Generates the code for a single test case from the checklist.
     It uses RAG to provide relevant context to the LLM.
-    """
-    async def prep_async(self, shared):
+    "    async def prep_async(self, shared):
         return {
             "test_case": shared.get("current_test_case"),
-            "project_analysis": shared.get("project_analysis", {}),
             "repo_path": self.params.get("repo_path")
         }
 
     async def exec_async(self, prep_res):
         test_case = prep_res.get("test_case")
-        project_analysis = prep_res.get("project_analysis")
         repo_path = prep_res.get("repo_path")
 
         if not test_case:
@@ -105,12 +173,10 @@ class GenerateSingleTestNode(AsyncNode):
 
         module_path = test_case.get("module_path")
         print(f"Generating code for test case: {test_case['id']}")
-
-        # RAG step: Get context for the specific module
-        context_summaries = await query_index(f"all function and class summaries for file {module_path}", top_k=10)
-        context_str = "\n---\n".join([f"Path: {s['file_path']}\nUnit: {s['unit_name']}\nSummary: {s['summary']}" for s in context_summaries]) if context_summaries else "No specific context found."
-
-        framework = project_analysis.get("test_framework", "pytest")
+        strategy = generation_context.get("strategy", {})
+        context_str = generation_context.get("context_str", "No specific context found.")
+        framework = generation_context.get("framework", "pytest")
+        prompt_modifier = strategy.get("prompt_modifier", "")
 
         prompt = f"""
 You are an expert Python test engineer. Your task is to write a single, complete, runnable test function for the following test case using the {framework} framework.
@@ -122,6 +188,9 @@ Test Case Details:
 
 Relevant Context from Knowledge Graph:
 {context_str}
+
+Generation Strategy: {strategy.get("name", "Standard")}
+Strategy Modifier: {prompt_modifier}
 
 IMPORTANT INSTRUCTIONS:
 1. Generate ONLY the code for the single test function {test_case['id']}.
