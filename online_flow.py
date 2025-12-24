@@ -1,6 +1,6 @@
 from pocketflow import AsyncFlow, Node
 from nodes.generation_nodes import PlanTestsNode, GenerateSingleTestNode, HealNode, MultiToolRouterNode
-from nodes.verification_nodes import VerifySingleTestNode, QualityGateNode
+from nodes.verification_nodes import VerifySingleTestNode, QualityGateNode, HumanInTheLoopNode
 import json
 
 class LoadContextNode(Node):
@@ -48,10 +48,10 @@ def create_planning_flow():
 
 def create_single_test_execution_flow():
     """
-    --- PHASE 3 QUALITY GATE FLOW ---
-    Creates the workflow for generating, validating, verifying, and healing a single test case.
+    --- PHASE 4 HUMAN-IN-THE-LOOP FLOW ---
+    Creates the workflow for generating, validating, verifying, healing, and escalating a single test case.
     The flow is: Route -> Generate -> QualityGate -> Verify (Success) -> End
-    or: Route -> Generate -> QualityGate -> Verify (Failure) -> Heal -> Verify (Success/Failure) -> End
+    or: Route -> Generate -> QualityGate -> Verify (Failure) -> Heal -> Verify (Failure) -> HumanInTheLoop -> End
     """
     router_node = MultiToolRouterNode()
     generate_node = GenerateSingleTestNode()
@@ -59,6 +59,7 @@ def create_single_test_execution_flow():
     verify_node_initial = VerifySingleTestNode(name="verify_initial")
     heal_node = HealNode()
     verify_node_healed = VerifySingleTestNode(name="verify_healed")
+    human_in_the_loop_node = HumanInTheLoopNode()
 
     # 1. Route, Generate, and Validate the test
     router_node >> generate_node >> quality_gate_node >> verify_node_initial
@@ -69,9 +70,17 @@ def create_single_test_execution_flow():
     # 3. If heal is successful, re-verify the test
     heal_node.on_success >> verify_node_healed
 
-    # 4. If Quality Gate fails, the flow ends (failure is handled by main.py)
-    # 5. If heal is unsuccessful, the flow ends (failure is handled by main.py)
-    # 6. If initial verification succeeds, the flow ends (success is handled by main.py)
+    # 4. If re-verification fails, escalate to human
+    verify_node_healed.on_failure >> human_in_the_loop_node
+
+    # 5. If Quality Gate fails, escalate to human
+    quality_gate_node.on_failure >> human_in_the_loop_node
+
+    # 6. If heal is unsuccessful, escalate to human
+    heal_node.on_failure >> human_in_the_loop_node
+
+    # 7. If initial verification succeeds, the flow ends (success is handled by main.py)
+    # 8. If re-verification succeeds, the flow ends (success is handled by main.py)
 
     execution_flow = AsyncFlow(start=router_node)
     return execution_flow

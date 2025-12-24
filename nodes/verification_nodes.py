@@ -142,6 +142,64 @@ class QualityGateNode(Node):
             # This will cause the main loop to mark the test as FAILED and move on
             return "failure"
 
+class HumanInTheLoopNode(Node):
+    """
+    Handles test cases that cannot be resolved by the automated flow (e.g.,
+    Quality Gate failure, unpatchable error) by escalating them for human review.
+    """
+    def prep(self, shared):
+        test_case = shared.get("current_test_case", {})
+        test_result = shared.get("current_test_case_result", {})
+        
+        # Determine the reason for escalation
+        reason = "Unknown failure"
+        if "Quality Gate Failed" in test_result.get("stderr", ""):
+            reason = "Quality Gate Failure"
+        elif test_result.get("passed") is False and shared.get("generated_patch") is not None:
+            reason = "Healing Failed (Patch did not fix the issue)"
+        elif test_result.get("passed") is False and shared.get("generated_patch") is None:
+            reason = "Initial Verification Failed (Unattempted Healing)"
+            
+        return {
+            "test_case": test_case,
+            "test_result": test_result,
+            "reason": reason,
+            "generated_patch": shared.get("generated_patch")
+        }
+
+    def exec(self, prep_res):
+        test_id = prep_res["test_case"].get("id")
+        reason = prep_res["reason"]
+        
+        print(f"\n--- ESCALATION: Human-in-the-Loop required for test case: {test_id} ---")
+        
+        escalation_report = {
+            "test_case_id": test_id,
+            "module_path": prep_res["test_case"].get("module_path"),
+            "description": prep_res["test_case"].get("description"),
+            "escalation_reason": reason,
+            "last_error_stderr": prep_res["test_result"].get("stderr", "N/A"),
+            "generated_patch": prep_res["generated_patch"] if prep_res["generated_patch"] else "N/A",
+            "action_required": "Human review is required to diagnose the issue and provide a manual fix or override."
+        }
+        
+        # In a real system, this would write to a database, a JIRA ticket, or send an email.
+        # Here, we will just update the test case status and log the report.
+        
+        print(f"Escalation Report:\n{yaml.dump(escalation_report, indent=2, default_flow_style=False)}")
+        
+        return {"status": "ESCALATED", "report": escalation_report}
+
+    def post(self, shared, prep_res, exec_res):
+        # Update the test case status in the main plan to reflect escalation
+        test_case = shared.get("current_test_case")
+        if test_case:
+            test_case["status"] = exec_res["status"]
+            test_case["escalation_reason"] = exec_res["report"]["escalation_reason"]
+            test_case["last_error"] = exec_res["report"]["last_error_stderr"]
+            
+        return "escalated"
+
 class FinalizeAndOrganizeNode(Node):
     """
     This node now runs at the very end of the entire process to write all
