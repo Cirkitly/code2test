@@ -11,7 +11,30 @@ This architecture combines:
 
 ---
 
-## **System Architecture**
+## **System Architecture: The Complete Intelligent Flow**
+
+The system is built around a stateful, incremental execution engine that orchestrates a series of intelligent nodes to generate, validate, and self-heal test cases.
+
+### **Implemented Core Components (Phase 2 & 3)**
+
+| Component | Node | Function | Status |
+| :--- | :--- | :--- | :--- |
+| **Multi-Tool Smart Router** | `MultiToolRouterNode` | Selects the optimal test generation strategy (e.g., prompt, confidence target) based on test case priority and context. | **Implemented** |
+| **Multi-Layer Quality Gate** | `QualityGateNode` | Validates generated test code against quality criteria (e.g., length, confidence) *before* execution to prevent wasted sandbox runs. | **Implemented** |
+| **Surgical Healing System** | `HealNode` | Attempts to fix failing tests by generating and applying a minimal, targeted unified diff patch to the source code. | **Implemented** |
+| **Human-in-the-Loop** | `HumanInTheLoopNode` | Escalates unresolvable failures (e.g., Quality Gate failure, failed healing attempt) for manual review and override. | **Implemented** |
+| **Continuous Learning Engine** | `LearningEngineNode` | Processes the final outcome of each test case to inform and refine future generation strategies. | **Implemented** |
+| **Reporting** | `FinalizeAndOrganizeNode` | Generates the final `quality_report.md` and `audit_trail.md` documents. | **Implemented** |
+
+### **Execution Flow**
+
+The single test execution flow is a robust, self-correcting pipeline:
+
+`Route -> Generate -> QualityGate -> Verify (Initial) -> [Failure] -> Heal -> Verify (Healed) -> [Failure] -> HumanInTheLoop -> Learn`
+
+---
+
+## **System Architecture Diagram**
 
 ```mermaid
 graph TD
@@ -26,129 +49,91 @@ graph TD
 
     %% === INPUT LAYER ===
     subgraph "📝 Multi-Source Truth"
-        UserStories["📋 Business Requirements<br/>• User stories<br/>• Acceptance criteria<br/>• Business rules"]:::input
-        TechnicalSpecs["📄 Technical Specifications<br/>• API contracts (OpenAPI)<br/>• Type definitions<br/>• Integration contracts"]:::input
-        ExistingAssets["💻 Existing Assets<br/>• Source code<br/>• Current tests<br/>• Git history<br/>• Documentation"]:::input
+        UserStories["📋 Business Requirements"]:::input
+        TechnicalSpecs["📄 Technical Specifications"]:::input
+        ExistingAssets["💻 Existing Assets"]:::input
     end
 
     %% === INTELLIGENCE LAYER ===
     subgraph "🧠 Multi-Modal Intelligence Engine"
-        FactExtractor["Fact Extraction Engine<br/>🎯 Zero-interpretation parsing<br/>🎯 Structured requirement analysis<br/>🎯 Code behavior mapping<br/>🎯 Historical pattern mining"]:::intelligent
-        
-        CrossValidator["Cross-Source Validator<br/>🔍 Spec ↔ Code alignment<br/>🔍 Requirement coverage gaps<br/>🔍 Implementation contradictions<br/>🔍 Missing functionality detection"]:::intelligent
-        
-        StrategyOrchestrator["Intelligent Strategy Orchestrator<br/>⚡ Risk-based prioritization<br/>⚡ Tool-to-task matching<br/>⚡ Resource optimization<br/>⚡ Failure prediction"]:::intelligent
+        FactExtractor["Fact Extraction Engine"]:::intelligent
+        CrossValidator["Cross-Source Validator"]:::intelligent
+        StrategyOrchestrator["Intelligent Strategy Orchestrator"]:::intelligent
     end
 
-    %% === PROVEN TOOLS LAYER ===
-    subgraph "🛠️ Best-in-Class Tool Ecosystem"
-        direction LR
-        
-        subgraph Generation Tools
-            Copilot["GitHub Copilot<br/>💰 $20/month<br/>⭐ 70% unit test success"]:::existing
-            Cursor["Cursor IDE<br/>💰 $20/month<br/>⭐ Best for refactoring"]:::existing
-            Hypothesis["Hypothesis PBT<br/>💰 Free<br/>⭐ 95% edge case coverage"]:::existing
-        end
-        
-        subgraph Validation Tools
-            MutationTest["Mutation Testing<br/>mutmut/Stryker<br/>💰 Free<br/>⭐ Test quality validation"]:::existing
-            StaticAnalysis["Static Analysis<br/>SonarQube/Semgrep<br/>💰 $30/month<br/>⭐ Code quality"]:::existing
-            ContractTest["Contract Testing<br/>Pact/WireMock<br/>💰 Free<br/>⭐ API validation"]:::existing
-        end
+    %% === PROVEN TOOLS LAYER (Simplified) ===
+    subgraph "🛠️ Tool Ecosystem"
+        Copilot["GitHub Copilot"]:::existing
+        Hypothesis["Hypothesis PBT"]:::existing
+        StaticAnalysis["Static Analysis"]:::existing
+    end
+
+    %% === NOVEL COORDINATION LAYER (Implemented) ===
+    subgraph "🎭 Smart Orchestration (Implemented)"
+        MultiToolRouter["Multi-Tool Smart Router"]:::novel
+        QualityGate["Multi-Layer Quality Gate"]:::novel
+        HumanLoop["Human-in-the-Loop Controller"]:::novel
+    end
+
+    %% === HEALING LAYER (Implemented) ===
+    subgraph "🏥 Surgical Healing System (Implemented)"
+        ErrorAnalyzer["AI-Powered Error Analyzer"]:::healing
+        SurgicalHealer["Surgical Patch Generator"]:::healing
+        LearningEngine["Continuous Learning Engine"]:::healing
     end
 
     %% === INCREMENTAL STATE LAYER ===
     subgraph "📊 Stateful Execution Engine"
-        TestChecklist["Smart Test Checklist<br/>📋 Individual test states<br/>📋 Failure categorization<br/>📋 Patch history<br/>📋 Success patterns"]:::state
-        
-        ExecutionEngine["Incremental Execution Engine<br/>🎯 Run only failed tests<br/>🎯 Parallel execution<br/>🎯 Resource monitoring<br/>🎯 State persistence"]:::novel
-        
-        PatchDatabase["Patch Knowledge Base<br/>🧠 Error → Fix mappings<br/>🧠 Success patterns<br/>🧠 Cross-project learning<br/>🧠 Confidence scoring"]:::state
+        TestChecklist["Smart Test Checklist"]:::state
+        ExecutionEngine["Incremental Execution Engine"]:::novel
+        PatchDatabase["Patch Knowledge Base"]:::state
     end
 
-    %% === HEALING LAYER ===
-    subgraph "🏥 Surgical Healing System"
-        ErrorAnalyzer["AI-Powered Error Analyzer<br/>🔍 Error categorization<br/>🔍 Root cause analysis<br/>🔍 Historical pattern matching<br/>🔍 Fix confidence scoring"]:::healing
-        
-        SurgicalHealer["Surgical Patch Generator<br/>🔧 Minimal impact patches<br/>🔧 Targeted fixes only<br/>🔧 Rollback capability<br/>🔧 Human escalation"]:::healing
-        
-        LearningEngine["Continuous Learning Engine<br/>🧠 Pattern recognition<br/>🧠 Success optimization<br/>🧠 Failure prediction<br/>🧠 Strategy improvement"]:::healing
-    end
-
-    %% === NOVEL COORDINATION LAYER ===
-    subgraph "🎭 Smart Orchestration (Our Secret Sauce)"
-        MultiToolRouter["Multi-Tool Smart Router<br/>🎯 Context-aware tool selection<br/>🎯 Parallel execution coordination<br/>🎯 Fallback strategies<br/>🎯 Cost optimization"]:::novel
-        
-        QualityGate["Multi-Layer Quality Gate<br/>✅ Citation requirement<br/>✅ Business logic validation<br/>✅ Performance benchmarks<br/>✅ Security checks"]:::novel
-        
-        HumanLoop["Human-in-the-Loop Controller<br/>👨‍💻 Approval workflows<br/>👨‍💻 Expert escalation<br/>👨‍💻 Quality oversight<br/>👨‍💻 Manual overrides"]:::novel
-    end
-
-    %% === OUTPUT LAYER ===
+    %% === OUTPUT LAYER (Implemented) ===
     subgraph "📦 Production-Ready Deliverables"
-        TestSuite["Self-Documenting Test Suite<br/>✅ Citation-backed assertions<br/>✅ Requirement traceability<br/>✅ Maintenance instructions<br/>✅ Business value mapping"]:::output
-        
-        QualityReport["Comprehensive Quality Report<br/>📊 Coverage analysis<br/>📊 Risk assessment<br/>📊 Gap identification<br/>📊 Improvement recommendations"]:::output
-        
-        AuditTrail["Complete Audit Trail<br/>📝 Generation decisions<br/>📝 Patch applications<br/>📝 Quality validations<br/>📝 Human approvals"]:::output
+        TestSuite["Self-Documenting Test Suite"]:::output
+        QualityReport["Comprehensive Quality Report"]:::output
+        AuditTrail["Complete Audit Trail"]:::output
     end
 
     %% === CONNECTIONS ===
     
     %% Input to Intelligence
     UserStories --> FactExtractor
-    TechnicalSpecs --> FactExtractor
     ExistingAssets --> FactExtractor
-    
     FactExtractor --> CrossValidator
     CrossValidator --> StrategyOrchestrator
     
-    %% Intelligence to Tools
+    %% Intelligence to Orchestration
     StrategyOrchestrator --> MultiToolRouter
-    MultiToolRouter --> Copilot
-    MultiToolRouter --> Cursor
-    MultiToolRouter --> Hypothesis
     
-    %% Tools to Quality
+    %% Orchestration to Tools/Healing
+    MultiToolRouter --> Copilot
+    MultiToolRouter --> Hypothesis
     Copilot --> QualityGate
-    Cursor --> QualityGate
     Hypothesis --> QualityGate
     
-    QualityGate --> MutationTest
-    QualityGate --> StaticAnalysis
-    QualityGate --> ContractTest
+    %% Quality Gate to Execution/Escalation
+    QualityGate --> ExecutionEngine
+    QualityGate --> HumanLoop
     
-    %% Quality to Execution
-    MutationTest --> ExecutionEngine
-    StaticAnalysis --> ExecutionEngine
-    ContractTest --> ExecutionEngine
-    
+    %% Execution Loop
     ExecutionEngine --> TestChecklist
     TestChecklist --> ErrorAnalyzer
-    
-    %% Healing Loop
     ErrorAnalyzer --> SurgicalHealer
-    SurgicalHealer --> PatchDatabase
-    PatchDatabase --> ExecutionEngine
+    SurgicalHealer --> ExecutionEngine
     
-    %% Learning Loop
-    TestChecklist --> LearningEngine
-    LearningEngine --> StrategyOrchestrator
-    LearningEngine --> MultiToolRouter
-    
-    %% Human Oversight
-    QualityGate --> HumanLoop
-    SurgicalHealer --> HumanLoop
-    HumanLoop --> TestSuite
-    
-    %% Final Outputs
+    %% Final Outcomes
     ExecutionEngine --> TestSuite
-    CrossValidator --> QualityReport
+    ExecutionEngine --> LearningEngine
+    HumanLoop --> LearningEngine
+    
+    %% Reporting
+    LearningEngine --> QualityReport
     LearningEngine --> AuditTrail
-
+    
     %% State Persistence
     TestChecklist -.->|"Persistent State"| PatchDatabase
-    ExecutionEngine -.->|"Execution History"| TestChecklist
     SurgicalHealer -.->|"Patch Results"| PatchDatabase
 ```
 
