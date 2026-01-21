@@ -1,0 +1,8 @@
+@pytest.fixture(scope="{{ scope | default('function') }}")
+def {{ name }}():
+    """{{ docstring | default('Generated fixture') }}"""
+    {{ body | indent(4) }}
+    {% if teardown %}
+    yield
+    {{ teardown | indent(4) }}
+    {% endif %}

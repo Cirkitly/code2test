@@ -1,0 +1,10 @@
+// Mock for {{ name }}
+{% if type == 'module' %}
+jest.mock('{{ target }}', () => ({
+    {{ body | indent(4) }}
+}));
+{% elif type == 'spy' %}
+const {{ name }} = jest.spyOn({{ object }}, '{{ method }}');
+{% else %}
+const {{ name }} = jest.fn({{ body }});
+{% endif %}

@@ -130,8 +130,8 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
 
 ### 4.3 Template System
 - [x] Create test file templates per language/framework
-- [/] Create fixture/mock templates (Using base test templates for now)
-- [/] Create assertion pattern library
+- [x] Create fixture/mock templates
+- [x] Create assertion pattern library
 
 ---
 
@@ -165,10 +165,8 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
 - LLM Agents (Intent, Test, Diagnosis)
 - Verification System
 - CLI (Refactored & Interactive)
-- Adapters (Pytest, Jest, JUnit) - Updated to use Templates
-
-### 🔄 In Progress
-- Advanced Template Features (Fixtures/Assertions)
+- Adapters (Pytest, Jest, JUnit)
+- Template System (Templates, Fixtures, Assertions)
 
 ### 🆕 Planned
 - CI/CD Integration
