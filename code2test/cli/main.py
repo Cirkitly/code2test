@@ -21,10 +21,10 @@ def cli(ctx):
     
     \b
     Quick Start:
-      code2test generate src/       # Generate tests interactively
-      code2test generate --auto .   # Auto-accept high-confidence tests
-      code2test verify tests/       # Verify generated tests
-      code2test intent show auth    # View inferred intents
+      code2test test src/             # Generate tests interactively
+      code2test test --auto .         # Auto-accept high-confidence tests
+      code2test verify tests/         # Verify generated tests
+      code2test intent show auth      # View inferred intents
     """
     # Ensure context object exists
     ctx.ensure_object(dict)
@@ -41,10 +41,16 @@ def version():
 # Import commands
 from code2test.cli.commands.config import config_group
 from code2test.cli.commands.generate import generate_command
+from code2test.cli.commands.test import test_command, verify_command, intent_command
 
 # Register command groups
 cli.add_command(config_group)
-cli.add_command(generate_command, name="generate")
+cli.add_command(generate_command, name="generate")  # Legacy docs command
+
+# Register new test generation commands
+cli.add_command(test_command)      # code2test test
+cli.add_command(verify_command)    # code2test verify
+cli.add_command(intent_command)    # code2test intent
 
 
 def main():
