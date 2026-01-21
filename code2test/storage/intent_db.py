@@ -7,7 +7,7 @@ SQLite-based persistence for inferred intents with JSON storage.
 import json
 import sqlite3
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 
 from code2test.core.models import Intent, IntentEvidence
@@ -147,6 +147,16 @@ class IntentDatabase:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("SELECT * FROM intents ORDER BY component_path")
             return [self._row_to_intent(row) for row in cursor.fetchall()]
+
+    def get_all_intents_dict(self) -> Dict[str, Intent]:
+        """
+        Get all stored intents as a dictionary keyed by component_id.
+        
+        Returns:
+            Dictionary of all intents
+        """
+        intents = self.get_all_intents()
+        return {intent.component_id: intent for intent in intents}
     
     def delete_intent(self, component_id: str) -> bool:
         """

@@ -1,7 +1,8 @@
 """
-Code2Test Reporting Module
-
-Report generation for test coverage and quality metrics.
+Reporting package for Code2Test.
 """
 
-__all__ = []
+from .html_report import HTMLReportGenerator
+from .json_report import JSONReportGenerator
+
+__all__ = ['HTMLReportGenerator', 'JSONReportGenerator']

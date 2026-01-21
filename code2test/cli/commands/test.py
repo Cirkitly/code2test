@@ -223,10 +223,29 @@ def test_command(
                 # Handle reporting
                 if report != "none":
                     display.info(f"Generating {report} report...")
-                    # Placeholder for reporting logic
-                    # from code2test.reporting import generate_reports
-                    # generate_reports(suite, report, output_dir)
-                    display.warning("Reporting not fully implemented yet")
+                    try:
+                        from code2test.reporting import HTMLReportGenerator, JSONReportGenerator
+                        
+                        report_dir = Path(output_dir) / "reports"
+                        report_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        if report in ["html", "all"]:
+                            html_path = report_dir / "report.html"
+                            html_gen = HTMLReportGenerator()
+                            html_gen.generate_report(suite, generator.intent_db.get_all_intents_dict(), str(html_path))
+                            display.success(f"HTML report generated: {html_path}")
+                            
+                        if report in ["json", "all"]:
+                            json_path = report_dir / "report.json"
+                            json_gen = JSONReportGenerator()
+                            json_gen.generate_report(suite, generator.intent_db.get_all_intents_dict(), str(json_path))
+                            display.success(f"JSON report generated: {json_path}")
+                            
+                    except Exception as e:
+                        display.error(f"Failed to generate report: {e}")
+                        if verbose:
+                            import traceback
+                            traceback.print_exc()
             else:
                 display.info(f"Would generate {suite.total_tests} tests (dry-run)")
                 
