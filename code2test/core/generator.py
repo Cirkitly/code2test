@@ -204,32 +204,61 @@ class TestGenerator:
         logger.info("Phase 2: Generating tests...")
         test_files: List[TestFile] = []
         
-        for comp_id, component in components.items():
-            intent = intents.get(comp_id)
-            if not intent:
-                continue
-            
-            # Skip low-confidence intents in auto mode
-            if self.config.auto_accept and intent.confidence < self.config.confidence_threshold:
-                logger.info(f"Skipping {comp_id} (low confidence: {intent.confidence:.0%})")
-                continue
-            
-            try:
-                test_file = await self.test_agent.generate_unit_tests(
-                    component,
-                    intent,
-                    self.config.framework,
-                )
+        logger.info("Phase 2: Generating tests...")
+        test_files: List[TestFile] = []
+        
+        # Concurrency limit
+        semaphore = asyncio.Semaphore(5)
+        
+        async def process_component(comp_id: str, component: Dict[str, Any]) -> Optional[TestFile]:
+            async with semaphore:
+                intent = intents.get(comp_id)
+                if not intent:
+                    return None
                 
-                if test_file.test_cases:
-                    test_files.append(test_file)
-                    self.test_registry.register_test(test_file)
+                # Incremental check: if verified test exists and intent hasn't changed, skip
+                # This is a basic check. Ideally we'd compare timestamps or hashes.
+                existing_test_files = self.test_registry.get_tests_for_component(comp_id)
+                if existing_test_files:
+                     # For now, if we have any existing test, simpler logic:
+                     # If verified, skip.
+                     # If auto-mode and verified, definitely skip.
+                     is_verified = any(t.verified for t in existing_test_files)
+                     if is_verified and self.config.auto_accept:
+                         logger.info(f"Skipping {comp_id} (already verified)")
+                         return None
+
+                # Skip low-confidence intents in auto mode
+                if self.config.auto_accept and intent.confidence < self.config.confidence_threshold:
+                    logger.info(f"Skipping {comp_id} (low confidence: {intent.confidence:.0%})")
+                    return None
+                
+                try:
+                    test_file = await self.test_agent.generate_unit_tests(
+                        component,
+                        intent,
+                        self.config.framework,
+                    )
                     
-                    if self.on_test_generated:
-                        self.on_test_generated(test_file)
-                        
-            except Exception as e:
-                logger.error(f"Test generation failed for {comp_id}: {e}")
+                    if test_file.test_cases:
+                        self.test_registry.register_test(test_file)
+                        if self.on_test_generated:
+                            self.on_test_generated(test_file)
+                        return test_file
+                            
+                except Exception as e:
+                    logger.error(f"Test generation failed for {comp_id}: {e}")
+                    return None
+                    
+        # Create tasks
+        tasks = [
+            process_component(cid, comp) 
+            for cid, comp in components.items()
+        ]
+        
+        # Run tasks
+        results = await asyncio.gather(*tasks)
+        test_files = [r for r in results if r is not None]
         
         logger.info(f"Generated {len(test_files)} test files")
         return test_files
