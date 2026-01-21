@@ -66,6 +66,17 @@ console = Console()
     help="Glob pattern for files to exclude (e.g., '*test*')"
 )
 @click.option(
+    "--exit-code/--no-exit-code",
+    default=False,
+    help="Return non-zero exit code if tests fail or verification fails"
+)
+@click.option(
+    "--report",
+    type=click.Choice(["none", "html", "json", "all"]),
+    default="none",
+    help="Generate reports after test generation"
+)
+@click.option(
     "--verbose", "-v",
     is_flag=True,
     default=False,
@@ -80,6 +91,8 @@ def test_command(
     framework: str,
     include: Optional[str],
     exclude: Optional[str],
+    exit_code: bool,
+    report: str,
     verbose: bool
 ) -> None:
     """
@@ -125,27 +138,63 @@ def test_command(
         
         # Build include/exclude patterns
         include_patterns = [include] if include else None
-        exclude_patterns = [exclude] if exclude else ["*test*", "*__pycache__*", "*.pyc"]
+        
+        # More specific default exclude patterns to avoid excluding the repo itself if it has "test" in the name
+        default_excludes = ["tests", "test", "*_test.py", "test_*.py", "*__pycache__*", "*.pyc", ".git", ".tox", ".env", "venv"]
+        exclude_patterns = [exclude] if exclude else default_excludes
         
         # Analyze codebase
         display.info("Parsing codebase...")
         
         # Use the existing dependency analyzer
+        # Use the existing dependency analyzer
+        # We need to construct Config correctly as it requires many fields
+        # and patterns go into agent_instructions
+        agent_instructions = {
+            "include_patterns": include_patterns,
+            "exclude_patterns": exclude_patterns
+        }
+        
         repo_config = Config(
             repo_path=str(repo_path),
-            include_patterns=include_patterns,
-            exclude_patterns=exclude_patterns,
+            output_dir=output_dir,
+            dependency_graph_dir=f"{output_dir}/dependency_graphs",
+            docs_dir=f"{output_dir}/docs",
+            max_depth=2,
+            llm_base_url="", # Not used for static analysis
+            llm_api_key="",
+            main_model="",
+            cluster_model="",
+            agent_instructions=agent_instructions
         )
         
         builder = DependencyGraphBuilder(repo_config)
-        components_data = builder.build()
+        components, leaf_nodes = builder.build_dependency_graph()
         
-        if not components_data or not components_data.get("components"):
+        if not components:
             display.warning("No components found to analyze")
             sys.exit(0)
-        
-        components = components_data.get("components", {})
+            
         display.success(f"Found {len(components)} components")
+        
+        # Convert Node objects to dictionaries for compatibility
+        # and map 'depends_on' to 'dependencies'
+        components_dict = {}
+        for k, v in components.items():
+            if hasattr(v, 'model_dump'):
+                data = v.model_dump()
+            else:
+                data = v.dict()
+            
+            # Map depends_on to dependencies
+            if 'depends_on' in data:
+                data['dependencies'] = list(data['depends_on'])
+            else:
+                data['dependencies'] = []
+                
+            components_dict[k] = data
+            
+        components = components_dict
         
         # Create generator
         generator = TestGenerator(
@@ -170,8 +219,24 @@ def test_command(
             
             if not dry_run:
                 display.success(f"Generated {suite.total_tests} tests in {len(suite.test_files)} files")
+                
+                # Handle reporting
+                if report != "none":
+                    display.info(f"Generating {report} report...")
+                    # Placeholder for reporting logic
+                    # from code2test.reporting import generate_reports
+                    # generate_reports(suite, report, output_dir)
+                    display.warning("Reporting not fully implemented yet")
             else:
                 display.info(f"Would generate {suite.total_tests} tests (dry-run)")
+                
+            # Handle exit code
+            if exit_code and not dry_run:
+                # Check for verification failures
+                failed_files = [tf for tf in suite.test_files if not tf.verified]
+                if failed_files:
+                    display.error(f"{len(failed_files)} files failed verification")
+                    sys.exit(1)
         else:
             # Interactive mode
             run_interactive_generation(generator, components, auto_accept=auto)
