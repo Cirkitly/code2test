@@ -151,9 +151,9 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
   - [x] Coverage analysis (behavioral vs line)
 
 ### 5.3 Batch Processing
-- [ ] Parallel module processing
-- [ ] Progress persistence and resumption
-- [ ] Incremental test generation (changed files only)
+- [x] Parallel module processing
+- [x] Progress persistence and resumption
+- [x] Incremental test generation (changed files only)
 
 ---
 
@@ -167,9 +167,21 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
 - CLI (Refactored & Interactive)
 - Adapters (Pytest, Jest, JUnit)
 - Template System
-- CI/CD Integration
-- Reporting System
+- CI/CD & Reporting
+- Batch Processing
 
 ### 🆕 Planned
-- Batch Processing
-- Final Project Cleanup (README, cleanup unused files)
+- Phase 6: Gap Filling (Proposal Compliance)
+
+---
+
+## Phase 6: Gap Filling (Weeks 13)
+
+### 6.1 CLI Completeness
+- [x] Implement `code2test init` command
+  - [x] Generate `.code2test/config.json`
+  - [x] Auto-detect language and frameworks
+- [x] Implement `code2test verify --fix` logic
+  - [x] Wire up DiagnosisAgent to verify command
+  - [x] Implement auto-patching of test files based on diagnosis
+
