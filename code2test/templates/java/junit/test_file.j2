@@ -1,0 +1,27 @@
+
+package {{ package_name }};
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+{% for import in imports %}
+import {{ import }};
+{% endfor %}
+
+class {{ test_class_name }} {
+
+    {% for test in tests %}
+    @Test
+    void {{ test.name }}() {
+        // Intent: {{ test.intent }}
+        
+        // Setup
+        {{ test.setup | indent(8) }}
+
+        // Action
+        {{ test.action | indent(8) }}
+
+        // Assertions
+        {{ test.assertions | indent(8) }}
+    }
+    {% endfor %}
+}

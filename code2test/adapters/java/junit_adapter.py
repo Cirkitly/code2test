@@ -15,24 +15,6 @@ import xml.etree.ElementTree as ET
 from code2test.core.models import TestFile, TestCase, TestStatus
 
 
-TEST_FILE_TEMPLATE = '''package {package_name};
-
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-{imports}
-
-/**
- * Tests for {component_name}
- * Intent: {intent}
- */
-class {test_class_name} {{
-
-{fixtures}
-
-{test_cases}
-}}
-'''
-
 class JUnitAdapter:
     """
     Adapter for JUnit test generation and execution.
@@ -40,6 +22,8 @@ class JUnitAdapter:
     
     def __init__(self, repo_path: str):
         self.repo_path = Path(repo_path)
+        from code2test.core.templates import TemplateManager
+        self.template_manager = TemplateManager()
     
     def generate_test_file_content(
         self,
@@ -56,20 +40,24 @@ class JUnitAdapter:
         component_name = Path(test_file.component_path).stem
         test_class_name = f"{component_name}Test"
         
-        imports_str = "\n".join(test_file.imports)
-        
-        fixtures_str = "\n".join(test_file.fixtures) if test_file.fixtures else ""
-        
-        test_cases_str = "\n\n".join(self._indent(tc.test_code, 4) for tc in test_file.test_cases)
-        
-        return TEST_FILE_TEMPLATE.format(
-            package_name=package_name,
-            component_name=component_name,
-            test_class_name=test_class_name,
-            intent=intent_text,
-            imports=imports_str,
-            fixtures=self._indent(fixtures_str, 4),
-            test_cases=test_cases_str
+        tests_data = []
+        for tc in test_file.test_cases:
+            tests_data.append({
+                "name": tc.name,
+                "intent": tc.intent_text,
+                "setup": "",
+                "action": tc.test_code,
+                "assertions": ""
+            })
+
+        return self.template_manager.render(
+            "java/junit/test_file.j2",
+            {
+                "package_name": package_name,
+                "test_class_name": test_class_name,
+                "imports": test_file.imports,
+                "tests": tests_data
+            }
         )
 
     def _infer_package(self, path_str: str) -> str:

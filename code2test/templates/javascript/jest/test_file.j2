@@ -1,0 +1,27 @@
+
+{% for import in imports %}
+{{ import }}
+{% endfor %}
+
+describe('{{ component_name }}', () => {
+    {% for mock in mocks %}
+    {{ mock }}
+    {% endfor %}
+
+    beforeEach(() => {
+        // Setup
+    });
+
+    {% for test in tests %}
+    test('{{ test.intent }}', async () => {
+        // Setup
+        {{ test.setup | indent(8) }}
+
+        // Action
+        {{ test.action | indent(8) }}
+
+        // Assertions
+        {{ test.assertions | indent(8) }}
+    });
+    {% endfor %}
+});

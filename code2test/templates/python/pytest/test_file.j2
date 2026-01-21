@@ -1,0 +1,28 @@
+
+import pytest
+
+{% for fixture in fixtures %}
+@pytest.fixture
+def {{ fixture.name }}():
+    """{{ fixture.docstring }}"""
+    {{ fixture.body | indent(4) }}
+    {% if fixture.teardown %}
+    yield
+    {{ fixture.teardown | indent(4) }}
+    {% endif %}
+{% endfor %}
+
+{% for test in tests %}
+def {{ test.name }}({{ test.fixtures | join(', ') }}):
+    """
+    Intent: {{ test.intent }}
+    """
+    # Setup
+    {{ test.setup | indent(4) }}
+
+    # Action
+    {{ test.action | indent(4) }}
+
+    # Assertions
+    {{ test.assertions | indent(4) }}
+{% endfor %}
