@@ -138,10 +138,10 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
 ## Phase 5: Enterprise Features (Weeks 11-12)
 
 ### 5.1 CI/CD Integration
-- [ ] Implement `--auto` mode for non-interactive generation
-- [ ] Implement confidence threshold filtering
-- [ ] Create GitHub Actions workflow example
-- [ ] Create GitLab CI example
+- [x] Implement `--auto` mode for non-interactive generation
+- [x] Implement confidence threshold filtering
+- [x] Create GitHub Actions workflow example
+- [x] Create GitLab CI example
 
 ### 5.2 Reporting System
 - [ ] Create `code2test/reporting/`:
@@ -166,8 +166,8 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
 - Verification System
 - CLI (Refactored & Interactive)
 - Adapters (Pytest, Jest, JUnit)
-- Template System (Templates, Fixtures, Assertions)
+- Template System
+- CI/CD Integration
 
 ### 🆕 Planned
-- CI/CD Integration
-- Advanced Reporting
+- Reporting System

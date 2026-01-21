@@ -1,0 +1,45 @@
+stages:
+  - test-generation
+  - test-execution
+
+variables:
+  PYTHON_VERSION: "3.12"
+  OUTPUT_DIR: "generated_tests"
+
+default:
+  image: python:$PYTHON_VERSION
+
+cache:
+  paths:
+    - .venv/
+    - .pip/
+
+before_script:
+  - python -m venv .venv
+  - source .venv/bin/activate
+  - pip install --upgrade pip
+  - pip install .
+  - pip install pytest pytest-cov
+
+generate_tests:
+  stage: test-generation
+  script:
+    - echo "Generating tests with Code2Test..."
+    - code2test test --auto --confidence 0.7 --exit-code --output-dir $OUTPUT_DIR code2test/core/
+  artifacts:
+    paths:
+      - $OUTPUT_DIR/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+run_tests:
+  stage: test-execution
+  needs: ["generate_tests"]
+  script:
+    - echo "Running generated tests..."
+    - pytest $OUTPUT_DIR
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
