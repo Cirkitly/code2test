@@ -1,0 +1,123 @@
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "code2test"
+version = "0.1.0"
+description = "Intelligent Test Generation for Legacy Codebases - Intent-first hierarchical test generation with human-in-the-loop verification"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Code2Test Contributors"}
+]
+keywords = ["testing", "test-generation", "code-analysis", "ai", "llm", "developer-tools", "pytest"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "click>=8.1.0",
+    "keyring>=24.0.0",
+    "GitPython>=3.1.40",
+    "Jinja2>=3.1.6",
+    "tree-sitter>=0.23.2",
+    "tree-sitter-language-pack>=0.8.0",
+    "tree-sitter-python>=0.23.6",
+    "tree-sitter-java>=0.23.5",
+    "tree-sitter-javascript>=0.21.4",
+    "tree-sitter-typescript>=0.21.2",
+    "tree-sitter-c>=0.21.4",
+    "tree-sitter-cpp>=0.23.4",
+    "tree-sitter-c-sharp>=0.23.1",
+    "tree-sitter-php>=0.23.0",
+    "openai>=1.107.0",
+    "litellm>=1.77.0",
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.10.1",
+    "pydantic-ai>=1.0.6",
+    "requests>=2.32.4",
+    "python-dotenv>=1.1.1",
+    "rich>=14.1.0",
+    "networkx>=3.5",
+    "psutil>=7.0.0",
+    "PyYAML>=6.0.2",
+    "prompt-toolkit>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "mypy>=1.5.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+code2test = "code2test.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/cirkitly/code2test"
+Documentation = "https://github.com/cirkitly/code2test/docs"
+Repository = "https://github.com/cirkitly/code2test"
+Issues = "https://github.com/cirkitly/code2test/issues"
+
+[tool.setuptools]
+packages = [
+    "code2test", 
+    "code2test.cli", 
+    "code2test.cli.commands", 
+    "code2test.cli.models", 
+    "code2test.cli.utils", 
+    "code2test.cli.adapters",
+    "code2test.core",
+    "code2test.agents",
+    "code2test.storage",
+    "code2test.adapters",
+    "code2test.adapters.python",
+    "code2test.reporting",
+    "code2test.src",
+    "code2test.src.be",
+    "code2test.src.be.agent_tools",
+    "code2test.src.be.dependency_analyzer",
+    "code2test.src.be.dependency_analyzer.analysis",
+    "code2test.src.be.dependency_analyzer.analyzers",
+    "code2test.src.be.dependency_analyzer.models",
+    "code2test.src.be.dependency_analyzer.utils",
+    "code2test.src.fe"
+]
+
+[tool.setuptools.package-data]
+code2test = ["templates/**/*", "py.typed"]
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=code2test --cov-report=term-missing"
