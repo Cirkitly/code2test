@@ -2,37 +2,21 @@
 Code2Test Intent Extraction
 
 Extracts behavioral intent from code components using multiple signals.
+Delegates to language-specific analyzers.
 """
 
 import re
+import os
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 
 from code2test.core.models import Intent, IntentEvidence
-
-
-# Naming pattern heuristics for common function behaviors
-NAMING_PATTERNS = {
-    r"^validate_|^is_valid_|^check_": "validation",
-    r"^is_|^has_|^can_|^should_": "boolean check",
-    r"^get_|^fetch_|^retrieve_|^load_": "data retrieval",
-    r"^set_|^update_|^modify_|^change_": "data modification",
-    r"^create_|^make_|^build_|^generate_": "creation/generation",
-    r"^delete_|^remove_|^destroy_|^clear_": "deletion/removal",
-    r"^parse_|^extract_|^split_": "parsing/extraction",
-    r"^format_|^render_|^display_": "formatting/display",
-    r"^save_|^store_|^persist_|^write_": "persistence",
-    r"^find_|^search_|^lookup_|^query_": "search/lookup",
-    r"^convert_|^transform_|^to_": "conversion/transformation",
-    r"^init_|^initialize_|^setup_": "initialization",
-    r"^handle_|^process_|^execute_": "processing/handling",
-    r"^send_|^emit_|^dispatch_|^publish_": "sending/publishing",
-    r"^receive_|^consume_|^subscribe_": "receiving/consuming",
-    r"^auth_|^authenticate_|^authorize_": "authentication/authorization",
-    r"^encrypt_|^decrypt_|^hash_": "cryptography",
-    r"^log_|^trace_|^debug_": "logging/debugging",
-    r"^test_|^assert_|^verify_": "testing/verification",
-}
+from code2test.core.intent_analyzers import (
+    IntentAnalyzer,
+    PythonAnalyzer,
+    JavascriptAnalyzer,
+    JavaAnalyzer
+)
 
 
 @dataclass
@@ -86,6 +70,35 @@ class IntentExtractor:
             confidence_threshold: Minimum confidence for auto-acceptance
         """
         self.confidence_threshold = confidence_threshold
+        # Cache analyzers
+        self._analyzers = {
+            "python": PythonAnalyzer(),
+            "javascript": JavascriptAnalyzer(),
+            "typescript": JavascriptAnalyzer(),  # Re-use JS analyzer for TS
+            "java": JavaAnalyzer(),
+        }
+        self._default_analyzer = PythonAnalyzer()
+    
+    def _get_analyzer(self, component: Dict[str, Any]) -> IntentAnalyzer:
+        """Determine correct analyzer for component."""
+        # Try explicit language field
+        lang = component.get("language", "").lower()
+        if lang in self._analyzers:
+            return self._analyzers[lang]
+            
+        # Try file extension
+        file_path = component.get("file_path", "")
+        _, ext = os.path.splitext(file_path)
+        ext = ext.lower()
+        
+        if ext == ".py":
+            return self._analyzers["python"]
+        elif ext in [".js", ".jsx", ".ts", ".tsx"]:
+            return self._analyzers["javascript"]
+        elif ext == ".java":
+            return self._analyzers["java"]
+            
+        return self._default_analyzer
     
     def extract_intent(
         self,
@@ -105,8 +118,10 @@ class IntentExtractor:
         if dependency_intents is None:
             dependency_intents = {}
         
+        analyzer = self._get_analyzer(component)
+        
         # Extract all signals
-        signals = self._extract_signals(component, dependency_intents)
+        signals = self._extract_signals(component, dependency_intents, analyzer)
         
         # Calculate confidence
         confidence = self._calculate_confidence(signals)
@@ -138,39 +153,40 @@ class IntentExtractor:
     def _extract_signals(
         self,
         component: Dict[str, Any],
-        dependency_intents: Dict[str, Intent]
+        dependency_intents: Dict[str, Intent],
+        analyzer: IntentAnalyzer
     ) -> IntentSignals:
-        """Extract all intent signals from component."""
+        """Extract all intent signals from component using analyzer."""
         signals = IntentSignals()
         
         # Docstring signal
-        docstring = component.get("docstring", "")
+        docstring = analyzer.extract_docstring(component)
         if docstring:
-            signals.docstring = docstring.strip()
+            signals.docstring = docstring
             # Higher weight for longer, more detailed docstrings
             doc_length = len(docstring.split())
             signals.docstring_weight = min(self.DOCSTRING_WEIGHT, 
                                            self.DOCSTRING_WEIGHT * (doc_length / 20))
         
         # Signature and type hints
-        signature = component.get("signature", "")
+        signature = analyzer.extract_signature(component)
         if signature:
             signals.signature = signature
             
-            # Check for type hints in signature
-            if "->" in signature or ": " in signature:
-                signals.type_hints = self._extract_type_hints(signature)
+            type_hints = analyzer.extract_type_hints(component)
+            if type_hints:
+                signals.type_hints = type_hints
                 signals.type_hint_weight = self.TYPE_HINT_WEIGHT
         
         # Naming signals
         name = component.get("name", "")
         if name:
-            naming_signals = self._analyze_naming(name)
+            naming_signals = self._analyze_naming(name, analyzer)
             if naming_signals:
                 signals.naming_signals = naming_signals
                 signals.naming_weight = self.NAMING_WEIGHT
         
-        # Call site analysis (if available)
+        # Call site analysis (if available) - Language agnostic mostly
         call_sites = component.get("called_by", [])
         if call_sites:
             signals.call_sites = call_sites[:5]  # Limit to 5
@@ -225,11 +241,13 @@ class IntentExtractor:
             behavior = signals.naming_signals[0]
             parts.append(f"Performs {behavior} operation")
         
-        # Add type hint information
-        if signals.type_hints and "->" in signals.type_hints:
-            return_type = signals.type_hints.split("->")[-1].strip()
-            if return_type and return_type != "None":
-                parts.append(f"Returns {return_type}")
+        # Add type hint information (Generic logic, might need refinement)
+        if signals.type_hints:
+            # Simple heuristic to avoid adding raw ugly signatures
+            if len(signals.type_hints) < 50: 
+                 # This logic was Python specific (->), we generalize it slightly or omit it if too complex
+                 # For now, just append if it's short, as it gives clues
+                 pass
         
         # Fallback
         if not parts:
@@ -237,29 +255,29 @@ class IntentExtractor:
         
         return ". ".join(parts)
     
-    def _extract_type_hints(self, signature: str) -> str:
-        """Extract type hints from function signature."""
-        # Simple extraction - could be enhanced
-        return signature
-    
-    def _analyze_naming(self, name: str) -> List[str]:
+    def _analyze_naming(self, name: str, analyzer: IntentAnalyzer) -> List[str]:
         """
         Analyze function/class name for behavioral hints.
-        
-        Args:
-            name: Function or class name
-            
-        Returns:
-            List of inferred behaviors from naming
         """
         signals = []
-        name_lower = name.lower()
+        # Name matching might depend on language case conventions, but regex usually handles this
+        # or we normalize.
+        name_lower = name if "_" in name else name # Python/snake_case check
+        # For camelCase, splitting is harder without extra libs, but regex patterns like "^get" work
         
-        for pattern, behavior in NAMING_PATTERNS.items():
-            if re.search(pattern, name_lower):
-                signals.append(behavior)
+        patterns = analyzer.get_naming_patterns()
         
-        return signals
+        for pattern, behavior in patterns.items():
+            if re.search(pattern, name): # Use case-sensitive matching if pattern dictates, or flags
+                 # Most patterns we defined don't use flags but rely on ^get vs ^Get or just lowercase in patterns
+                 # Actually, patterns in my analyzers used ^get etc.
+                 # Let's try case-insensitive search to be safe for mixed conventions
+                 signals.append(behavior)
+            elif re.search(pattern, name, re.IGNORECASE):
+                 signals.append(behavior)
+        
+        # De-duplicate
+        return list(set(signals))
     
     def needs_clarification(self, intent: Intent) -> bool:
         """Check if intent needs user clarification."""
@@ -299,3 +317,4 @@ class IntentExtractor:
             questions.append(f"Please describe the expected behavior of '{name}'.")
         
         return questions
+

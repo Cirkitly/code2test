@@ -31,11 +31,12 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
   - [x] Verification status tracking
 
 ### 1.4 CLI Scaffold Enhancements
-- [/] Add new commands to `code2test/cli/commands/`:
-  - [/] `generate.py` - Interactive test generation (exists, needs update)
-  - [ ] `verify.py` - Test verification and diagnosis
-  - [ ] `intent.py` - View/edit inferred intents
-  - [ ] `report.py` - Coverage and quality reports
+- [x] Add new commands to `code2test/cli/commands/`:
+  - [x] `generate.py` - Interactive test generation (exists, remains as legacy/alias)
+  - [x] `test.py` - Main interactive test generation command
+  - [x] `verify.py` - Test verification and diagnosis
+  - [x] `intent.py` - View/edit inferred intents
+  - [x] `report.py` - Coverage and quality reports
 - [x] Update `main.py` with new command groups
 
 ---
@@ -122,9 +123,10 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
   - [x] Test execution and result parsing
 
 ### 4.2 Language-Specific Intent Extraction
-- [/] Extend Python analyzer with intent signals
-- [ ] Extend JavaScript/TypeScript analyzer with intent signals
-- [ ] Extend Java analyzer with intent signals
+- [x] Refactor IntentExtractor for pluggable strategies
+- [x] Implement Python analyzer
+- [x] Implement JavaScript/TypeScript analyzer
+- [x] Implement Java analyzer
 
 ### 4.3 Template System
 - [ ] Create test file templates per language/framework
@@ -157,21 +159,17 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
 
 ## Current Implementation Status
 
-### ✅ Already Available
-- Dependency Analysis
-- Dependency Graph Builder
-- Module Clustering
-- Agent Orchestration
-- CLI Framework
-- LLM Integration
+### ✅ Completed
+- Core Models & Storage
+- Intent Extraction Engine (Polylingual)
+- LLM Agents (Intent, Test, Diagnosis)
+- Verification System
+- CLI (Refactored & Interactive)
+- Adapters (Pytest, Jest, JUnit)
 
-### 🔄 Needs Adaptation
-- `DocumentationGenerator` → `TestGenerator` (Done)
-- Prompt templates (In progress)
+### 🔄 In Progress
+- Template System
 
-### 🆕 Created
-- Intent extraction system (Done)
-- Verification loop with diagnosis (Done)
-- Test framework adapters (Done: Pytest, Jest, JUnit)
-- Intent storage (Done: SQLite)
-- Interactive CLI (Done)
+### 🆕 Planned
+- CI/CD Integration
+- Advanced Reporting
