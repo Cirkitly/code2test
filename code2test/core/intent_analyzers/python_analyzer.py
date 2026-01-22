@@ -28,6 +28,7 @@ class PythonAnalyzer(IntentAnalyzer):
         r"^encrypt_|^decrypt_|^hash_": "cryptography",
         r"^log_|^trace_|^debug_": "logging/debugging",
         r"^test_|^assert_|^verify_": "testing/verification",
+        r"^main$|^run$|^cli$|^app$": "application entry point",
     }
 
     def extract_docstring(self, component: Dict[str, Any]) -> str:

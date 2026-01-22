@@ -2,6 +2,7 @@
 Test generation command for Code2Test CLI.
 """
 
+import os
 import sys
 import logging
 import asyncio
@@ -13,6 +14,7 @@ from rich.console import Console
 
 from code2test.cli.display import DisplayManager
 from code2test.cli.interactive import InteractiveSession, run_interactive_generation
+from code2test.cli.config_manager import ConfigManager
 from code2test.core import TestGenerator, GenerationConfig, TestFramework
 from code2test.src.be.dependency_analyzer import DependencyGraphBuilder
 from code2test.src.config import Config
@@ -121,9 +123,62 @@ def test_command(
         display.error("Confidence must be between 0.0 and 1.0")
         sys.exit(1)
     
+    # Load configuration
+    config_manager = ConfigManager()
+    if not config_manager.load() or not config_manager.is_configured():
+        display.warning("Code2Test is not fully configured.")
+        display.info("Usage may fail if API keys are missing. Run 'code2test config set' to configure.")
+    
+    # Set API key in environment for agents
+    api_key = config_manager.get_api_key()
+    if api_key:
+        os.environ["OPENAI_API_KEY"] = api_key
+        # Support for Gemini/Google models which might look for these keys
+        os.environ["GEMINI_API_KEY"] = api_key
+        os.environ["GOOGLE_API_KEY"] = api_key
+    
     # Resolve paths
     repo_path = Path(path).resolve()
     
+    # Get configured model
+    cli_config = config_manager.get_config()
+    main_model = cli_config.main_model if cli_config and cli_config.main_model else None
+    
+    # If no model configured, infer from env/keys
+    # If no model configured, infer from env/keys
+    if not main_model:
+        llm_backend = os.environ.get("LLM_BACKEND", "").lower()
+        azure_deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT")
+        
+        # Check for Azure configuration first (explicit override)
+        if llm_backend == "azure" or (azure_deployment and os.environ.get("AZURE_OPENAI_ENDPOINT")):
+            if azure_deployment:
+                main_model = f"azure:{azure_deployment}"
+                # Ensure API version is available for clients that need it
+                if os.environ.get("AZURE_OPENAI_API_VERSION"):
+                    os.environ["OPENAI_API_VERSION"] = os.environ["AZURE_OPENAI_API_VERSION"]
+                else:
+                    # Default to a version that supports tool_choice='required'
+                    # See: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions
+                    default_version = "2024-06-01"
+                    if not os.environ.get("OPENAI_API_VERSION"):
+                         os.environ["OPENAI_API_VERSION"] = default_version
+                         display.info(f"Using default Azure API version: {default_version}")
+                display.info(f"Detected Azure configuration, using deployment: {azure_deployment}")
+            else:
+                display.warning("Azure backend detected but AZURE_OPENAI_DEPLOYMENT is missing.")
+                main_model = "openai:gpt-4o-mini"
+        
+        # Then check for Google API Key
+        elif api_key and api_key.startswith("AIza"):
+            # Google API key detected
+            main_model = "google-gla:gemini-2.0-flash-exp"
+            display.info("Detected Google API key, using Gemini 2.0 Flash")
+            
+        else:
+            main_model = "openai:gpt-4o-mini"
+    
+    display.info(f"Using model: {main_model}")
     display.info(f"Analyzing: {repo_path}")
     
     try:
@@ -134,6 +189,7 @@ def test_command(
             dry_run=dry_run,
             output_dir=output_dir,
             framework=TestFramework.PYTEST if framework == "pytest" else TestFramework.UNITTEST,
+            model=main_model,
         )
         
         # Build include/exclude patterns

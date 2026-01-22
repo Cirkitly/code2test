@@ -79,13 +79,13 @@ class TestGenerator:
     @property
     def intent_agent(self) -> IntentAgent:
         if self._intent_agent is None:
-            self._intent_agent = IntentAgent()
+            self._intent_agent = IntentAgent(model=self.config.model)
         return self._intent_agent
     
     @property
     def test_agent(self) -> TestAgent:
         if self._test_agent is None:
-            self._test_agent = TestAgent()
+            self._test_agent = TestAgent(model=self.config.model)
         return self._test_agent
     
     @property

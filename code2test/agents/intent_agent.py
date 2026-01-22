@@ -5,6 +5,7 @@ LLM-powered agent for intent inference when static analysis signals are weak.
 """
 
 import logging
+import asyncio
 from typing import Dict, List, Any, Optional
 
 from pydantic_ai import Agent
@@ -93,7 +94,7 @@ class IntentAgent:
             self._agent = Agent(
                 self.model,
                 system_prompt=INTENT_SYSTEM_PROMPT,
-                result_type=IntentInferenceResult,
+                output_type=IntentInferenceResult,
             )
         return self._agent
     
@@ -130,7 +131,26 @@ class IntentAgent:
         
         try:
             agent = self._get_agent()
-            result = await agent.run(prompt)
+            
+            # Simple retry loop for 429s
+            max_retries = 3
+            backoff = 2.0
+            for attempt in range(max_retries):
+                try:
+                    result = await agent.run(prompt)
+                    break 
+                except Exception as e:
+                    # Check for rate limit
+                    is_rate_limit = "429" in str(e)
+                    if hasattr(e, "status_code") and e.status_code == 429:
+                        is_rate_limit = True
+
+                    if is_rate_limit and attempt < max_retries - 1:
+                        wait = backoff * (2 ** attempt)
+                        logger.warning(f"Rate limited (429), retrying in {wait}s...")
+                        await asyncio.sleep(wait)
+                    else:
+                        raise e
             
             # Build evidence
             evidence = IntentEvidence(
@@ -145,8 +165,8 @@ class IntentAgent:
             return Intent(
                 component_id=component.get("id", component.get("name", "unknown")),
                 component_path=component.get("file_path", ""),
-                intent_text=result.data.intent_text,
-                confidence=result.data.confidence,
+                intent_text=result.output.intent_text,
+                confidence=result.output.confidence,
                 evidence=evidence,
             )
             

@@ -250,3 +250,4 @@ class GenerationConfig(BaseModel):
     include_fixtures: bool = True
     output_dir: Optional[str] = None
     framework: TestFramework = TestFramework.PYTEST
+    model: str = "openai:gpt-4o-mini"

@@ -5,6 +5,7 @@ LLM-powered agent for generating tests from inferred intents.
 """
 
 import logging
+import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
@@ -104,7 +105,6 @@ class TestAgent:
             self._agent = Agent(
                 self.model,
                 system_prompt=TEST_SYSTEM_PROMPT,
-                result_type=TestGenerationResult,
             )
         return self._agent
     
@@ -138,11 +138,30 @@ class TestAgent:
         
         try:
             agent = self._get_agent()
-            result = await agent.run(prompt)
+            
+            # Simple retry loop for 429s without tenacity dependency
+            max_retries = 3
+            backoff = 2.0
+            for attempt in range(max_retries):
+                try:
+                    result = await agent.run(prompt, output_type=TestGenerationResult)
+                    break 
+                except Exception as e:
+                    # Check for rate limit
+                    is_rate_limit = "429" in str(e)
+                    if hasattr(e, "status_code") and e.status_code == 429:
+                        is_rate_limit = True
+
+                    if is_rate_limit and attempt < max_retries - 1:
+                        wait = backoff * (2 ** attempt)
+                        logger.warning(f"Rate limited (429), retrying in {wait}s...")
+                        await asyncio.sleep(wait)
+                    else:
+                        raise e
             
             # Convert to TestCase objects
             test_cases = []
-            for gen_test in result.data.tests:
+            for gen_test in result.output.tests:
                 test_cases.append(TestCase(
                     name=gen_test.name,
                     intent_text=gen_test.tests_behavior,
@@ -160,8 +179,8 @@ class TestAgent:
                 component_path=component_path,
                 test_cases=test_cases,
                 framework=framework,
-                imports=result.data.imports,
-                fixtures=result.data.fixtures,
+                imports=result.output.imports,
+                fixtures=result.output.fixtures,
                 created_at=datetime.now(),
             )
             
@@ -220,7 +239,22 @@ Use pytest syntax with appropriate fixtures."""
 
         try:
             agent = self._get_agent()
-            result = await agent.run(prompt)
+            
+            # Simple retry loop for 429s
+            max_retries = 3
+            backoff = 2.0
+            for attempt in range(max_retries):
+                try:
+                    result = await agent.run(prompt, output_type=TestGenerationResult)
+                    break
+                except Exception as e:
+                    is_rate_limit = "429" in str(e) or (hasattr(e, "status_code") and e.status_code == 429)
+                    if is_rate_limit and attempt < max_retries - 1:
+                        wait = backoff * (2 ** attempt)
+                        logger.warning(f"Rate limited (429), retrying in {wait}s...")
+                        await asyncio.sleep(wait)
+                    else:
+                        raise e
             
             test_cases = [
                 TestCase(
@@ -229,7 +263,7 @@ Use pytest syntax with appropriate fixtures."""
                     test_code=gen_test.test_code,
                     status=TestStatus.PENDING,
                 )
-                for gen_test in result.data.tests
+                for gen_test in result.output.tests
             ]
             
             module_path = module.get("path", "unknown")
@@ -241,8 +275,8 @@ Use pytest syntax with appropriate fixtures."""
                 component_path=module_path,
                 test_cases=test_cases,
                 framework=framework,
-                imports=result.data.imports,
-                fixtures=result.data.fixtures,
+                imports=result.output.imports,
+                fixtures=result.output.fixtures,
             )
             
         except Exception as e:
