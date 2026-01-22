@@ -81,6 +81,7 @@ packages = [
     "code2test.cli.utils", 
     "code2test.cli.adapters",
     "code2test.core",
+    "code2test.core.intent_analyzers",
     "code2test.agents",
     "code2test.storage",
     "code2test.adapters",
