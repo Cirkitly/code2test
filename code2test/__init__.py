@@ -1,5 +1,4 @@
-"""
-Code2Test: Intelligent Test Generation for Legacy Codebases.
+"""Code2Test: Intelligent Test Generation for Legacy Codebases.
 
 This package provides a CLI tool for generating comprehensive test suites
 for codebases lacking tests using intent-first AI analysis.
@@ -11,6 +10,13 @@ __version__ = "0.1.0"
 __author__ = "Code2Test Contributors"
 __license__ = "MIT"
 
-from code2test.cli.main import cli
+__all__ = ["__version__"]
 
-__all__ = ["cli", "__version__"]
+
+def get_cli():
+    """Lazy accessor for the CLI; avoids importing click + every subcommand at
+    package import time. Use this to obtain the click Group from outside
+    package-init context (tests, IDE, etc.)."""
+    from code2test.cli.main import cli
+    return cli
+

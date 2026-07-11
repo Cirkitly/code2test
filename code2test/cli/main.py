@@ -1,24 +1,55 @@
 """
 Main CLI application for Code2Test using Click framework.
+
+Subcommands are loaded lazily: only when a user actually invokes them is the
+corresponding command module imported. This keeps `code2test --help` cheap and
+isolates per-command import failures from package startup.
 """
 
-import sys
+import importlib
+from typing import Callable
+
 import click
-from pathlib import Path
-
-from code2test import __version__
 
 
-@click.group()
-@click.version_option(version=__version__, prog_name="Code2Test")
+class LazyGroup(click.Group):
+    """A click Group whose subcommands are imported on first resolution.
+
+    Two patterns are required by Click:
+
+    * ``list_commands(ctx)`` enumerates names — must use ``self.lazy_subcommands``
+      plus whatever is already registered. Called for help rendering.
+    * ``get_command(ctx, name)`` resolves a name to a Command object, importing
+      the module on first call. This is what actually defers the work.
+    """
+
+    def __init__(self, *args, lazy_subcommands: dict | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lazy_subcommands: dict = lazy_subcommands or {}
+
+    def list_commands(self, ctx):
+        names = set(super().list_commands(ctx))
+        names.update(self.lazy_subcommands)
+        return sorted(names)
+
+    def get_command(self, ctx, cmd_name):
+        if cmd_name in self.lazy_subcommands:
+            module_path, attr = self.lazy_subcommands[cmd_name]
+            module = importlib.import_module(module_path)
+            cmd: click.Command = getattr(module, attr)
+            return cmd
+        return super().get_command(ctx, cmd_name)
+
+
+@click.group(cls=LazyGroup)
+@click.version_option(version="0.1.0", prog_name="Code2Test")
 @click.pass_context
 def cli(ctx):
-    """
-    Code2Test: Intelligent Test Generation for Legacy Codebases.
-    
+    """Code2Test: Intelligent Test Generation for Legacy Codebases.
+
     Generate comprehensive test suites using intent-first AI analysis.
     Supports Python, Java, JavaScript, TypeScript, C, C++, and C#.
-    
+
     \b
     Quick Start:
       code2test test src/             # Generate tests interactively
@@ -26,41 +57,37 @@ def cli(ctx):
       code2test verify tests/         # Verify generated tests
       code2test intent show auth      # View inferred intents
     """
-    # Ensure context object exists
     ctx.ensure_object(dict)
 
 
 @cli.command()
 def version():
     """Display version information."""
-    click.echo(f"Code2Test v{__version__}")
+    click.echo("Code2Test v0.1.0")
     click.echo("Intent-first test generation for legacy codebases")
     click.echo("Built on FSoft AI4Code's CodeWiki framework")
-    
 
-# Import commands
-from code2test.cli.commands.config import config_group
-from code2test.cli.commands.generate import generate_command
-from code2test.cli.commands.test import test_command
-from code2test.cli.commands.verify import verify_command
-from code2test.cli.commands.intent import intent_command
-from code2test.cli.commands.report import report_command
-from code2test.cli.commands.init import init_command
 
-# Register command groups
-cli.add_command(config_group)
-cli.add_command(generate_command, name="generate")  # Legacy docs command
+# Subcommand registry. Modules are imported only when the named subcommand is
+# resolved, never at package load. Optional subcommands (config-group) live
+# under nested registration once their module is loaded.
+_LAZY_SUBCOMMANDS: dict[str, tuple[str, str]] = {
+    "config": ("code2test.cli.commands.config", "config_group"),
+    "generate": ("code2test.cli.commands.generate", "generate_command"),
+    "test": ("code2test.cli.commands.test", "test_command"),
+    "verify": ("code2test.cli.commands.verify", "verify_command"),
+    "intent": ("code2test.cli.commands.intent", "intent_command"),
+    "report": ("code2test.cli.commands.report", "report_command"),
+    "init": ("code2test.cli.commands.init", "init_command"),
+}
 
-# Register new test generation commands
-cli.add_command(test_command)      # code2test test
-cli.add_command(verify_command)    # code2test verify
-cli.add_command(intent_command)    # code2test intent
-cli.add_command(report_command)    # code2test report
-cli.add_command(init_command)      # code2test init
+# Inject the lazy subcommand table on the group without triggering imports.
+cli.lazy_subcommands = _LAZY_SUBCOMMANDS
 
 
 def main():
     """Entry point for the CLI."""
+    import sys
     try:
         cli(obj={})
     except KeyboardInterrupt:
