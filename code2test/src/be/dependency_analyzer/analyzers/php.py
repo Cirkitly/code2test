@@ -74,7 +74,8 @@ class NamespaceResolver:
         if parts[0] in self.use_map:
             base = self.use_map[parts[0]]
             if len(parts) > 1:
-                return f"{base}\\{'\\'.join(parts[1:])}"
+                joined = "\\".join(parts[1:])
+                return f"{base}\\{joined}"
             return base
 
         # Prepend current namespace
