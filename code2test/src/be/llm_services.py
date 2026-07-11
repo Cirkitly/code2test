@@ -1,39 +1,38 @@
 """
 LLM service factory for creating configured LLM clients.
 """
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.models.openai import OpenAIModelSettings
 from pydantic_ai.models.fallback import FallbackModel
 from openai import OpenAI
 
 from code2test.src.config import Config
 
 
-def create_main_model(config: Config) -> OpenAIModel:
+def create_main_model(config: Config) -> OpenAIChatModel:
     """Create the main LLM model from configuration."""
-    return OpenAIModel(
+    return OpenAIChatModel(
         model_name=config.main_model,
         provider=OpenAIProvider(
             base_url=config.llm_base_url,
             api_key=config.llm_api_key
         ),
-        settings=OpenAIModelSettings(
+        settings=OpenAIChatModelSettings(
             temperature=0.0,
             max_tokens=config.max_tokens
         )
     )
 
 
-def create_fallback_model(config: Config) -> OpenAIModel:
+def create_fallback_model(config: Config) -> OpenAIChatModel:
     """Create the fallback LLM model from configuration."""
-    return OpenAIModel(
+    return OpenAIChatModel(
         model_name=config.fallback_model,
         provider=OpenAIProvider(
             base_url=config.llm_base_url,
             api_key=config.llm_api_key
         ),
-        settings=OpenAIModelSettings(
+        settings=OpenAIChatModelSettings(
             temperature=0.0,
             max_tokens=config.max_tokens
         )
