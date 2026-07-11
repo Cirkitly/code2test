@@ -25,6 +25,15 @@ from code2test.storage.test_registry import TestRegistry
 from code2test.agents.intent_agent import IntentAgent
 from code2test.agents.test_agent import TestAgent
 from code2test.agents.diagnosis_agent import DiagnosisAgent
+from code2test.events import (
+    IntentExtracted,
+    TestsGenerated,
+    VerificationCompleted,
+    DiagnosisTriggered,
+    RewriteAttempted,
+    new_run_id,
+    null_sink,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,49 +41,71 @@ logger = logging.getLogger(__name__)
 class TestGenerator:
     """
     Main test generation orchestrator.
-    
+
     Coordinates the three-phase pipeline:
     1. Intent extraction
     2. Test generation
     3. Verification and refinement
+
+    Events are emitted into a sink; the production default is a null sink.
+    The benchmark collector (code2testbench/) injects a real sink that
+    accumulates AcceptanceReport. code2test itself never imports
+    AcceptanceReport — that is the M1B.2 architectural invariant.
     """
-    
+
     def __init__(
         self,
         repo_path: str,
         db_path: Optional[str] = None,
         config: Optional[GenerationConfig] = None,
+        sink=None,
     ):
         """
         Initialize test generator.
-        
+
         Args:
             repo_path: Path to the repository root
             db_path: Path to database for persistence
             config: Generation configuration
+            sink: Object with `emit(event)` accepting GeneratorEvent
+                  subclasses. Defaults to null_sink so the generator is
+                  unaware of any benchmark machinery.
         """
         self.repo_path = Path(repo_path)
         self.config = config or GenerationConfig()
-        
+        # Sink for events; production default is null_sink.
+        self._sink = sink if sink is not None else null_sink()
+        # run_id is created on first generate_tests_for_module call and reused
+        # across phases so a sink can correlate events for the same generation.
+        self._run_id: Optional[str] = None
+
         # Set up database path
         if db_path is None:
             db_path = str(self.repo_path / ".code2test" / "code2test.db")
-        
+
         # Initialize components
         self.intent_extractor = IntentExtractor(self.config.confidence_threshold)
         self.intent_db = IntentDatabase(db_path)
         self.test_registry = TestRegistry(db_path)
         self.verifier = TestVerifier(str(repo_path))
-        
+
         # LLM agents (lazy init)
         self._intent_agent: Optional[IntentAgent] = None
         self._test_agent: Optional[TestAgent] = None
         self._diagnosis_agent: Optional[DiagnosisAgent] = None
-        
+
         # Callbacks for interactive mode
         self.on_intent_extracted: Optional[Callable[[Intent], None]] = None
         self.on_test_generated: Optional[Callable[[TestFile], None]] = None
         self.on_verification_complete: Optional[Callable[[VerificationResult], None]] = None
+
+    def _publish(self, event) -> None:
+        """Single point of emission; null sink absorbs in production."""
+        try:
+            self._sink.emit(event)
+        except Exception as exc:  # noqa: BLE001
+            # A misbehaving sink must NEVER break generation. Log and move on.
+            logger.warning("event sink raised %r; suppressed", exc)
     
     @property
     def intent_agent(self) -> IntentAgent:
@@ -110,7 +141,11 @@ class TestGenerator:
             TestSuite with all generated tests
         """
         logger.info(f"Generating tests for module: {module_path}")
-        
+
+        # Initialize run_id so all phases carry the same identifier.
+        if self._run_id is None:
+            self._run_id = new_run_id()
+
         # Phase 1: Extract intents
         intents = await self._extract_intents_phase(components)
         
@@ -179,7 +214,17 @@ class TestGenerator:
             
             intents[comp_id] = intent
             self.intent_db.save_intent(intent)
-            
+
+            # Emit IntentExtracted. accepted=True when the intent clears the
+            # configured confidence threshold (downstream tests will run).
+            accepted = intent.confidence >= self.config.confidence_threshold
+            self._publish(IntentExtracted(
+                run_id=self._run_id or new_run_id(),
+                component_id=comp_id,
+                confidence=intent.confidence,
+                accepted=accepted,
+            ))
+
             if self.on_intent_extracted:
                 self.on_intent_extracted(intent)
         
@@ -239,9 +284,17 @@ class TestGenerator:
                         intent,
                         self.config.framework,
                     )
-                    
+
                     if test_file.test_cases:
                         self.test_registry.register_test(test_file)
+                        # Emit TestsGenerated. M1B.2 invariant: production
+                        # default sink absorbs; benchmark collector emits.
+                        self._publish(TestsGenerated(
+                            run_id=self._run_id or new_run_id(),
+                            component_id=comp_id,
+                            test_file_path=test_file.path,
+                            test_count=len(test_file.test_cases),
+                        ))
                         if self.on_test_generated:
                             self.on_test_generated(test_file)
                         return test_file
@@ -291,17 +344,28 @@ class TestGenerator:
             
             # Run tests
             result = self.verifier.run_tests(test_file)
-            
+
             if self.on_verification_complete:
                 self.on_verification_complete(result)
-            
+
+            # Emit VerificationCompleted. Pass/fail counts come from
+            # the verifier result; failure_ids is the tuple of failed
+            # test names for downstream diagnosis correlation.
+            self._publish(VerificationCompleted(
+                run_id=self._run_id or new_run_id(),
+                component_id=test_file.component_id,
+                passed=len(result.passed),
+                failed=len(result.failed),
+                failure_ids=tuple(result.failed),
+            ))
+
             # Diagnose failures
             if not result.all_passed:
                 for tc in test_file.test_cases:
                     if tc.status == TestStatus.FAILED:
                         component = components.get(test_file.component_id, {})
                         intent = intents.get(test_file.component_id)
-                        
+
                         if intent:
                             try:
                                 diagnosis = await self.diagnosis_agent.diagnose_failure(
@@ -311,6 +375,15 @@ class TestGenerator:
                                     intent,
                                 )
                                 tc.diagnosis = diagnosis
+                                # Emit DiagnosisTriggered after the agent
+                                # successfully classifies the failure.
+                                self._publish(DiagnosisTriggered(
+                                    run_id=self._run_id or new_run_id(),
+                                    component_id=test_file.component_id,
+                                    failure_id=tc.name,
+                                    cause=diagnosis.cause.value if hasattr(diagnosis.cause, "value") else str(diagnosis.cause),
+                                    diagnosis_confidence=diagnosis.confidence,
+                                ))
                             except Exception as e:
                                 logger.error(f"Diagnosis failed: {e}")
             
