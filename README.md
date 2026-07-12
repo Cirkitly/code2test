@@ -41,12 +41,17 @@ For the quantitative SLOs reported by the benchmark, see `code2testbench/SLO.md`
 git clone https://github.com/cirkitly/code2test.git
 cd code2test
 
-# Install dependencies
-pip install .
+# Install with the dev extras (the only mode that lets you run the
+# test suite). The [dev] extras pull pytest, pytest-cov, pytest-asyncio,
+# pygments, and the linting tools. Without [dev] the package is install-
+# able but not testable.
+pip install -e ".[dev]"
 
 # Verify installation
-code2test --help
+python -m code2test --help
 ```
+
+Note: on a clean machine `pip install -e .` (without `[dev]`) succeeds too, but won't include the test tools. Both forms are reproducible from `pyproject.toml` alone.
 
 ## 🛠️ Usage
 
