@@ -86,7 +86,7 @@ def test_get_provider_dispatches_openai_returns_pydantic_ai_provider():
 
 
 def test_get_provider_dispatches_pydantic_ai_alias():
-    cfg = Config(provider="pydantic-ai", model="x")
+    cfg = Config(provider="pydantic-ai", model="x", api_key="k")
     p = get_provider(cfg)
     assert isinstance(p, PydanticAIProvider)
 
@@ -97,10 +97,165 @@ def test_get_provider_unknown_raises_value_error():
         get_provider(cfg)
 
 
-def test_pydantic_ai_provider_predict_raises_not_implemented():
-    p = PydanticAIProvider(model_name="x", base_url="http://x", api_key="k")
-    with pytest.raises(NotImplementedError, match="v1.0"):
+def test_pydantic_ai_provider_rejects_missing_api_key():
+    """api_key must be set before predict() can succeed.
+
+    Surface the failure as early as possible (constructor) so misconfig
+    is loud, not surprising.
+    """
+    with pytest.raises(ValueError, match="api_key"):
+        PydanticAIProvider(model_name="x", base_url="http://x", api_key="")
+
+
+def test_pydantic_ai_provider_rejects_empty_model_name():
+    """model_name must be set; an empty string would produce a 400 from
+    every OpenAI-compatible endpoint.
+    """
+    with pytest.raises(ValueError, match="model_name"):
+        PydanticAIProvider(model_name="", api_key="k")
+
+
+def test_pydantic_ai_provider_predict_uses_mocked_openai_client():
+    """End-to-end of the OpenAI-SDK roundtrip with a mocked client.
+
+    Verifies that:
+      * predict() makes exactly one chat.completions.create call
+      * the messages use role=system with our schema-instruction
+        prepended, and role=user with the user prompt
+      * the model name forwarded from constructor is used
+      * base_url forwarding is correct (delegated to OpenAI client)
+      * the JSON reply is parsed into the schema instance
+    """
+    out_schema_json = {
+        "intent_text": "reduce path with no symlinks",
+        "confidence": 0.91,
+    }
+    mock_client = _mk_mock_completion(out_schema_json)
+
+    p = PydanticAIProvider(
+        model_name="gpt-4o-mini",
+        base_url="http://testserver/v1",
+        api_key="sk-test",
+    )
+    # Replace the SDK client with a mock. The provider stores the
+    # openai.OpenAI instance at self._client.
+    p._client = mock_client
+
+    out = p.predict("system one", "user one", Out)
+    assert isinstance(out, Out)
+    assert out.intent_text == "reduce path with no symlinks"
+    assert out.confidence == pytest.approx(0.91)
+
+    # Verify the underlying call was made once with the right shape.
+    mock_client.call.assert_called_once()
+    kwargs = mock_client.call.call_kwargs
+    assert kwargs["model"] == "gpt-4o-mini"
+    messages = kwargs["messages"]
+    assert len(messages) == 2
+    assert messages[0]["role"] == "system"
+    assert messages[1]["role"] == "user"
+    assert messages[1]["content"] == "user one"
+    # Schema instruction is in the system message.
+    assert "intent_text" in messages[0]["content"]
+    assert "system one" in messages[0]["content"]
+    assert kwargs["temperature"] == 0.0
+
+
+def test_pydantic_ai_provider_predict_handles_markdown_fenced_json():
+    """Models sometimes wrap replies in markdown fences. The extractor
+    peels them off before passing to model_validate_json.
+    """
+    fenced = "```json\n{\"intent_text\": \"x\", \"confidence\": 0.5}\n```"
+    mock_client = _mk_mock_completion_from_text(fenced)
+    p = PydanticAIProvider(model_name="x", api_key="k")
+    p._client = mock_client
+    out = p.predict("sys", "user", Out)
+    assert out.intent_text == "x"
+    assert out.confidence == pytest.approx(0.5)
+
+
+def test_pydantic_ai_provider_predict_handles_prose_with_embedded_json():
+    """Models sometimes prefix JSON with prose. We extract the first
+    {...} substring and parse that.
+    """
+    raw = 'Here you go:\n{"intent_text": "y", "confidence": 0.7}'
+    mock_client = _mk_mock_completion_from_text(raw)
+    p = PydanticAIProvider(model_name="x", api_key="k")
+    p._client = mock_client
+    out = p.predict("sys", "user", Out)
+    assert out.intent_text == "y"
+    assert out.confidence == pytest.approx(0.7)
+
+
+def test_pydantic_ai_provider_predict_rejects_non_json_reply():
+    """When the reply isn't JSON at all, predict() raises ValueError."""
+    mock_client = _mk_mock_completion_from_text("not json at all")
+    p = PydanticAIProvider(model_name="x", api_key="k")
+    p._client = mock_client
+    with pytest.raises(ValueError, match="does not contain JSON"):
         p.predict("sys", "user", Out)
+
+
+def test_pydantic_ai_provider_predict_rejects_empty_choices():
+    """If the provider returns empty choices (rare but real), fail loudly."""
+    empty = type("R", (), {})()
+    empty.choices = []
+    response = type("Resp", (), {"choices": []})()
+    client = type("C", (), {"chat": type("CC", (), {"completions": type(
+        "CCC", (), {"create": lambda self, **k: response})()})()})()
+    p = PydanticAIProvider(model_name="x", api_key="k")
+    p._client = client
+    with pytest.raises(ValueError, match="empty choices"):
+        p.predict("sys", "user", Out)
+
+
+# --- helpers for the mocked-openai tests ---------------------------------
+
+
+class _MockClient:
+    """Test double for ``openai.OpenAI``. The provider puts this at
+    ``self._client`` and calls ``self._client.chat.completions.create(...)``.
+    """
+
+    def __init__(self, content: str):
+        # Use a fresh _MockCompletions instance per test so recorded
+        # kwargs don't leak across tests.
+        completions = _MockCompletions(content)
+        self.chat = type("ChatNamespace", (), {"completions": completions})()
+        self._completions = completions
+
+    @property
+    def call(self) -> _MockCompletions:
+        return self._completions
+
+
+class _MockCompletions:
+    """Records a single chat.completions.create call and returns a
+    canned response object.
+    """
+
+    def __init__(self, content: str):
+        self._content = content
+        self.call_kwargs: dict | None = None
+
+    def create(self, **kwargs):
+        self.call_kwargs = kwargs
+
+        msg = type("Msg", (), {"content": self._content})()
+        choice = type("Choice", (), {"message": msg})()
+        return type("Resp", (), {"choices": [choice]})()
+
+    def assert_called_once(self):
+        assert self.call_kwargs is not None, "create() was never called"
+
+
+def _mk_mock_completion(json_payload: dict) -> _MockClient:
+    import json as _json
+    return _MockClient(_json.dumps(json_payload))
+
+
+def _mk_mock_completion_from_text(text: str) -> _MockClient:
+    return _MockClient(text)
 
 
 def test_provider_protocol_satisfied():
