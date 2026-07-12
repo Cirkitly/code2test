@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "provider": "openai",
+  "model": "MiniMax-M3",
+  "confidence": 0.0,
+  "initial_acceptance_rate": 1.0,
+  "diagnosis_trigger_rate": 1.0,
+  "rewrite_attempt_rate": 0.0,
+  "final_acceptance_rate": NaN,
+  "net_improvement": NaN,
+  "_num_components": 1
+}
