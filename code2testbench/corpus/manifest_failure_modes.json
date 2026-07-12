@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "frozen": false,
+  "notes": "v1.1 failure-mode corpus. Adds three deliberately-buggy implementations to exercise the diagnosis_agent and rewrite paths. The v1.0 manifest (manifest.json) is frozen; this file is independent. Run with --manifest corpus/manifest_failure_modes.json to use.",
+  "repos": [
+    {
+      "name": "repo_failure_modes",
+      "path": "corpus/repo_failure_modes",
+      "components_dir": "code",
+      "commit_sha": "v1.1.0-repo_failure_modes",
+      "components": ["is_valid_email", "clamp", "reverse_words"],
+      "ground_truth": "corpus/repo_failure_modes/hidden/test_validators.py",
+      "expected_failures": {
+        "is_valid_email": "foo@example missing dot in domain; buggy impl returns True",
+        "clamp": "low+1 bug excludes lower endpoint",
+        "reverse_words": "split(' ') preserves whitespace runs; buggy impl keeps them"
+      }
+    }
+  ]
+}
