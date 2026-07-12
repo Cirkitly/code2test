@@ -3,16 +3,17 @@
 The collector implements the same `emit(event)` contract as NullSink, so
 it can be passed directly to TestGenerator(sink=collector).
 
-It walks every event and updates four counters:
+It walks every event and updates six counters plus a raw events list:
 
-  initial_total, initial_accept  -> IntentExtracted.accepted counts
-  diagnostics_total             -> VerificationCompleted.failed counts
-  diagnosis_triggered           -> DiagnosisTriggered counts
-  rewrites_total                 -> VerificationCompleted.failed (shared denominator)
-  rewrite_attempted              -> RewriteAttempted counts
-  final_total, final_accept      -> RewriteAttempted.success counts
+  initial_total, initial_accept        -> IntentExtracted.accepted counts
+  diagnostics_total                   -> VerificationCompleted.failed counts
+  diagnosis_triggered                 -> DiagnosisTriggered counts
+  rewrites_total                      -> VerificationCompleted.failed (shared denominator)
+  rewrite_attempted, rewrite_success  -> RewriteAttempted counts
+  final_total, final_accept           -> RewriteAttempted.success counts
+  events                              -> raw event list, for per-event replay
 
-When `report()` is called, these counters are normalized into the four
+When `report()` is called, these counters are normalized into the five
 rates that AcceptanceReport exposes.
 
 The collector is *strict* — it raises on events it doesn't understand, so
@@ -39,7 +40,6 @@ from code2testbench.report import AcceptanceReport
 
 class EventCollector:
     """Subscribes to a code2test event stream and produces AcceptanceReport."""
-
     def __init__(self) -> None:
         # Initial acceptance: from IntentExtracted.accepted / total.
         self._initial_total = 0
@@ -52,8 +52,12 @@ class EventCollector:
         # Rewrite attempted: a repair was actually attempted.
         self._rewrites_total = 0
         self._rewrite_attempted = 0
+        # Rewrite success: of rewrites attempted, what fraction produced
+        # a passing test. Per-event metric, distinct from final_acceptance_rate.
+        self._rewrite_success = 0
 
-        # Final acceptance: rewrites that succeeded.
+        # Final acceptance: rewrites that succeeded AND a re-run of the
+        # suite passed more tests than before the rewrite.
         self._final_total = 0
         self._final_accept = 0
 
@@ -83,6 +87,7 @@ class EventCollector:
             self._rewrite_attempted += 1
             self._final_total += 1
             if event.success:
+                self._rewrite_success += 1
                 self._final_accept += 1
 
         elif isinstance(event, TestsGenerated):
@@ -107,6 +112,7 @@ class EventCollector:
             initial_acceptance_rate=_safe_ratio(self._initial_accept, self._initial_total),
             diagnosis_trigger_rate=_safe_ratio(self._diagnosis_triggered, self._diagnostics_total),
             rewrite_attempt_rate=_safe_ratio(self._rewrite_attempted, self._rewrites_total),
+            rewrite_success_rate=_safe_ratio(self._rewrite_success, self._rewrite_attempted),
             final_acceptance_rate=_safe_ratio(self._final_accept, self._final_total),
         )
 
@@ -116,6 +122,10 @@ class EventCollector:
     def events(self) -> List:
         """Raw captured events; used by tests."""
         return list(self._events)
+
+    def rewrite_events(self) -> List[RewriteAttempted]:
+        """All RewriteAttempted events, in order; for the recorded JSON."""
+        return [e for e in self._events if isinstance(e, RewriteAttempted)]
 
 
 def _safe_ratio(num: int, den: int) -> float:

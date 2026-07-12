@@ -113,11 +113,25 @@ class RewriteAttempted(GeneratorEvent):
     """A test or intent was rewritten in response to a diagnosis.
 
     ``success`` records whether the rewritten version passes verification.
-    Multiple rewrites can occur for one failure.
+    Multiple rewrites can occur for one failure; the v1.1 generator's
+    per-component invariant caps the count at one per component per run.
+
+    ``failure_classification`` carries the diagnosis agent's
+    ``DiagnosisCause`` value (TEST_WRONG, CODE_BUG, INTENT_WRONG). This
+    is what lets us explain *why* a benchmark improved or didn't:
+    strategy=='skip' with cause=='CODE_BUG' means a source bug the
+    test side couldn't fix; strategy=='test_rewrite' with
+    success==False means the rewrite failed to produce a passing test.
+
+    ``elapsed_seconds`` is wall-clock time of the rewrite attempt.
+    Combined with ``strategy`` and ``success`` it answers "did this
+    rewrite burn budget without payoff?"
     """
     failure_id: str
     success: bool
     strategy: str = "test_rewrite"   # "test_rewrite" | "intent_rewrite" | "skip"
+    failure_classification: str = "UNKNOWN"
+    elapsed_seconds: float = 0.0
 
 
 # --- sink contract ------------------------------------------------------

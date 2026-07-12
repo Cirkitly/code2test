@@ -1,7 +1,7 @@
 """Unit tests for code2testbench.report.AcceptanceReport.
 
-Verifies the four-number schema, the net_improvement helper, and JSON
-round-trip. These tests do NOT touch code2test/ — that's the M1D.1
+Verifies the five-number schema, the net_improvement helper, and JSON
+round-trip. These tests do NOT touch code2test/ -- that's the M1D.1
 architectural invariant.
 """
 
@@ -15,18 +15,29 @@ import pytest
 from code2testbench.report import AcceptanceReport
 
 
+def _r(initial, diagnosis, rewrite_attempt, rewrite_success, final):
+    """Convenience constructor that keeps the positional order obvious."""
+    return AcceptanceReport(
+        initial_acceptance_rate=initial,
+        diagnosis_trigger_rate=diagnosis,
+        rewrite_attempt_rate=rewrite_attempt,
+        rewrite_success_rate=rewrite_success,
+        final_acceptance_rate=final,
+    )
+
+
 def test_net_improvement_subtracts_initial_from_final():
-    r = AcceptanceReport(0.48, 0.30, 0.20, 0.71)
+    r = _r(0.48, 0.30, 0.20, 0.50, 0.71)
     assert math.isclose(r.net_improvement(), 0.23, rel_tol=1e-9)
 
 
 def test_net_improvement_negative_when_repair_makes_worse():
-    r = AcceptanceReport(0.80, 0.10, 0.05, 0.50)
+    r = _r(0.80, 0.10, 0.05, 0.20, 0.50)
     assert math.isclose(r.net_improvement(), -0.30, rel_tol=1e-9)
 
 
 def test_net_improvement_zero_when_unchanged():
-    r = AcceptanceReport(0.40, 0.20, 0.10, 0.40)
+    r = _r(0.40, 0.20, 0.10, 0.10, 0.40)
     assert r.net_improvement() == 0.0
 
 
@@ -35,11 +46,13 @@ def test_from_dict_round_trip():
         "initial_acceptance_rate": 0.50,
         "diagnosis_trigger_rate": 0.25,
         "rewrite_attempt_rate": 0.12,
+        "rewrite_success_rate": 0.40,
         "final_acceptance_rate": 0.66,
     }
     r = AcceptanceReport.from_dict(src)
     assert r.initial_acceptance_rate == 0.50
     assert r.final_acceptance_rate == 0.66
+    assert r.rewrite_success_rate == 0.40
     assert r.to_dict() == {**src, "net_improvement": pytest.approx(0.16)}
 
 
@@ -49,19 +62,42 @@ def test_from_dict_rejects_unknown_keys():
             "initial_acceptance_rate": 0.5,
             "diagnosis_trigger_rate": 0.5,
             "rewrite_attempt_rate": 0.5,
+            "rewrite_success_rate": 0.5,
             "final_acceptance_rate": 0.5,
             "extra_field": "no",  # not allowed
         })
 
 
 def test_to_dict_contains_net_improvement():
-    r = AcceptanceReport(0.4, 0.2, 0.1, 0.6)
+    r = _r(0.4, 0.2, 0.1, 0.5, 0.6)
     d = r.to_dict()
     assert d["net_improvement"] == pytest.approx(0.2)
     assert set(d) == {
         "initial_acceptance_rate",
         "diagnosis_trigger_rate",
         "rewrite_attempt_rate",
+        "rewrite_success_rate",
         "final_acceptance_rate",
         "net_improvement",
     }
+
+
+def test_rewrite_success_rate_independent_from_final():
+    """rewrite_success_rate is per-event, final_acceptance_rate is per-run.
+
+    A rewrite can succeed at producing a passing test (event-level) while
+    the post-rewrite suite has worse outcomes than before (run-level).
+    The two metrics must be tracked independently so the data can
+    distinguish 'rewrite itself worked' from 'rewrite improved things'.
+    """
+    # 4 rewrites attempted, all of which produced a passing test
+    # (rewrite_success_rate = 1.0). But only 1 of those rewrites ended
+    # with a component that previously had failing tests now passing
+    # all of them (final_acceptance_rate = 0.25).
+    r = _r(initial=0.6, diagnosis=1.0, rewrite_attempt=1.0,
+           rewrite_success=1.0, final=0.25)
+    assert r.rewrite_success_rate == 1.0
+    assert r.final_acceptance_rate == 0.25
+    # net_improvement = -0.35: the run got worse despite every rewrite
+    # producing a passing test.
+    assert r.net_improvement() < 0

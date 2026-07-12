@@ -1,8 +1,9 @@
 """AcceptanceReport — the four-number benchmark result.
 
-Schema is closed. Adding fields is a v2 commit.
+Schema is closed at v1. v1.1 adds a fifth number to disambiguate
+"the rewrite itself succeeded" from "the post-rewrite run is better."
 
-The four numbers tell a consistent story:
+The five numbers tell a consistent story:
 
   initial_acceptance_rate:
       Of all components considered, what fraction had an intent above
@@ -18,6 +19,12 @@ The four numbers tell a consistent story:
       Of all diagnosed failures, what fraction led to a rewrite attempt?
       (Diagnose but don't rewrite = no repair; that's a leak in the
       loop.) Stretch goal ≥50%.
+
+  rewrite_success_rate:
+      Of all rewrites attempted, what fraction produced a passing
+      test? This is the per-event metric; it answers "did the
+      rewrite itself work?" and is independent of how the post-rewrite
+      suite shakes out.
 
   final_acceptance_rate:
       After repair, what fraction of components passed verification?
@@ -35,13 +42,14 @@ from dataclasses import dataclass
 class AcceptanceReport:
     """Closed-schema benchmark result.
 
-    All four rates are floating-point fractions in [0.0, 1.0]. NaN is
+    All five rates are floating-point fractions in [0.0, 1.0]. NaN is
     permitted when denominators are zero; it signals "no data" rather
     than zero.
     """
     initial_acceptance_rate: float
     diagnosis_trigger_rate: float
     rewrite_attempt_rate: float
+    rewrite_success_rate: float
     final_acceptance_rate: float
 
     def net_improvement(self) -> float:
@@ -56,10 +64,12 @@ class AcceptanceReport:
             {"initial_acceptance_rate": 0.48,
              "diagnosis_trigger_rate": 0.30,
              "rewrite_attempt_rate": 0.20,
+             "rewrite_success_rate": 0.50,
              "final_acceptance_rate": 0.71}
         """
         expected = {"initial_acceptance_rate", "diagnosis_trigger_rate",
-                    "rewrite_attempt_rate", "final_acceptance_rate"}
+                    "rewrite_attempt_rate", "rewrite_success_rate",
+                    "final_acceptance_rate"}
         unknown = set(payload) - expected
         if unknown:
             raise ValueError(f"Unknown fields in AcceptanceReport payload: {sorted(unknown)}")
@@ -67,6 +77,7 @@ class AcceptanceReport:
             initial_acceptance_rate=float(payload["initial_acceptance_rate"]),
             diagnosis_trigger_rate=float(payload["diagnosis_trigger_rate"]),
             rewrite_attempt_rate=float(payload["rewrite_attempt_rate"]),
+            rewrite_success_rate=float(payload["rewrite_success_rate"]),
             final_acceptance_rate=float(payload["final_acceptance_rate"]),
         )
 
@@ -75,6 +86,7 @@ class AcceptanceReport:
             "initial_acceptance_rate": self.initial_acceptance_rate,
             "diagnosis_trigger_rate": self.diagnosis_trigger_rate,
             "rewrite_attempt_rate": self.rewrite_attempt_rate,
+            "rewrite_success_rate": self.rewrite_success_rate,
             "final_acceptance_rate": self.final_acceptance_rate,
             "net_improvement": self.net_improvement(),
         }
