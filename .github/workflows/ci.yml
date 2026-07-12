@@ -1,0 +1,117 @@
+# Code2Test v1.1+ CI gate
+#
+# Five sequential steps, in order. Each step is required; the workflow
+# fails if any fails. New contributors cannot merge a PR that breaks
+# the architecture.
+#
+# 1. `python -m code2test --help`
+#    Catches import-blocking regressions (the original M0 problem):
+#    if anyone reintroduces an eager `from code2test.cli.main import cli`,
+#    this step crashes before we even test.
+#
+# 2. `pip check`
+#    Catches transitive-dep breakage (e.g. a partial uninstall like the
+#    one a subagent did during v1.0 development). This is the v1.0 lesson
+#    that found its way into CI.
+#
+# 3. `pytest tests/`
+#    Architectural invariants and unit / smoke / integration tests for
+#    code2test. Includes four `inspect.getsource`-based checks that
+#    enforce:
+#      * generator does not import AcceptanceReport
+#      * agents do not import pydantic_ai directly
+#      * `import code2test` does not pull cli.main
+#      * LazyGroup is used for subcommand resolution
+#    These are no longer conventions; they are contracts. Any PR that
+#    silently breaks them will turn this step red.
+#
+# 4. `pytest code2testbench/tests/`
+#    Separate package, separate invocation. Guards the benchmark
+#    package's own contracts (AcceptanceReport round-trip,
+#    EventCollector counter math, corpus integrity).
+#
+# 5. `python -m code2testbench.runner --provider stub`
+#    End-to-end smoke: install code2testbench, run the harness against
+#    the vendored corpus, verify latest_report.json is produced.
+#    Last because slowest; first because it is the closest thing we
+#    have to "does the architecture still wire together?"
+#
+# NOT in this workflow (deliberate):
+#   * Real LLM provider runs. v1.0 ships with stub only; v1.1 will add
+#     PydanticAIProvider and CI gating around it.
+#   * Coverage thresholds. We have 88 passing unit/smoke/integration
+#     tests; coverage is high on the architecture but low on the legacy
+#     CodeWiki docs subsystem. A coverage gate would create friction
+#     during refactors without adding signal about architectural drift.
+#   * Multiple Python versions. pyproject.toml declares `>=3.12`.
+#     Adding 3.10 / 3.11 means reviving the nested-f-string fixes
+#     and the OpenAI / logfire dep saga. Defer until v1.1 architectural
+#     decisions are stable.
+
+name: ci
+
+on:
+  push:
+    branches: [main, master, v1.1]
+  pull_request:
+    branches: [main, master, v1.1]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install (editable, with dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # --- Gate 1: import-blocking regression must surface immediately.
+      - name: code2test --help
+        run: |
+          python -m code2test --help
+          python -c "import code2test; print('import ok,', code2test.__version__)"
+
+      # --- Gate 2: install-graph integrity.
+      - name: pip check
+        run: pip check
+
+      # --- Gate 3: code2test unit + smoke + integration. The architectural
+      #     invariants live here. Failure => no merge.
+      - name: pytest code2test
+        run: pytest tests/ --no-cov -v
+
+      # --- Gate 4: code2testbench separately. Different pytest rootdir,
+      #     different venv resolution in the install graph.
+      - name: pytest code2testbench
+        run: |
+          cd code2testbench
+          pip install -e .
+          pytest tests/ --no-cov -v
+
+      # --- Gate 5: end-to-end wiring. The harness actually drives
+      #     code2test through the architecture. If anything in the seam
+      #     regresses (agents, providers, generator, events), this step
+      #     catches it.
+      - name: code2testbench harness run (stub)
+        run: |
+          cd code2testbench
+          python -m code2testbench.runner --provider stub --confidence 0.5
+          test -f latest_report.json
+          python -c "
+          import json
+          r = json.load(open('latest_report.json'))
+          required = {'initial_acceptance_rate', 'diagnosis_trigger_rate',
+                      'rewrite_attempt_rate', 'final_acceptance_rate'}
+          assert required.issubset(r), f'missing keys: {required - set(r)}'
+          print('latest_report keys OK')
+          "
