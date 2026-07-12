@@ -2,26 +2,37 @@
 
 <p align="center">
   <strong>Hierarchical Test Generation</strong> • <strong>Multi-Language Support</strong> • <strong>Human-in-the-Loop Verification</strong>
-</p>
-
 # Code2Test
 
-Code2Test is an advanced AI agent that automatically generates, verifies, and maintains test suites for large-scale codebases. Unlike simple test generators that look at isolated functions, Code2Test understands the *intent* of your components, their role in the system architecture, and their dependencies.
+> **Status: v1.0.0** — see [CHANGELOG.md](./CHANGELOG.md) for what is and isn't in this release.
 
-It employs a hierarchical approach, extracting high-level intents from your codebase, generating corresponding tests, and running them in a verification loop to ensure correctness.
+Code2Test is an intent-first test generation agent. It extracts behavioral intent from source components (static analysis + LLM), generates tests that verify that intent, runs them, and diagnoses any failures. The emphasis is on **understanding what code is supposed to do** before deciding how to test it.
 
-## 🚀 Key Features
+This v1.0 release ships:
 
-*   **Intent-First Generation**: Extracts "intent" from docstrings, naming conventions, and dependencies to generate meaningful tests, not just coverage padding.
-*   **Hierarchical Understanding**: Analyzes your dependency graph to understand how components interact, enabling integration test suggestions.
-*   **Human-in-the-Loop**: Interactive CLI allows you to review inferred intents, edit generated tests, and guide the agent before committing.
-*   **Self-Healing Verification**: If a generated test fails, the agent analyzes the error, determines if it's a test bug or a code bug, and attempts to fix the test automatically.
-*   **Multi-Language Support**:
-    *   🐍 **Python** (pytest) - *Fully Supported*
-    *   ☕ **Java** (JUnit 5) - *Beta*
-    *   🟨 **JavaScript/TypeScript** (Jest) - *Beta*
-*   **CI/CD Ready**: Includes `--auto` mode for headless execution in CI pipelines, with support for Github Actions and GitLab CI.
-*   **Comprehensive Reporting**: Generates HTML and JSON reports detailing test coverage, verification status, and confidence levels.
+- A single `Config` schema (`code2test.config.Config`) and a single provider seam (`code2test.providers.get_provider`) — agents no longer embed `pydantic_ai.Agent(...)` construction; they go through `provider.predict(system, user, schema)`.
+- A real `StubProvider` for offline deterministic runs and CI; a scaffolding `PydanticAIProvider` (raises `NotImplementedError` — real wiring lands in v1.1).
+- A real three-phase pipeline (intent extraction → test generation → verifier+diagnosis) wired end-to-end on stub.
+- 88 passing tests covering smoke, unit, integration, and the full pipeline.
+- A separate `code2testbench/` package with a 5-repo vendored corpus and a four-number `AcceptanceReport` (`code2testbench.runner` CLI).
+
+What's **not** in v1.0 (deferred to v1.1+):
+
+- A real LLM-backed provider (`PydanticAIProvider.predict` raises `NotImplementedError`).
+- ChromaDB / vector-DB-backed intent storage.
+- The web UI (`code2test/src/fe/`) inherited from the CodeWiki fork.
+- Multi-language adapter benchmarks beyond Python.
+- Mutation testing.
+- The 1M-LOC scaling claim.
+
+Architecture invariants are enforced by automated tests:
+
+- `code2test/core/generator.py` does not import `AcceptanceReport`.
+- `code2test/agents/*.py` do not import `pydantic_ai` directly.
+- `import code2test` does not eagerly pull `cli.main`.
+- CLI subcommands load lazily through `LazyGroup`.
+
+For the quantitative SLOs reported by the benchmark, see `code2testbench/SLO.md`.
 
 ## 📦 Installation
 

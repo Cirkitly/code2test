@@ -84,4 +84,4 @@ def test_package_init_does_not_import_cli(runner):
     assert "code2test.cli.main" not in sys.modules, (
         "code2test package import must be lazy; got cli.main in sys.modules"
     )
-    assert c2t.__version__ == "0.1.0"
+    assert c2t.__version__ == "1.0.0"

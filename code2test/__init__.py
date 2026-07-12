@@ -6,7 +6,7 @@ for codebases lacking tests using intent-first AI analysis.
 Built on FSoft AI4Code's CodeWiki framework.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __author__ = "Code2Test Contributors"
 __license__ = "MIT"
 
