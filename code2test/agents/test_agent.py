@@ -9,7 +9,6 @@ import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-from pydantic_ai import Agent
 from pydantic import BaseModel, Field
 
 from code2test.core.models import (
@@ -19,6 +18,8 @@ from code2test.core.models import (
     TestStatus,
     TestFramework,
 )
+from code2test.providers import Provider, get_provider
+from code2test.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,9 @@ class GeneratedTest(BaseModel):
 
 class TestGenerationResult(BaseModel):
     """Result from test generation."""
-    tests: List[GeneratedTest]
-    imports: List[str] = Field(default_factory=list)
-    fixtures: List[str] = Field(default_factory=list)
+    tests: list  # list[GeneratedTest]
+    imports: list = Field(default_factory=list)
+    fixtures: list = Field(default_factory=list)
 
 
 TEST_SYSTEM_PROMPT = """You are an expert test engineer specializing in writing comprehensive, readable tests.
@@ -89,24 +90,33 @@ class TestAgent:
     Generates tests based on inferred intents using the specified test framework.
     """
     
-    def __init__(self, model: str = "openai:gpt-4o-mini"):
-        """
-        Initialize test agent.
-        
+    def __init__(
+        self,
+        model: str = "stub",
+        provider: Provider | None = None,
+    ) -> None:
+        """Initialize test agent.
+
         Args:
-            model: LLM model to use for generation
+            model: Used to construct a default Provider when none is
+                supplied. Defaults to "stub" so v1.0 has a sensible
+                offline default.
+            provider: A pre-built Provider. Preferred over `model`.
         """
         self.model = model
-        self._agent = None
-    
-    def _get_agent(self) -> Agent:
-        """Get or create the pydantic-ai agent."""
-        if self._agent is None:
-            self._agent = Agent(
-                self.model,
-                system_prompt=TEST_SYSTEM_PROMPT,
-            )
-        return self._agent
+        if provider is None:
+            if model in ("stub", "openai", "pydantic-ai"):
+                cfg = Config(provider=model)
+            else:
+                cfg = Config(provider="stub")
+            self._provider = get_provider(cfg)
+        else:
+            self._provider = provider
+        self._agent = None  # legacy shim; harmless
+
+    def _get_agent(self):
+        """Deprecated. Returns self._provider for legacy callers."""
+        return self._provider
     
     async def generate_unit_tests(
         self,
@@ -137,53 +147,38 @@ class TestAgent:
         )
         
         try:
-            agent = self._get_agent()
-            
-            # Simple retry loop for 429s without tenacity dependency
-            max_retries = 3
-            backoff = 2.0
-            for attempt in range(max_retries):
-                try:
-                    result = await agent.run(prompt, output_type=TestGenerationResult)
-                    break 
-                except Exception as e:
-                    # Check for rate limit
-                    is_rate_limit = "429" in str(e)
-                    if hasattr(e, "status_code") and e.status_code == 429:
-                        is_rate_limit = True
+            # The provider seam: one call, one schema, one result.
+            result = self._provider.apredict(
+                TEST_SYSTEM_PROMPT, prompt, TestGenerationResult,
+            )
 
-                    if is_rate_limit and attempt < max_retries - 1:
-                        wait = backoff * (2 ** attempt)
-                        logger.warning(f"Rate limited (429), retrying in {wait}s...")
-                        await asyncio.sleep(wait)
-                    else:
-                        raise e
-            
-            # Convert to TestCase objects
+            # Convert to TestCase objects. Defensive: a stub or partial
+            # provider may yield fewer fields than the full schema.
+            raw_tests = result.tests or []
             test_cases = []
-            for gen_test in result.output.tests:
+            for gen_test in raw_tests:
                 test_cases.append(TestCase(
                     name=gen_test.name,
                     intent_text=gen_test.tests_behavior,
                     test_code=gen_test.test_code,
                     status=TestStatus.PENDING,
                 ))
-            
+
             # Build test file path
             component_path = component.get("file_path", "unknown.py")
             test_path = self._generate_test_path(component_path)
-            
+
             return TestFile(
                 path=test_path,
                 component_id=component.get("id", component.get("name", "unknown")),
                 component_path=component_path,
                 test_cases=test_cases,
                 framework=framework,
-                imports=result.output.imports,
-                fixtures=result.output.fixtures,
+                imports=result.imports or [],
+                fixtures=result.fixtures or [],
                 created_at=datetime.now(),
             )
-            
+
         except Exception as e:
             logger.error(f"Test generation failed: {e}")
             # Return empty test file
@@ -238,24 +233,12 @@ Generate integration tests that verify:
 Use pytest syntax with appropriate fixtures."""
 
         try:
-            agent = self._get_agent()
-            
-            # Simple retry loop for 429s
-            max_retries = 3
-            backoff = 2.0
-            for attempt in range(max_retries):
-                try:
-                    result = await agent.run(prompt, output_type=TestGenerationResult)
-                    break
-                except Exception as e:
-                    is_rate_limit = "429" in str(e) or (hasattr(e, "status_code") and e.status_code == 429)
-                    if is_rate_limit and attempt < max_retries - 1:
-                        wait = backoff * (2 ** attempt)
-                        logger.warning(f"Rate limited (429), retrying in {wait}s...")
-                        await asyncio.sleep(wait)
-                    else:
-                        raise e
-            
+            # The provider seam: same shape as generate_unit_tests.
+            result = self._provider.apredict(
+                TEST_SYSTEM_PROMPT, prompt, TestGenerationResult,
+            )
+
+            raw_tests = result.tests or []
             test_cases = [
                 TestCase(
                     name=gen_test.name,
@@ -263,22 +246,22 @@ Use pytest syntax with appropriate fixtures."""
                     test_code=gen_test.test_code,
                     status=TestStatus.PENDING,
                 )
-                for gen_test in result.output.tests
+                for gen_test in raw_tests
             ]
-            
+
             module_path = module.get("path", "unknown")
             test_path = f"tests/integration/test_{module.get('name', 'module')}.py"
-            
+
             return TestFile(
                 path=test_path,
                 component_id=f"module:{module.get('name', 'unknown')}",
                 component_path=module_path,
                 test_cases=test_cases,
                 framework=framework,
-                imports=result.output.imports,
-                fixtures=result.output.fixtures,
+                imports=result.imports or [],
+                fixtures=result.fixtures or [],
             )
-            
+
         except Exception as e:
             logger.error(f"Integration test generation failed: {e}")
             return TestFile(

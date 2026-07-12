@@ -7,7 +7,6 @@ LLM-powered agent for analyzing test failures and determining root cause.
 import logging
 from typing import Dict, Any, Optional
 
-from pydantic_ai import Agent
 from pydantic import BaseModel
 
 from code2test.core.models import (
@@ -16,6 +15,8 @@ from code2test.core.models import (
     Diagnosis,
     DiagnosisCause,
 )
+from code2test.providers import Provider, get_provider
+from code2test.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -86,25 +87,33 @@ class DiagnosisAgent:
     Analyzes why tests fail and categorizes the root cause.
     """
     
-    def __init__(self, model: str = "openai:gpt-4o-mini"):
-        """
-        Initialize diagnosis agent.
-        
+    def __init__(
+        self,
+        model: str = "stub",
+        provider: Provider | None = None,
+    ) -> None:
+        """Initialize the diagnosis agent.
+
         Args:
-            model: LLM model to use
+            model: Used to construct a default Provider when none is
+                supplied. v1.0 default is "stub" so diagnosis runs
+                offline.
+            provider: A pre-built Provider.
         """
         self.model = model
-        self._agent = None
-    
-    def _get_agent(self) -> Agent:
-        """Get or create the pydantic-ai agent."""
-        if self._agent is None:
-            self._agent = Agent(
-                self.model,
-                system_prompt=DIAGNOSIS_SYSTEM_PROMPT,
-                result_type=DiagnosisResult,
-            )
-        return self._agent
+        if provider is None:
+            if model in ("stub", "openai", "pydantic-ai"):
+                cfg = Config(provider=model)
+            else:
+                cfg = Config(provider="stub")
+            self._provider = get_provider(cfg)
+        else:
+            self._provider = provider
+        self._agent = None  # legacy shim
+
+    def _get_agent(self):
+        """Deprecated. Returns self._provider for legacy callers."""
+        return self._provider
     
     async def diagnose_failure(
         self,
@@ -139,26 +148,28 @@ class DiagnosisAgent:
         )
         
         try:
-            agent = self._get_agent()
-            result = await agent.run(prompt)
-            
-            # Map string cause to enum
+            # The provider seam: one call, one schema, one result.
+            result = self._provider.apredict(
+                DIAGNOSIS_SYSTEM_PROMPT, prompt, DiagnosisResult,
+            )
+
+            # Map string cause to enum.
             cause_map = {
                 "TEST_WRONG": DiagnosisCause.TEST_WRONG,
                 "CODE_BUG": DiagnosisCause.CODE_BUG,
                 "INTENT_WRONG": DiagnosisCause.INTENT_WRONG,
             }
-            cause = cause_map.get(result.data.cause, DiagnosisCause.TEST_WRONG)
-            
+            cause = cause_map.get(result.cause, DiagnosisCause.TEST_WRONG)
+
             return Diagnosis(
                 test_name=test_case.name,
                 cause=cause,
-                confidence=result.data.confidence,
-                explanation=result.data.explanation,
-                suggested_fix=result.data.suggested_fix,
+                confidence=result.confidence,
+                explanation=result.explanation,
+                suggested_fix=result.suggested_fix,
                 stack_trace=failure_output[:500] if failure_output else None,
             )
-            
+
         except Exception as e:
             logger.error(f"Diagnosis failed: {e}")
             # Return fallback diagnosis

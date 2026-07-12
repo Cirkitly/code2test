@@ -15,7 +15,8 @@ from rich.console import Console
 from code2test.cli.display import DisplayManager
 from code2test.cli.interactive import InteractiveSession, run_interactive_generation
 from code2test.cli.config_manager import ConfigManager
-from code2test.core import TestGenerator, GenerationConfig, TestFramework
+from code2test.core.models import GenerationConfig, TestFramework
+from code2test.core.generator import TestGenerator
 from code2test.src.be.dependency_analyzer import DependencyGraphBuilder
 from code2test.src.config import Config
 

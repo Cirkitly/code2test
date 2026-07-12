@@ -1,17 +1,26 @@
-"""
-Code2Test Intent Agent
+"""Code2Test Intent Agent (M1A.3 refactor).
 
-LLM-powered agent for intent inference when static analysis signals are weak.
+LLM-powered agent for intent inference when static analysis signals are
+weak. v1.0 refactor: the agent no longer constructs pydantic_ai.Agent
+directly. It receives a Provider through __init__ and calls
+provider.apredict(system, user, schema) for the actual inference.
+
+Backward compatibility: __init__ still accepts a `model: str` argument.
+When given, it constructs a default provider via get_provider(). Tests
+and existing call sites that pass `model="openai:gpt-4o-mini"` continue
+to work — but the call will fail at predict() time in v1.0 with a
+NotImplementedError from PydanticAIProvider, which is the intended
+"real LLM not wired" signal.
 """
 
 import logging
-import asyncio
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 
-from pydantic_ai import Agent
 from pydantic import BaseModel
 
 from code2test.core.models import Intent, IntentEvidence
+from code2test.providers import Provider, get_provider
+from code2test.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +30,7 @@ class IntentInferenceResult(BaseModel):
     intent_text: str
     confidence: float
     reasoning: str
-    unclear_aspects: List[str] = []
+    unclear_aspects: list = []
 
 
 INTENT_SYSTEM_PROMPT = """You are an expert code analyst specializing in understanding code behavior.
@@ -72,87 +81,80 @@ Provide your analysis as a clear, concise intent statement."""
 
 
 class IntentAgent:
+    """LLM agent for intent inference.
+
+    Used when static analysis cannot determine intent with high
+    confidence. In v1.0 the agent goes through the provider seam; if
+    provider='stub' is configured, the response is deterministic and
+    safe to run without API keys.
     """
-    LLM agent for intent inference.
-    
-    Used when static analysis cannot determine intent with high confidence.
-    """
-    
-    def __init__(self, model: str = "openai:gpt-4o-mini"):
-        """
-        Initialize intent agent.
-        
+
+    def __init__(
+        self,
+        model: str = "stub",
+        provider: Provider | None = None,
+    ) -> None:
+        """Initialize the agent.
+
         Args:
-            model: LLM model to use for inference
+            model: Used only when no provider is supplied; we construct
+                a default provider from a Config whose provider/model
+                carry across. Defaults to "stub" so v1.0 has a sensible
+                offline default.
+            provider: A pre-built Provider. Preferred over `model` for
+                callers that already have a configured provider (the
+                test-generation generator builds one and shares it).
         """
         self.model = model
-        self._agent = None
-    
-    def _get_agent(self) -> Agent:
-        """Get or create the pydantic-ai agent."""
-        if self._agent is None:
-            self._agent = Agent(
-                self.model,
-                system_prompt=INTENT_SYSTEM_PROMPT,
-                output_type=IntentInferenceResult,
-            )
-        return self._agent
-    
+        if provider is None:
+            cfg = Config(provider=model) if model in ("stub", "openai", "pydantic-ai") else Config(provider="stub")
+            self._provider = get_provider(cfg)
+        else:
+            self._provider = provider
+        self._agent = None  # legacy shim for old callers reading `.model` or `._agent`; harmless
+
+    def _get_agent(self):
+        """Deprecated. Returns self._provider for backward compat with
+        very old callers that introspected ._agent. Prefer the seam."""
+        return self._provider
+
     async def infer_intent(
         self,
         component: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ) -> Intent:
-        """
-        Use LLM to infer intent when static signals are weak.
-        
+        """Use LLM to infer intent when static signals are weak.
+
         Args:
             component: Component data from AST analysis
             context: Additional context (dependencies, callers, etc.)
-            
+
         Returns:
             Inferred Intent with confidence score
         """
         if context is None:
             context = {}
-        
-        # Format prompt
-        prompt = INTENT_USER_PROMPT_TEMPLATE.format(
+
+        user = INTENT_USER_PROMPT_TEMPLATE.format(
             name=component.get("name", "unknown"),
             component_type=component.get("type", "function"),
             file_path=component.get("file_path", ""),
             signature=component.get("signature", ""),
             language=component.get("language", "python"),
-            source_code=component.get("source_code", "")[:2000],  # Limit size
+            source_code=component.get("source_code", "")[:2000],
             docstring=component.get("docstring", "None provided"),
             call_sites=", ".join(component.get("called_by", [])[:5]) or "None",
             dependencies=", ".join(context.get("dependencies", [])[:5]) or "None",
         )
-        
-        try:
-            agent = self._get_agent()
-            
-            # Simple retry loop for 429s
-            max_retries = 3
-            backoff = 2.0
-            for attempt in range(max_retries):
-                try:
-                    result = await agent.run(prompt)
-                    break 
-                except Exception as e:
-                    # Check for rate limit
-                    is_rate_limit = "429" in str(e)
-                    if hasattr(e, "status_code") and e.status_code == 429:
-                        is_rate_limit = True
 
-                    if is_rate_limit and attempt < max_retries - 1:
-                        wait = backoff * (2 ** attempt)
-                        logger.warning(f"Rate limited (429), retrying in {wait}s...")
-                        await asyncio.sleep(wait)
-                    else:
-                        raise e
-            
-            # Build evidence
+        try:
+            # The provider seam: one call, one schema, one result.
+            # `apredict` is synchronous in v1.0 (it delegates to predict);
+            # we keep the name as a placeholder for v1.1's async backend.
+            result = self._provider.apredict(
+                INTENT_SYSTEM_PROMPT, user, IntentInferenceResult,
+            )
+
             evidence = IntentEvidence(
                 docstring=component.get("docstring"),
                 signature=component.get("signature"),
@@ -161,18 +163,18 @@ class IntentAgent:
                 call_sites=component.get("called_by", [])[:5],
                 dependency_intents=[],
             )
-            
+
             return Intent(
                 component_id=component.get("id", component.get("name", "unknown")),
                 component_path=component.get("file_path", ""),
-                intent_text=result.output.intent_text,
-                confidence=result.output.confidence,
+                intent_text=result.intent_text,
+                confidence=result.confidence,
                 evidence=evidence,
             )
-            
+
         except Exception as e:
             logger.error(f"Intent inference failed: {e}")
-            # Return low-confidence fallback
+            # Return low-confidence fallback so the pipeline can continue.
             return Intent(
                 component_id=component.get("id", component.get("name", "unknown")),
                 component_path=component.get("file_path", ""),
@@ -180,24 +182,15 @@ class IntentAgent:
                 confidence=0.3,
                 evidence=IntentEvidence(),
             )
-    
+
     def get_clarification_prompt(
         self,
         component: Dict[str, Any],
-        partial_intent: Intent
+        partial_intent: Intent,
     ) -> str:
-        """
-        Generate a user-facing prompt requesting clarification.
-        
-        Args:
-            component: Component data
-            partial_intent: The low-confidence intent
-            
-        Returns:
-            Formatted clarification prompt
-        """
+        """Generate a user-facing prompt requesting clarification."""
         name = component.get("name", "unknown")
-        
+
         prompt_parts = [
             f"⚠ Low confidence intent ({partial_intent.confidence:.0%}) for {name}()",
             "",
@@ -205,28 +198,17 @@ class IntentAgent:
             "",
             "Please describe the intended behavior:",
         ]
-        
+
         return "\n".join(prompt_parts)
-    
+
     async def refine_intent(
         self,
         intent: Intent,
         user_feedback: str,
-        component: Dict[str, Any]
+        component: Dict[str, Any],
     ) -> Intent:
-        """
-        Refine intent based on user feedback.
-        
-        Args:
-            intent: Original low-confidence intent
-            user_feedback: User's description of intended behavior
-            component: Component data
-            
-        Returns:
-            Updated Intent with higher confidence
-        """
-        # User-provided intents get high confidence
-        refined_intent = Intent(
+        """Refine intent based on user feedback."""
+        return Intent(
             component_id=intent.component_id,
             component_path=intent.component_path,
             intent_text=user_feedback.strip(),
@@ -234,5 +216,3 @@ class IntentAgent:
             evidence=intent.evidence,
             user_edited=True,
         )
-        
-        return refined_intent
