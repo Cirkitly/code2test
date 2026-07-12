@@ -3,3 +3,11 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .coverage
+
+# State files produced when the harness runs against corpus repos.
+# The harness writes a SQLite intent-db into each repo's .code2test/
+# dir and dumps generated tests into the source dir (code/); both are
+# incidental state, not corpus content.
+.code2test/
+corpus/.hermes-tmp.*
+corpus/*/code/test_*.py
