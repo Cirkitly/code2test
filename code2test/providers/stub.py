@@ -94,7 +94,20 @@ class StubProvider(Provider):
     def predict(self, system: str, user: str, schema: type[T]) -> T:
         slug = _slug_user(user)
         values: dict[str, Any] = {}
+
+        # Pre-pass: figure out which field is the "tests" collection
+        # (heuristic by name); produces an empty list, not primitives,
+        # because downstream code expects typed objects.
+        tests_field = None
         for fname in schema.model_fields:
+            if fname == "tests" or fname.endswith("_tests") or fname == "test_cases":
+                tests_field = fname
+                break
+
+        for fname in schema.model_fields:
+            if fname == tests_field:
+                values[fname] = []
+                continue
             if "name" in fname.lower():
                 values[fname] = f"stub_{slug}_{uuid4().hex[:4]}"
             elif fname == "test_code":
