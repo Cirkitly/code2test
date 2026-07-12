@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "frozen": true,
+  "notes": "Vendored at v1.0.0 release. The `commit_sha` records the synthetic SHA at which the corpus was first published; subsequent improvements to the corpus require a v1.x release with a schema_version bump.",
+  "repos": [
+    {
+      "name": "repo1",
+      "path": "corpus/repo1",
+      "components_dir": "code",
+      "commit_sha": "v1.0.0-repo1",
+      "components": ["truncate"],
+      "ground_truth": "corpus/repo1/hidden/test_texttools.py"
+    },
+    {
+      "name": "repo2",
+      "path": "corpus/repo2",
+      "components_dir": "code",
+      "commit_sha": "v1.0.0-repo2",
+      "components": ["chunk"],
+      "ground_truth": "corpus/repo2/hidden/test_listutils.py"
+    },
+    {
+      "name": "repo3",
+      "path": "corpus/repo3",
+      "components_dir": "code",
+      "commit_sha": "v1.0.0-repo3",
+      "components": ["format_date"],
+      "ground_truth": "corpus/repo3/hidden/test_datetools.py"
+    },
+    {
+      "name": "repo4",
+      "path": "corpus/repo4",
+      "components_dir": "code",
+      "commit_sha": "v1.0.0-repo4",
+      "components": ["is_valid_email"],
+      "ground_truth": "corpus/repo4/hidden/test_mailutils.py"
+    },
+    {
+      "name": "repo5",
+      "path": "corpus/repo5",
+      "components_dir": "code",
+      "commit_sha": "v1.0.0-repo5",
+      "components": ["slugify"],
+      "ground_truth": "corpus/repo5/hidden/test_slug.py"
+    }
+  ]
+}

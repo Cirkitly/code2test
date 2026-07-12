@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "code2testbench"
+version = "1.0.0"
+description = "Code2Test benchmark harness: a vendored 5-repo corpus and an AcceptanceReport collector driven by code2test's event stream."
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Code2Test Contributors"},
+]
+keywords = ["testing", "benchmarks", "code2test", "evaluation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Topic :: Software Development :: Testing",
+    "License :: OSI Approved :: MIT License",
+]
+
+# code2testbench is a sibling package. It imports code2test.events types
+# but NOT code2test.core.generator internals. code2test is not on PyPI
+# yet; the actual install happens via `pip install code2testbench` once
+# code2test is published, OR via `pip install -e ../code2test` while
+# developing locally.
+dependencies = [
+    "pydantic>=2.11.7",
+]  # code2test is provided by the runtime (editable install during development)
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+]
+
+[project.scripts]
+code2testbench = "code2testbench.runner:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["code2testbench*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
