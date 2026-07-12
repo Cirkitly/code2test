@@ -34,7 +34,7 @@ class GeneratedTest(BaseModel):
 
 class TestGenerationResult(BaseModel):
     """Result from test generation."""
-    tests: list  # list[GeneratedTest]
+    tests: list[GeneratedTest]
     imports: list = Field(default_factory=list)
     fixtures: list = Field(default_factory=list)
 

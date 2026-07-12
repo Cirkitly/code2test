@@ -149,6 +149,7 @@ def test_pydantic_ai_provider_predict_uses_mocked_openai_client():
     # Verify the underlying call was made once with the right shape.
     mock_client.call.assert_called_once()
     kwargs = mock_client.call.call_kwargs
+    assert kwargs is not None  # for type checkers; mock invariant
     assert kwargs["model"] == "gpt-4o-mini"
     messages = kwargs["messages"]
     assert len(messages) == 2
@@ -159,6 +160,62 @@ def test_pydantic_ai_provider_predict_uses_mocked_openai_client():
     assert "intent_text" in messages[0]["content"]
     assert "system one" in messages[0]["content"]
     assert kwargs["temperature"] == 0.0
+
+    # v1.1 task 3b: response_format with strict JSON-schema envelope is
+    # passed. This is what closes the loop on reasoning-capable models
+    # that emit schema descriptions instead of array-element instances
+    # when only prose-instructed.
+    rf = kwargs.get("response_format")
+    assert rf is not None  # belt-and-suspenders
+    assert rf["type"] == "json_schema"
+    schema_envelope = rf["json_schema"]
+    assert schema_envelope["strict"] is True
+    assert schema_envelope["name"] == "Out"
+    inner = schema_envelope["schema"]
+    assert inner.get("type") == "object"
+    # Strict mode requires additionalProperties: false at every object
+    # level; our helper walks and sets it.
+    assert inner.get("additionalProperties") is False
+    # Sanity-check the inner schema references Out's fields.
+    assert "intent_text" in inner["properties"]
+    assert "confidence" in inner["properties"]
+
+
+def test_pydantic_ai_provider_schema_helpers_set_additional_properties_false():
+    """The schema helper walks every object level and sets
+    additionalProperties=false, including nested object schemas
+    reachable via $ref.
+    """
+    from code2test.providers.schema_helpers import pydantic_to_openai_strict_schema
+
+    schema = pydantic_to_openai_strict_schema(TestGenerationResultForHelpers)
+    # Top-level object: additionalProperties must be false.
+    assert schema.get("additionalProperties") is False
+
+    # tests: list[GeneratedTestNested] -- the items $ref points into
+    # $defs. The HELPER walks $defs and applies the flag on the
+    # resolved definition, so the GeneratedTestNested object schema
+    # also has additionalProperties: false. That is the strict-mode
+    # requirement that triggered v1.1 task 3b's 400 errors.
+    nested = schema["$defs"]["GeneratedTestNested"]
+    assert nested.get("additionalProperties") is False
+    # Spot-check the field names reach through.
+    assert "name" in nested["properties"]
+    assert "tests_behavior" in nested["properties"]
+    assert set(nested["required"]) == {"name", "description", "test_code", "tests_behavior"}
+
+
+class GeneratedTestNested(BaseModel):
+    name: str
+    description: str
+    test_code: str
+    tests_behavior: str
+
+
+class TestGenerationResultForHelpers(BaseModel):
+    tests: list[GeneratedTestNested]
+    imports: list = Field(default_factory=list)
+    fixtures: list = Field(default_factory=list)
 
 
 def test_pydantic_ai_provider_predict_handles_markdown_fenced_json():

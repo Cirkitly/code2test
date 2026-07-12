@@ -38,6 +38,7 @@ dependencies = [
     "tree-sitter-c-sharp>=0.23.1",
     "tree-sitter-php>=0.23.0",
     "openai>=1.107.0",
+    "pytest-json-report>=1.5.0",  # verifier writes structured pytest results; v1.0 lacked this
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "pydantic-ai>=1.0.6",

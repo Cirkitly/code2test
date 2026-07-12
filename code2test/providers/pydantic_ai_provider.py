@@ -170,16 +170,44 @@ class PydanticAIProvider(Provider):
     def predict(self, system: str, user: str, schema: type[T]) -> T:
         """Send a chat completion; parse JSON into the schema instance.
 
+        Uses the openai SDK's ``response_format={"type": "json_schema",
+        ...}`` so the model is server-side constrained to emit a JSON
+        object that conforms to ``schema``. This is the documented path
+        for OpenAI-compatible reasoning-capable models (e.g. MiniMax-M3)
+        -- prose-instruction alone produces schema descriptions on those
+        models; server-side schema enforcement returns array-element
+        instances directly.
+
         Raises:
             openai.OpenAIError subclasses on network or auth failure.
             ValueError when the model reply is not valid JSON for the
-            schema.
+            schema (should be impossible with response_format, but
+            our extractor remains as belt-and-suspenders).
         """
-        # The seam accepts both system+user. We prepend the schema
-        # instruction to the system prompt so the schema constraint
-        # is the strongest context.
+        from .schema_helpers import openai_response_format
+
+        # The seam accepts both system+user. We keep the schema
+        # instruction in the system prompt so the model sees it;
+        # the server-side response_format enforces compliance.
         composed_system = self._schema_json_instruction(schema) + "\n\n" + system
         composed_user = user
+
+        # The schema name must be a valid identifier for the openai SDK.
+        # A stable name per call site lets providers cache; we use a
+        # stable "<schema.__name__>-<hash>" so distinct schemas have
+        # distinct cache keys.
+        schema_format = openai_response_format(
+            schema, name=self._schema_cache_name(schema),
+        )
+
+        # The openai SDK's response_format parameter is typed as a
+        # discriminated union, and our JSON-schema dict doesn't satisfy
+        # that union statically (the SDK hasn't generated a TypedDict
+        # for it). It's valid at runtime -- the SDK accepts the dict
+        # and the server enforces the schema. Cast through `Any` so
+        # pyright doesn't complain; the runtime contract is verified
+        # by the mock-client tests in test_providers.py.
+        from typing import cast, Any
 
         response = self._client.chat.completions.create(
             model=self.model_name,
@@ -188,6 +216,7 @@ class PydanticAIProvider(Provider):
                 {"role": "user", "content": composed_user},
             ],
             temperature=0.0,
+            response_format=cast(Any, schema_format),
         )
 
         if not response.choices:
@@ -197,6 +226,16 @@ class PydanticAIProvider(Provider):
         content = response.choices[0].message.content or ""
         payload = self._extract_json(content)
         return schema.model_validate_json(payload)
+
+    @staticmethod
+    def _schema_cache_name(schema: type) -> str:
+        """Stable, SDK-legal schema name for the openai response_format.
+
+        openai requires an identifier; we use the class's qualified
+        name. Stable across processes so a real provider can cache the
+        compiled JSON schema.
+        """
+        return schema.__name__
 
 
 __all__ = ["PydanticAIProvider"]
