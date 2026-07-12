@@ -240,8 +240,16 @@ class TestSuite(BaseModel):
 
 
 class GenerationConfig(BaseModel):
-    """Configuration for test generation."""
-    
+    """Configuration for test generation.
+
+    v1.0 schema. v1.1 adds ``provider`` so the generator's lazy-init
+    agent constructors know which Provider seam implementation to wire
+    into each agent. Without this, running ``TestGenerator(provider='openai')``
+    silently degrades to StubProvider agents because GenerationConfig
+    was provider-agnostic.
+    """
+
+    # v1.0 fields unchanged.
     confidence_threshold: float = 0.6
     auto_accept: bool = False
     dry_run: bool = False
@@ -250,4 +258,12 @@ class GenerationConfig(BaseModel):
     include_fixtures: bool = True
     output_dir: Optional[str] = None
     framework: TestFramework = TestFramework.PYTEST
-    model: str = "openai:gpt-4o-mini"
+    model: str = "openai:gpt-4o-mini"  # v1.1 default: real LLM
+
+    # v1.1 additions: seam awareness. api_key is optional because the
+    # field is read but not validated at the GenerationConfig layer; an
+    # openai provider built with an empty api_key will raise at construct
+    # time, which is the correct failure point.
+    provider: str = "openai"
+    base_url: str = "https://api.minimax.io/v1"
+    api_key: str = ""

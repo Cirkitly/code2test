@@ -32,11 +32,15 @@ sys.path.insert(0, str(PACKAGE_DIR))
 def _build_config(provider_name: str, model: str, threshold: float):
     """Construct a code2test.config.Config from CLI args."""
     from code2test.config import Config
-    base_url = os.environ.get("OPENAI_API_BASE", "")
+    base_url = os.environ.get("OPENAI_BASE_URL", os.environ.get("OPENAI_API_BASE", ""))
     api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("CODE2TEST_API_KEY") or ""
     if provider_name == "openai" and not api_key:
-        # Allow operator to leave key empty; harness will report stub-only.
-        api_key = "missing"
+        raise SystemExit(
+            "ERROR: --provider openai was selected but OPENAI_API_KEY is not set. "
+            "Export it before invoking the harness, e.g.\n"
+            "    export OPENAI_API_KEY=sk-...\n"
+            "    python -m code2testbench.runner --provider openai --model MiniMax-M3"
+        )
     return Config(
         provider=provider_name,
         model=model,
@@ -90,6 +94,13 @@ def _run_one_repo(repo_path: Path, components_dir: Path, config, sink):
         auto_accept=config.auto_accept,
         dry_run=False,  # we want verification
         framework=TestFramework.PYTEST,
+        # v1.1: forward provider credentials to the generator so its
+        # lazily-built agent trio wires the right provider, not the
+        # silent-default StubProvider.
+        provider=config.provider,
+        model=config.model,
+        base_url=config.base_url,
+        api_key=config.api_key,
     )
     gen = TestGenerator(
         repo_path=str(repo_path),

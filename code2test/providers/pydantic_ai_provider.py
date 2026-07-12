@@ -73,9 +73,15 @@ class PydanticAIProvider(Provider):
         self.model_name = model_name
         self.base_url = base_url
         self.api_key = api_key
+        # Reasoning-capable models (e.g. MiniMax-M3) think before they
+        # answer, so the default 30s OpenAI SDK timeout is not enough
+        # for complex schemas. 120s is conservative without being
+        # unbounded.
+        self._request_timeout = 120.0
         self._client = OpenAI(
             api_key=api_key,
             base_url=base_url or None,
+            timeout=self._request_timeout,
         )
 
     # --- request framing ---------------------------------------------------
@@ -87,11 +93,19 @@ class PydanticAIProvider(Provider):
         than tool/function-calling because (a) every OpenAI-compatible
         provider supports the former, and (b) the latter varies in
         shape across vendors.
+
+        The instruction explicitly excludes ``<think>...</think>`` blocks
+        and any other prose, because reasoning-capable models (e.g.
+        MiniMax-M3) emit them by default and they would be invisible to
+        our JSON-only parser.
         """
         return (
-            "You are a code-analysis assistant. Respond ONLY with a "
-            "single JSON object — no prose, no markdown fences, no "
-            "explanations. The JSON object must conform to this schema:\n"
+            "You are a code-analysis assistant. Output MUST be a single "
+            "JSON object and nothing else. "
+            "Do not include <think>...</think> blocks, prose, markdown "
+            "fences, code fences, explanations, or commentary of any "
+            "kind. "
+            "The JSON object must conform to this schema:\n"
             f"```\n{json.dumps(schema.model_json_schema(), indent=2)}\n```"
         )
 
@@ -99,29 +113,49 @@ class PydanticAIProvider(Provider):
     def _extract_json(text: str) -> str:
         """Pull the first balanced {...} JSON object out of a model reply.
 
-        Models sometimes wrap JSON in prose or markdown fences despite
-        strict instructions. We try to parse the whole string first;
-        on failure, locate the first '{' and the matching '}' and
-        parse that slice.
+        Models wrap JSON in many ways despite strict instructions:
+          * bare JSON: the easiest case.
+          * markdown-fenced JSON: ````json\\n{...}\\n```` — strip outer fence.
+          * reasoning-prefixed JSON: `<think>...</think>\\n\\n{...}` —
+            strip the think block before parsing.
+          * prose prefix: "Sure, here it is:\\n{...}" — extract first JSON.
+        We try the whole string first; on failure, fall back to the
+        "first balanced {...}" heuristic.
         """
         text = text.strip()
-        # Strip a single level of markdown fence if present.
+
+        # 1. Strip a single  ...  block (different models use different
+        #    wrapper tags, but a bare <think>...</think> is the common case).
+        for tag in ("think", "thinking", "reasoning"):
+            open_tag = f"<{tag}>"
+            close_tag = f"</{tag}>"
+            while open_tag in text and close_tag in text:
+                start = text.find(open_tag)
+                end = text.find(close_tag, start + len(open_tag))
+                if end == -1:
+                    break
+                text = (text[:start] + text[end + len(close_tag):]).strip()
+            # If only the open tag is present (partial response), strip
+            # from the open tag onward.
+            if open_tag in text and close_tag not in text:
+                text = text[: text.find(open_tag)].strip()
+
+        # 2. Strip outer markdown fence if present.
         if text.startswith("```"):
-            # Strip the opening fence line; tolerate language tags.
             nl = text.find("\n")
             if nl >= 0:
                 text = text[nl + 1:].rstrip()
-        # Drop a trailing fence if present.
         if text.endswith("```"):
             text = text[:-3].rstrip()
 
+        # 3. Try parsing as-is.
         try:
             json.loads(text)
             return text
         except json.JSONDecodeError:
             pass
 
-        # Fall back: substring from first '{' to last '}'.
+        # 4. Fall back: substring from first '{' to last '}'.
         first = text.find("{")
         last = text.rfind("}")
         if first == -1 or last == -1 or last <= first:
@@ -129,7 +163,7 @@ class PydanticAIProvider(Provider):
                 f"Provider response does not contain JSON object: "
                 f"{text[:200]!r}..."
             )
-        return text[first:last + 1]
+        return text[first:last + 1]  # noqa: E501
 
     # --- predict -----------------------------------------------------------
 

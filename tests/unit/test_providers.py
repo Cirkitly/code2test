@@ -196,6 +196,39 @@ def test_pydantic_ai_provider_predict_rejects_non_json_reply():
         p.predict("sys", "user", Out)
 
 
+def test_pydantic_ai_provider_predict_handles_reasoning_block():
+    """Reasoning-capable models (MiniMax-M3 etc.) emit ``-prefixed
+    JSON. The extractor peels the think block and parses the JSON.
+    """
+    reply = ("<think>The user wants a JSON object only.</think>\n\n"
+             "{\"intent_text\": \"x\", \"confidence\": 0.5}")
+    mock_client = _mk_mock_completion_from_text(reply)
+    p = PydanticAIProvider(model_name="x", api_key="k")
+    p._client = mock_client
+    out = p.predict("sys", "user", Out)
+    assert out.intent_text == "x"
+    assert out.confidence == pytest.approx(0.5)
+
+
+def test_pydantic_ai_provider_predict_handles_partial_reasoning_block():
+    """A truncated `` block with no close tag is dropped from
+    the open-tag onward, leaving whatever comes after.
+    """
+    reply = "stuff before <think>rambling\n\n{\"intent_text\": \"y\", \"confidence\": 0.7}"
+    # This case still has balanced JSON after the <think> opens, but no
+    # closing tag. The extractor should treat the entire <think>...</think>
+    # block as missing (because the close is absent) and use the JSON
+    # that appears after.
+    mock_client = _mk_mock_completion_from_text(reply)
+    p = PydanticAIProvider(model_name="x", api_key="k")
+    p._client = mock_client
+    # The extractor will treat this as a partial-block case and clip
+    # from <think> onward, leaving "stuff before " + a stray leading
+    # JSON substring. We expect this to raise — the corpus isn't JSON.
+    with pytest.raises(ValueError, match="does not contain JSON"):
+        p.predict("sys", "user", Out)
+
+
 def test_pydantic_ai_provider_predict_rejects_empty_choices():
     """If the provider returns empty choices (rare but real), fail loudly."""
     empty = type("R", (), {})()

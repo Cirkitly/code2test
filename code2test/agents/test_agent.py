@@ -74,13 +74,20 @@ PYTEST_GENERATION_PROMPT = """Generate pytest tests for the following component 
 {source_code}
 ```
 
-Generate comprehensive tests that validate this intent. Include:
-1. A test for the primary happy path
-2. Tests for edge cases mentioned in the intent
-3. Tests for error conditions
-4. Any necessary fixtures
+Produce a JSON object matching the schema above, where ``tests`` is an
+array of OBJECT INSTANCES (not type descriptions, not schema
+definitions, not placeholders). Each object in ``tests`` MUST have
+these four fields filled:
 
-Return tests using pytest syntax with clear docstrings explaining what each test validates."""
+  - ``name``: a valid Python identifier prefixed with ``test_``.
+  - ``description``: one sentence explaining what scenario this tests.
+  - ``test_code``: a complete, runnable ``def test_*(...)`` body — must
+    be valid Python that imports ``pytest`` and asserts on real values.
+  - ``tests_behavior``: one sentence describing the assertion.
+
+Aim for 3-5 test cases covering the happy path, edge cases, and error
+conditions. Do not include <think>...</think> blocks, prose, markdown
+fences, or anything outside the JSON object."""
 
 
 class TestAgent:

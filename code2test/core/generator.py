@@ -34,6 +34,7 @@ from code2test.events import (
     new_run_id,
     null_sink,
 )
+from code2test.providers.base import Provider
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,10 @@ class TestGenerator:
         self.config = config or GenerationConfig()
         # Sink for events; production default is null_sink.
         self._sink = sink if sink is not None else null_sink()
+        # Provider shared by all three agents; lazily built on first access
+        # through the `provider` property so we don't pay SDK-import cost
+        # on a TestGenerator that never makes an LLM call.
+        self._provider: Optional[Provider] = None
         # run_id is created on first generate_tests_for_module call and reused
         # across phases so a sink can correlate events for the same generation.
         self._run_id: Optional[str] = None
@@ -108,21 +113,50 @@ class TestGenerator:
             logger.warning("event sink raised %r; suppressed", exc)
     
     @property
+    def provider(self):
+        """Single Provider shared by all three agents.
+
+        Built lazily because some v1.0 callers (e.g. the legacy CLI
+        path with an old Config) instantiate TestGenerator without ever
+        making an LLM call; deferring the openai SDK import until
+        actually needed keeps those paths cheap.
+
+        v1.1 adds the seam-awareness: previously, the lazy agent
+        constructors received only ``model=self.config.model`` and
+        silently produced StubProvider agents regardless of
+        ``Config.provider``. We now construct one Provider that honors
+        the configured provider/base_url/api_key and inject it into
+        every agent.
+        """
+        if self._provider is None:
+            from code2test.config import Config
+            from code2test.providers import get_provider
+            cfg = Config(
+                provider=getattr(self.config, "provider", "stub"),
+                model=self.config.model,
+                base_url=getattr(self.config, "base_url", ""),
+                api_key=getattr(self.config, "api_key", ""),
+            )
+            self._provider = get_provider(cfg)
+        return self._provider
+
+    @property
     def intent_agent(self) -> IntentAgent:
         if self._intent_agent is None:
-            self._intent_agent = IntentAgent(model=self.config.model)
+            self._intent_agent = IntentAgent(provider=self.provider)
         return self._intent_agent
-    
+
     @property
     def test_agent(self) -> TestAgent:
         if self._test_agent is None:
-            self._test_agent = TestAgent(model=self.config.model)
+            self._test_agent = TestAgent(provider=self.provider)
         return self._test_agent
-    
+
     @property
     def diagnosis_agent(self) -> DiagnosisAgent:
         if self._diagnosis_agent is None:
-            self._diagnosis_agent = DiagnosisAgent()
+            self._diagnosis_agent = DiagnosisAgent(provider=self.provider)
+        return self._diagnosis_agent
         return self._diagnosis_agent
     
     async def generate_tests_for_module(
