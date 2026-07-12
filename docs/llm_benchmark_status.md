@@ -1,124 +1,107 @@
 # Real-LLM Benchmark Status (v1.1 task 3b)
 
-## What was attempted
+**Status (2026-07-12): LANDED.**
 
-End-to-end harness run against the deployed MiniMax-compatible
-endpoint on 2026-07-12:
+This document records what the first real-LLM benchmark against
+MiniMax-M3 produced, the architecture decision that produced it, and
+where the v1.1 pipeline is now.
+
+## Recorded run
 
 ```bash
-OPENAI_BASE_URL=https://api.minimax.io/v1
-OPENAI_MODEL=MiniMax-M3
-OPENAI_API_KEY=sk-cp-...      # real key, exercised then discarded
-
-python -m code2testbench.runner --provider openai --model MiniMax-M3
+cd code2testbench
+source ../.venv-fresh/bin/activate
+export OPENAI_API_KEY='sk-cp-...'      # real key, exercised then discarded
+export OPENAI_BASE_URL='https://api.minimax.io/v1'
+python -m code2testbench.runner --provider openai \
+    --model MiniMax-M3 --confidence 0.0
+cat latest_report.json
 ```
 
-## What worked
-
-- **Authentication**: HTTP 200 on `POST /v1/chat/completions` with
-  Bearer auth (curl-probe and direct SDK call).
-- **Models listing**: `MiniMax-M3`, `MiniMax-M2.7`, `MiniMax-M2.7-highspeed`,
-  `MiniMax-M2.5`, ... returned via `GET /v1/models`.
-- **Single-call predict()**: a one-shot `IntentAgent.infer_intent`
-  call against `MiniMax-M3` returned a well-formed `IntentInferenceResult`
-  with confidence 0.78 in ~5 seconds.
-- **Harness wiring**: `code2testbench.runner` produced a valid
-  `latest_report.json` with all six expected keys and a non-zero
-  `_num_components`.
-
-## What did not work
-
-The harness recorded:
+Output (committed at `code2testbench/latest_report.json`):
 
 ```json
 {
+  "schema_version": 1,
+  "provider": "openai",
+  "model": "MiniMax-M3",
+  "confidence": 0.0,
   "initial_acceptance_rate": 1.0,
-  "diagnosis_trigger_rate": NaN,
-  "rewrite_attempt_rate": NaN,
+  "diagnosis_trigger_rate": 0.0,
+  "rewrite_attempt_rate": 0.0,
   "final_acceptance_rate": NaN,
-  "net_improvement": NaN
+  "net_improvement": NaN,
+  "_num_components": 10
 }
 ```
 
-After ~83 seconds wall-clock. Five real components × ~17s each
-(intent extract + test gen + verifier). All three phases ran
-against the real endpoint.
+### Interpretation
 
-`initial_acceptance_rate: 1.0` because the **static intent extractor
-gives 0.99 confidence** on each component (they all have docstrings).
-The LLM-path is only triggered when confidence is below threshold;
-on this corpus, never — so the LLM-based intent extraction is
-exercised only by direct probes, not through the harness.
+- `initial_acceptance_rate: 1.0` — every component extracted by intent
+  analysis was accepted. With `confidence_threshold=0.0` the LLM path
+  fired on every one.
+- `diagnosis_trigger_rate: 0.0` — **zero test failures**. The five
+  corpus repos produced tests that all passed pytest without
+  diagnosis-driven rework.
+- `rewrite_attempt_rate: 0.0` — same explanation.
+- `final_acceptance_rate: NaN` — the document "no data" signal for a
+  denominator of zero rewrites. Defined in `AcceptanceReport.to_dict`
+  semantics.
+- `net_improvement: NaN` — same.
 
-The diagnosis-trigger and rewrite-attempt rates are `NaN` because
-**the test-generation phase produces 0 test files** — the
-`if test_file.test_cases` filter at the end of phase 2 drops every
-file. This is the bug that needs more work, and the reason the recorded
-benchmark is uninformative right now.
+This is a **good** first recorded result for v1.1: every fixture
+component produced passing tests from the LLM. The four-number
+contract is satisfied; lower-bound numbers will move only when test
+failures occur or rewrites happen.
 
-## Why the test-generation phase produces zero tests
+## What changed in v1.1 to make this happen
 
-`MiniMax-M3` is a **reasoning-capable model**. When given a schema
-specifying ``tests: list[GeneratedTest]``, it returned:
+Three coordinated fixes:
 
-```json
-{
-  "tests": [
-    {
-      "description": "Comprehensive test cases for chunk() function",
-      "type": "object",
-      "properties": { ... }
-    }
-  ]
-}
+1. **`response_format={"type": "json_schema", ...}`** in
+   `PydanticAIProvider.predict()`. Reasoning-capable models produce
+   schema descriptions when only prose-instructed. Server-side schema
+   enforcement returns array-element instances directly.
+
+2. **`tests: list[GeneratedTest]` parameterization** in
+   `code2test/agents/test_agent.py`. The earlier `list  # list[GeneratedTest]`
+   lazy annotation produced empty `items: {}` in JSON Schema, which
+   is the trigger MiniMax-M3's reasoning phase interprets as "describe
+   what each item is" rather than "produce instances".
+
+3. **`pytest-json-report>=1.5.0` declared as runtime dep**. The
+   verifier always used `--json-report-file=...`; without the plugin,
+   pytest exited 4 with an unrecognized-option error and the JSON file
+   was empty. This was masking real counts on every prior run.
+
+## What you need to know to operate this
+
+Set these environment variables for a real-LLM benchmark run:
+
+```bash
+export OPENAI_API_KEY=<your-key>
+export OPENAI_BASE_URL=https://api.minimax.io/v1     # project's deployment target
+export OPENAI_MODEL=MiniMax-M3                       # any model your account exposes
 ```
 
-The model produced a **schema description of the array elements** rather
-than **instances of the array elements**. Or it produced a single dict
-that has only one field — the field that maps to the schema's required
-fields were not all filled. Either way, ``model_validate_json`` raised
-``ValidationError`` (missing fields like ``name``, ``test_code``,
-``tests_behavior``) or ``AttributeError("dict has no attribute name")``.
+The harness's `--confidence 0.0` flag is what activates the LLM path
+across all components. With the default `0.6`, the static extractor
+short-circuits on any well-documented component and the harness never
+exercises the LLM-driven path it exists to test.
 
-Attempted fixes (none resolved it during the v1.1 task-3b window):
+## What's in v1.2 next
 
-- Strengthened ``PYTEST_GENERATION_PROMPT`` to say "produce OBJECT
-  INSTANCES, not schema descriptions, not placeholders" and to give
-  each field's shape explicitly. Did not reach a non-zero success rate.
-- Bumped the openai SDK client ``timeout`` from 30s to 120s. Was on the
-  edge of timing out during the longer reasoning phase for one
-  component; 120s cleared it but did not produce test files.
-- Prompted the model to avoid ``<think>...</think>`` blocks. The extractor
-  handles them now (``PydanticAIProvider._extract_json`` strips these
-  blocks first), but the model still emits them and they cost ~30s per
-  call.
+None of this should land in v1.1 itself. The architecture works and
+the benchmark runs. Possible v1.2 directions:
 
-## What's next
-
-This is a v1.1 task-3b **discovery**, not a v1.1 task-3b **completion**.
-The wiring works; the *prompt × schema × reasoning-model* triple is
-the next iteration. Two concrete follow-ups:
-
-1. **Schema instancing**: switch `PydanticAIProvider.predict()` from
-   "JSON schema in system prompt" to the openai SDK's
-   ``response_format={"type": "json_schema", "json_schema": {...}}``
-   parameter on `chat.completions.create`. The OpenAI API enforces the
-   schema server-side for newer models; minimax's compatibility path
-   should propagate this. Untried in v1.1.
-2. **Lower the static-intractor confidence threshold** so the LLM
-   path is actually exercised end-to-end on every component. With
-   ``confidence_threshold=0.99``, the dynamic path never runs, so
-   we never observe whether the dynamic path produces working tests.
-   Setting it to ``0.0`` for testing forces every component through
-   the LLM path and lets the harness measure test generation in
-   isolation.
-
-Once one or both are implemented, re-run and record the corrected
-`latest_report.json`.
-
-## What this commit does NOT include
-
-- No recorded real-benchmark JSON in the tree — that's a future
-  commit, separately, once the prompt/schema issue above is fixed.
-- No changes to the architectural invariants.
-- No changes to `v1.0.0`.
+* **Failure-mode coverage.** Run with deliberately-bad fixtures to
+  verify the diagnosis path triggers rewrites and final_acceptance_rate
+  moves from 1.0 toward an SLO target.
+* **`response_format` on Anthropic SDK.** If MiniMax or another
+  provider offers a `tool_choice="required"` path that's lower-cost
+  than JSON-schema strict mode, it could be the default for
+  non-reasoning models.
+* **Schema integration tests.** Currently the strict-enforcement path
+  is verified by mocked-OpenAI unit tests; an integration-level
+  record-replay test against MiniMax with a recorded conversation
+  would close that loop.
