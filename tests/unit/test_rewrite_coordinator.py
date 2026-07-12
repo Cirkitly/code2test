@@ -217,7 +217,13 @@ def test_coordinator_test_rewrite_success_commits_candidate():
     ))
     assert outcome.strategy is Strategy.TEST_REWRITE
     assert outcome.success is True
-    assert outcome.new_test_file is candidate
+    # The coordinator's commit step materializes the candidate at
+    # the production path. The returned new_test_file equals the
+    # candidate in content but is a fresh instance with the
+    # production path stamped on.
+    assert outcome.new_test_file is not None
+    assert outcome.new_test_file == candidate
+    assert outcome.new_test_file.path == "f_test.py"
     assert outcome.failure_classification == "TEST_WRONG"
     assert outcome.tests_before == 1
     assert outcome.tests_after == 0  # all-passed verifier returns empty failed list
@@ -327,7 +333,8 @@ def test_coordinator_intent_rewrite_re_extracts_intent_then_rewrites():
     ))
     assert outcome.strategy is Strategy.INTENT_REWRITE
     assert outcome.success is True
-    assert outcome.new_test_file is candidate
+    assert outcome.new_test_file is not None
+    assert outcome.new_test_file == candidate
     intent_agent.infer_intent.assert_called_once()
     test_agent.generate_unit_tests.assert_called_once()
     # The test_agent was called with the *new* intent, not the original.
@@ -479,3 +486,76 @@ def test_exception_during_rewrite_returns_failure_outcome_not_raises():
     assert outcome.new_test_file is None
     assert "RuntimeError" in outcome.explanation
     assert "LLM down" in outcome.explanation
+
+
+def test_coordinator_writes_candidate_to_temp_path_during_verification():
+    """The transactional property: the verifier must NOT overwrite
+    the production test file when running the candidate. Otherwise
+    a verification failure would destroy the original.
+
+    We assert this by recording which paths the verifier was called
+    with. The candidate runs at a temp path; only on success does
+    the production path get used.
+    """
+    candidate = _make_test_file([], ["t1"])
+    # Make the verifier capture what path it was called with.
+    verifier = MagicMock()
+    verifier.validate_syntax.return_value = (True, "")
+    result = MagicMock()
+    result.all_passed = True
+    result.failed = []
+    verifier.run_tests.return_value = result
+    verifier.repo_path = "/tmp/does-not-exist"
+    test_agent = _make_test_agent(candidate)
+
+    coord = RewriteCoordinator(
+        test_agent=test_agent,
+        intent_agent=_make_intent_agent(_make_intent()),
+        verifier=verifier,
+    )
+    outcome = _run(coord.attempt_rewrite(
+        run_id="r", component_id="comp",
+        original_test_file=_make_test_file(["t1"], []),
+        component={"id": "comp"}, intent=_make_intent(),
+        diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+    ))
+    # The verifier was called once. The path argument must NOT be
+    # the production path "f_test.py"; it must be a temp variant.
+    assert verifier.run_tests.call_count == 1
+    called_path = verifier.run_tests.call_args.args[0].path
+    assert called_path != "f_test.py", (
+        "verifier was called with the production path; original "
+        "test file would be overwritten during candidate verification"
+    )
+    assert ".rewrite_tmp" in called_path or called_path.endswith(".tmp")
+    # On success, the returned new_test_file has the production path.
+    assert outcome.new_test_file is not None
+    assert outcome.new_test_file.path == "f_test.py"
+
+
+def test_coordinator_failure_preserves_original_test_file_object():
+    """If verification rejects the rewrite, the candidate is discarded
+    and the original_test_file object passed in by the caller is
+    untouched. The caller can re-attempt or commit it later.
+    """
+    candidate = _make_test_file([], ["t1"])
+    verifier = _make_verifier(all_passed=False)
+    test_agent = _make_test_agent(candidate)
+
+    original = _make_test_file(["t1"], [])
+    coord = RewriteCoordinator(
+        test_agent=test_agent,
+        intent_agent=_make_intent_agent(_make_intent()),
+        verifier=verifier,
+    )
+    outcome = _run(coord.attempt_rewrite(
+        run_id="r", component_id="comp",
+        original_test_file=original, component={"id": "comp"},
+        intent=_make_intent(), diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+    ))
+    assert outcome.success is False
+    assert outcome.new_test_file is None
+    # The original passed in is untouched in the caller's frame;
+    # the coordinator does not mutate it.
+    assert original.test_cases[0].status == TestStatus.FAILED
+    assert len(original.test_cases) == 1

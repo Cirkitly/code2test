@@ -235,14 +235,19 @@ class RewriteCoordinator:
             # Default to pytest if framework is unspecified; matches
             # the runner's default behavior.
             fw = framework if framework is not None else _DEFAULT_FRAMEWORK
-            new_test_file = await test_agent.generate_unit_tests(
+            candidate = await test_agent.generate_unit_tests(
                 component, new_intent, fw,
             )
 
             # Transactional verification: the candidate exists
-            # alongside the original. The verifier runs it on its
-            # own. The caller's commit step is gated on the result.
-            valid, _ = self._verifier.validate_syntax(new_test_file)
+            # alongside the original. The verifier writes to
+            # test_file.path; we use a temp path so the original
+            # survives a verification failure.
+            from pathlib import Path as _Path
+            original_path = _Path(candidate.path)
+            tmp_path = str(original_path) + ".rewrite_tmp"
+
+            valid, _ = self._verifier.validate_syntax(candidate)
             if not valid:
                 return RewriteOutcome(
                     component_id=component_id,
@@ -255,23 +260,53 @@ class RewriteCoordinator:
                     new_test_file=None,
                     explanation="rewrite produced syntactically invalid test",
                 )
-            result = self._verifier.run_tests(new_test_file)
+
+            # Build a transient TestFile view at the temp path so the
+            # verifier writes there, not at the production path.
+            temp_test_file = candidate.model_copy(update={"path": tmp_path})
+            result = self._verifier.run_tests(temp_test_file)
             tests_after = len(result.failed)
             success = result.all_passed
 
+            # Cleanup the temp file unconditionally. The verifier
+            # wrote it; we remove it. The original at the production
+            # path is untouched.
+            try:
+                full_tmp = _Path(_verifier_repo_path(self._verifier)) / tmp_path
+                if full_tmp.exists():
+                    full_tmp.unlink()
+            except Exception:
+                pass
+
+            if not success:
+                # Discard the candidate; the original is preserved.
+                return RewriteOutcome(
+                    component_id=component_id,
+                    strategy=strategy,
+                    failure_classification=classification,
+                    success=False,
+                    elapsed_seconds=time.monotonic() - t0,
+                    tests_before=tests_before,
+                    tests_after=tests_after,
+                    new_test_file=None,
+                    explanation="rewrite produced a test that did not pass verification",
+                )
+
+            # Commit: rewrite the candidate's content onto the
+            # production path. The caller (generator) is responsible
+            # for re-running the entire suite to confirm no
+            # regressions elsewhere.
+            new_test_file = candidate.model_copy(update={"path": str(original_path)})
             return RewriteOutcome(
                 component_id=component_id,
                 strategy=strategy,
                 failure_classification=classification,
-                success=success,
+                success=True,
                 elapsed_seconds=time.monotonic() - t0,
                 tests_before=tests_before,
                 tests_after=tests_after,
-                new_test_file=new_test_file if success else None,
-                explanation=(
-                    "rewrote test; verification "
-                    f"{'passed' if success else 'failed'}"
-                ),
+                new_test_file=new_test_file,
+                explanation="rewrote test; verification passed",
             )
         except Exception as exc:  # noqa: BLE001
             # An LLM or verifier exception is recorded but does not
@@ -288,6 +323,13 @@ class RewriteCoordinator:
                 new_test_file=None,
                 explanation=f"rewrite raised: {type(exc).__name__}: {exc}",
             )
+
+
+def _verifier_repo_path(verifier: Any) -> str:
+    """Read the verifier's repo_path. The attribute name varies; both
+    are tolerated so this module works across verifier versions.
+    """
+    return getattr(verifier, "repo_path", "") or getattr(verifier, "_repo_path", "")
 
 
 def _count_failures(test_file: TestFile) -> int:
