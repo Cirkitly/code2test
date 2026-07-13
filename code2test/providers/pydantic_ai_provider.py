@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+from typing import Any, Callable, Dict, Optional
 
 from .base import Provider, T
 
@@ -167,7 +167,13 @@ class PydanticAIProvider(Provider):
 
     # --- predict -----------------------------------------------------------
 
-    def predict(self, system: str, user: str, schema: type[T]) -> T:
+    def predict(
+        self,
+        system: str,
+        user: str,
+        schema: type[T],
+        on_record: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ) -> T:
         """Send a chat completion; parse JSON into the schema instance.
 
         Uses the openai SDK's ``response_format={"type": "json_schema",
@@ -178,19 +184,36 @@ class PydanticAIProvider(Provider):
         models; server-side schema enforcement returns array-element
         instances directly.
 
+        Instrumentation: ``on_record`` is a per-call callback the
+        caller (the test_agent) installs to receive one dict per
+        call. The dict carries everything needed to diagnose why
+        a generation succeeded or returned zero tests. The
+        provider fills in model, prompt_hash, raw_response,
+        parsed_response, validation_errors, and generated_test_count.
+        The caller is responsible for adding component_id and
+        publishing the event.
+
+        The callback is invoked synchronously inside ``predict``.
+        Callers must not raise from inside it; doing so turns a
+        schema-validation failure into a provider exception.
+
         Raises:
             openai.OpenAIError subclasses on network or auth failure.
             ValueError when the model reply is not valid JSON for the
             schema (should be impossible with response_format, but
             our extractor remains as belt-and-suspenders).
         """
+        import hashlib
+
         from .schema_helpers import openai_response_format
 
-        # The seam accepts both system+user. We keep the schema
-        # instruction in the system prompt so the model sees it;
-        # the server-side response_format enforces compliance.
+        # Compose the prompt early so we can hash it before sending.
+        # This is the prompt that actually goes to the model; the
+        # hash is what we'll compare across runs to detect drift.
         composed_system = self._schema_json_instruction(schema) + "\n\n" + system
         composed_user = user
+        prompt_blob = (composed_system + "\n\n" + composed_user).encode("utf-8")
+        prompt_hash = hashlib.sha256(prompt_blob).hexdigest()
 
         # The schema name must be a valid identifier for the openai SDK.
         # A stable name per call site lets providers cache; we use a
@@ -207,7 +230,7 @@ class PydanticAIProvider(Provider):
         # and the server enforces the schema. Cast through `Any` so
         # pyright doesn't complain; the runtime contract is verified
         # by the mock-client tests in test_providers.py.
-        from typing import cast, Any
+        from typing import cast
 
         response = self._client.chat.completions.create(
             model=self.model_name,
@@ -219,13 +242,56 @@ class PydanticAIProvider(Provider):
             response_format=cast(Any, schema_format),
         )
 
+        # Initialize the record. We populate it through the lifecycle
+        # and finally invoke the callback exactly once.
+        record: Dict[str, Any] = {
+            "model": self.model_name,
+            "prompt_hash": prompt_hash,
+            "raw_response": None,
+            "parsed_response": None,
+            "validation_errors": None,
+            "generated_test_count": 0,
+        }
+
         if not response.choices:
+            record["validation_errors"] = "no choices returned"
+            if on_record is not None:
+                on_record(record)
             raise ValueError(
                 "Provider returned empty choices list; nothing to parse."
             )
+
         content = response.choices[0].message.content or ""
+        record["raw_response"] = content
+
         payload = self._extract_json(content)
-        return schema.model_validate_json(payload)
+        record["parsed_response"] = payload
+
+        try:
+            instance = schema.model_validate_json(payload)
+        except Exception as exc:  # noqa: BLE001
+            # ValidationError, JSONDecodeError, anything else. The
+            # record captures the failure mode; we re-raise so the
+            # caller's exception path still fires.
+            record["validation_errors"] = f"{type(exc).__name__}: {exc}"
+            if on_record is not None:
+                on_record(record)
+            raise
+
+        # Best-effort: count the field that means "did the model emit
+        # any tests" for the test generation schema. The field name
+        # varies across schemas; we look it up by convention.
+        generated_count = 0
+        for field_name in ("tests", "results", "items"):
+            val = getattr(instance, field_name, None)
+            if isinstance(val, list):
+                generated_count = len(val)
+                break
+        record["generated_test_count"] = generated_count
+
+        if on_record is not None:
+            on_record(record)
+        return instance
 
     @staticmethod
     def _schema_cache_name(schema: type) -> str:

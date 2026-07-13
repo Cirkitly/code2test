@@ -299,6 +299,132 @@ def test_pydantic_ai_provider_predict_rejects_empty_choices():
         p.predict("sys", "user", Out)
 
 
+# --- instrumentation: per-call on_record callback -------------------------
+
+def test_pydantic_ai_provider_predict_invokes_on_record_with_all_fields():
+    """The on_record callback receives model, prompt_hash, raw_response,
+    parsed_response, generated_test_count on success. validation_errors
+    is None when validation succeeds.
+
+    The point of this test is to pin the instrumentation contract so the
+    benchmark's `GenerationRecorded` event has a stable schema.
+    """
+    payload = {"intent_text": "x", "confidence": 0.5}
+    mock_client = _mk_mock_completion(payload)
+    records = []
+    p = PydanticAIProvider(model_name="m", api_key="k")
+    p._client = mock_client
+    p.predict("sys", "user", Out, on_record=records.append)
+    assert len(records) == 1
+    r = records[0]
+    assert r["model"] == "m"
+    assert isinstance(r["prompt_hash"], str) and len(r["prompt_hash"]) == 64
+    assert r["raw_response"] is not None
+    assert r["parsed_response"] is not None
+    assert r["validation_errors"] is None
+    # Out has fields intent_text and confidence, not a list. The
+    # counter falls back to 0. The actual list field here is the test
+    # expectation: Out has no list-typed field, so the heuristic
+    # returns 0. That's correct: the goal is to count list-typed
+    # outputs; non-list schemas are zero by design.
+    assert r["generated_test_count"] == 0
+
+
+def test_pydantic_ai_provider_predict_records_validation_errors():
+    """When the schema rejects the model's JSON, validation_errors is
+    populated with the exception class and message. This is what makes
+    a `generation_success_rate` metric interpretable: we know whether
+    a zero-test count was a model problem or a schema problem.
+    """
+    # Out requires confidence; send raw JSON missing the field.
+    bad_payload = '{"intent_text": "x"}'  # no confidence
+    mock_client = _mk_mock_completion_from_text(bad_payload)
+    records = []
+    p = PydanticAIProvider(model_name="m", api_key="k")
+    p._client = mock_client
+    with pytest.raises(Exception):  # ValidationError
+        p.predict("sys", "user", Out, on_record=records.append)
+    assert len(records) == 1
+    r = records[0]
+    assert r["validation_errors"] is not None
+    assert "ValidationError" in r["validation_errors"]
+    # On validation failure, generated_test_count stays at 0 because
+    # we don't have a parsed instance to count from.
+    assert r["generated_test_count"] == 0
+    # raw_response and parsed_response are populated even on failure;
+    # that's what makes the failure mode diagnosable.
+    assert r["raw_response"] is not None
+    assert r["parsed_response"] is not None
+
+
+def test_pydantic_ai_provider_predict_records_no_choices_failure():
+    """Empty-choices failures are captured too. The callback fires
+    before the exception is raised so observability isn't lost.
+    """
+    empty_response = type("Resp", (), {"choices": []})()
+    client = type("C", (), {"chat": type("CC", (), {"completions": type(
+        "CCC", (), {"create": lambda self, **k: empty_response})()})()})()
+    records = []
+    p = PydanticAIProvider(model_name="m", api_key="k")
+    p._client = client
+    with pytest.raises(ValueError, match="empty choices"):
+        p.predict("sys", "user", Out, on_record=records.append)
+    assert len(records) == 1
+    assert records[0]["validation_errors"] == "no choices returned"
+
+
+def test_pydantic_ai_provider_predict_prompt_hash_is_stable():
+    """The same prompt produces the same hash across calls. This is
+    what lets the benchmark correlate raw_responses across runs.
+    """
+    payload = {"intent_text": "x", "confidence": 0.5}
+    mock_client_a = _mk_mock_completion(payload)
+    mock_client_b = _mk_mock_completion(payload)
+    records_a = []
+    records_b = []
+    p_a = PydanticAIProvider(model_name="m", api_key="k")
+    p_a._client = mock_client_a
+    p_b = PydanticAIProvider(model_name="m", api_key="k")
+    p_b._client = mock_client_b
+    p_a.predict("sys", "user", Out, on_record=records_a.append)
+    p_b.predict("sys", "user", Out, on_record=records_b.append)
+    assert records_a[0]["prompt_hash"] == records_b[0]["prompt_hash"]
+
+
+def test_pydantic_ai_provider_predict_prompt_hash_differs_on_input_change():
+    """Different prompts produce different hashes. Without this the
+    benchmark can't detect prompt drift.
+    """
+    payload = {"intent_text": "x", "confidence": 0.5}
+    records_a = []
+    records_b = []
+    p_a = PydanticAIProvider(model_name="m", api_key="k")
+    p_a._client = _mk_mock_completion(payload)
+    p_b = PydanticAIProvider(model_name="m", api_key="k")
+    p_b._client = _mk_mock_completion(payload)
+    p_a.predict("sys-a", "user", Out, on_record=records_a.append)
+    p_b.predict("sys-b", "user", Out, on_record=records_b.append)
+    assert records_a[0]["prompt_hash"] != records_b[0]["prompt_hash"]
+
+
+def test_pydantic_ai_provider_predict_count_tests_field_when_present():
+    """For schemas with a list-typed field named `tests` (or `results`
+    or `items`), the counter is populated. This is what makes
+    `generation_success_rate` derivable from the recorded JSON.
+    """
+    class Container(BaseModel):
+        tests: list = Field(default_factory=list)
+        other: str = "x"
+
+    mock_client = _mk_mock_completion({"tests": [{"a": 1}, {"b": 2}, {"c": 3}]})
+    records = []
+    p = PydanticAIProvider(model_name="m", api_key="k")
+    p._client = mock_client
+    out = p.predict("sys", "user", Container, on_record=records.append)
+    assert len(out.tests) == 3
+    assert records[0]["generated_test_count"] == 3
+
+
 # --- helpers for the mocked-openai tests ---------------------------------
 
 
