@@ -32,6 +32,7 @@ from code2test.events import (
     GenerationRecorded,
     IntentExtracted,
     RewriteAttempted,
+    RewriteCommitted,
     TestsGenerated,
     VerificationCompleted,
 )
@@ -77,7 +78,19 @@ class EventCollector:
         self._generation_requested = 0
         self._generation_succeeded = 0
 
-        # Sanity check: duplicate component_ids in InitialAcceptance? Track raw events.
+        # Phase-4 re-run tracking. VerificationCompleted events with
+        # rerun=True feed verification_pass_rate_after_rewrite. The
+        # numerator is the count of components passing on the re-run;
+        # the denominator is the count of components that had a rerun
+        # event (i.e. components the loop chose to re-verify).
+        # verification_pass_rate_before_rewrite is derived: it's
+        # (_initial_total - _failed_components) / _initial_total.
+        self._rerun_components_total = 0
+        self._rerun_components_passed = 0
+
+        # Per-event raw list for the variance experiment. The variance
+        # script walks these to classify failures into the categories
+        # defined in docs/benchmark_findings_v1.1_instrumentation.md.
         self._events: List = []
 
     # --- sink contract -----------------------------------------------------
@@ -92,19 +105,27 @@ class EventCollector:
                 self._initial_accept += 1
 
         elif isinstance(event, VerificationCompleted):
-            # The number of failed TESTS in this component's test file.
-            # Used as the denominator for diagnosis_trigger_rate
-            # (per-test metric). NOT used as the rewrite denominator;
-            # see _failed_components below for that.
+            # Per-test counter for diagnosis_trigger_rate. The
+            # metric denominator is the count of failed tests, not
+            # the count of failed components, so the diagnostic
+            # path's reasoning ("every failure triggered diagnosis")
+            # is exposed directly.
             self._diagnostics_total += event.failed
             self._rewrites_total += event.failed
-            # Per-component: increment failed_components if this
-            # component had any failures. The rewrite_attempt_rate
-            # denominator is components-with-failures, not failed
-            # tests; this keeps the ratio well-defined when one
-            # component has many failing tests.
-            if event.failed > 0:
+            # Per-component counter for failed-components. The
+            # rewrite_attempt_rate denominator is components-with-
+            # failures, not failed tests; this keeps the ratio
+            # well-defined when one component has many failing tests.
+            if event.failed > 0 and not getattr(event, "rerun", False):
                 self._failed_components += 1
+            # Phase-4 re-run events feed the post-rewrite pass rate.
+            # A re-run event on a component that passed (failed=0)
+            # is a successful re-run, which is what we count toward
+            # verification_pass_rate_after_rewrite.
+            if getattr(event, "rerun", False):
+                self._rerun_components_total += 1
+                if event.failed == 0:
+                    self._rerun_components_passed += 1
 
         elif isinstance(event, DiagnosisTriggered):
             self._diagnosis_triggered += 1
@@ -124,6 +145,15 @@ class EventCollector:
             self._generation_requested += 1
             if event.generated_test_count > 0 and not event.validation_errors:
                 self._generation_succeeded += 1
+
+        elif isinstance(event, RewriteCommitted):
+            # RewriteCommitted is observational; its data lives in
+            # self._events for the variance experiment to walk. We
+            # do not increment any counters here because the same
+            # logical event already incremented them via
+            # RewriteAttempted; the only new data is the verifier
+            # counts and the replaced flag.
+            pass
 
         else:
             # Unknown event type: fail loudly so the catalog can be updated.
@@ -153,6 +183,24 @@ class EventCollector:
             generation_success_rate=_safe_ratio(
                 self._generation_succeeded, self._generation_requested
             ),
+            # verification_pass_rate_before_rewrite: fraction of all
+            # components that passed verification in phase 3, before
+            # the rewrite loop ran. This is the user-facing "did your
+            # tests pass before we tried to repair?" number.
+            verification_pass_rate_before_rewrite=_safe_ratio(
+                self._initial_total - self._failed_components,
+                self._initial_total,
+            ),
+            # verification_pass_rate_after_rewrite: fraction of all
+            # components that passed verification in phase 4, after
+            # the rewrite loop ran. The denominator is the count of
+            # components that had a re-run event (i.e. components
+            # the loop chose to re-verify). NaN when no re-runs
+            # occurred because the loop had nothing to repair.
+            verification_pass_rate_after_rewrite=_safe_ratio(
+                self._rerun_components_passed,
+                self._rerun_components_total,
+            ),
         )
 
     # --- introspection -----------------------------------------------------
@@ -165,6 +213,19 @@ class EventCollector:
     def rewrite_events(self) -> List[RewriteAttempted]:
         """All RewriteAttempted events, in order; for the recorded JSON."""
         return [e for e in self._events if isinstance(e, RewriteAttempted)]
+
+    def rewrite_committed_events(self) -> List[RewriteCommitted]:
+        """All RewriteCommitted events, in order; the variance
+        experiment walks this list to classify failures.
+        """
+        return [e for e in self._events if isinstance(e, RewriteCommitted)]
+
+    def verification_rerun_events(self) -> List[VerificationCompleted]:
+        """All phase-4 re-run VerificationCompleted events."""
+        return [
+            e for e in self._events
+            if isinstance(e, VerificationCompleted) and getattr(e, "rerun", False)
+        ]
 
 
 def _safe_ratio(num: int, den: int) -> float:

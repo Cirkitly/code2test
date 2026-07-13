@@ -169,19 +169,44 @@ def main(argv: Optional[list] = None) -> int:
 
     report = sink.report()
     out = here / args.out
+    # Schema_version bumped to 2 in v1.1.4: events list is now
+    # included so the variance script can partition the failure
+    # space without re-running the harness.
     out.write_text(json.dumps({
-        "schema_version": 1,
+        "schema_version": 2,
         "provider": args.provider,
         "model": args.model,
         "confidence": args.confidence,
         **report.to_dict(),
         "_num_components": sum(1 for _ in sink.events
                               if _.__class__.__name__ == "IntentExtracted"),
-    }, indent=2))
+        "_events": _serialize_events(sink),
+    }, indent=2, default=str))
 
     print(f"wrote {out}")
     print(json.dumps(report.to_dict(), indent=2))
     return 0
+
+
+def _serialize_events(sink) -> list:
+    """Convert the collector's raw events to JSON-serializable dicts.
+
+    Used by the recorded JSON so the variance script can partition
+    the failure space without re-running the harness. Each event
+    becomes a dict with __dict__-style fields plus the class
+    name as a discriminator (so the script knows what type it is).
+    """
+    out = []
+    for ev in sink.events:
+        d = {"_type": type(ev).__name__}
+        # dataclass instances expose fields via __dataclass_fields__.
+        if hasattr(ev, "__dataclass_fields__"):
+            for k in ev.__dataclass_fields__:
+                d[k] = getattr(ev, k)
+        else:
+            d["_repr"] = repr(ev)
+        out.append(d)
+    return out
 
 
 if __name__ == "__main__":

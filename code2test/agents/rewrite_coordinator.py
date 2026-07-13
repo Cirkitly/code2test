@@ -127,6 +127,8 @@ class RewriteOutcome:
     verification_after_seconds: float
     tests_before: int   # failing-test count for the component pre-rewrite
     tests_after: int    # failing-test count for the component post-suite-rerun
+    isolated_passed: int = 0  # candidate's verifier pass count when known
+    isolated_failed: int = 0  # candidate's verifier fail count when known
     new_test_file: Optional[TestFile] = None
     explanation: str = ""
 
@@ -317,6 +319,11 @@ class RewriteCoordinator:
             verification_after_seconds = time.monotonic() - t_verify
             tests_after = len(result.failed)
             success = result.all_passed
+            # Capture the candidate's verifier counts so the
+            # variance experiment can distinguish verifier_failure
+            # from transactional_replacement_failure.
+            isolated_passed = len(result.passed) if hasattr(result, "passed") else 0
+            isolated_failed = len(result.failed)
 
             try:
                 full_tmp = _Path(_verifier_repo_path(self._verifier)) / tmp_path
@@ -336,6 +343,8 @@ class RewriteCoordinator:
                     verification_after_seconds=verification_after_seconds,
                     tests_before=tests_before,
                     tests_after=tests_after,
+                    isolated_passed=isolated_passed,
+                    isolated_failed=isolated_failed,
                     new_test_file=None,
                     explanation="rewrite produced a test that did not pass verification",
                 )
@@ -351,6 +360,8 @@ class RewriteCoordinator:
                 verification_after_seconds=verification_after_seconds,
                 tests_before=tests_before,
                 tests_after=tests_after,
+                isolated_passed=isolated_passed,
+                isolated_failed=isolated_failed,
                 new_test_file=new_test_file,
                 explanation="rewrote test; verification passed",
             )

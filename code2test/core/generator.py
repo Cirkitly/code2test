@@ -31,6 +31,7 @@ from code2test.events import (
     VerificationCompleted,
     DiagnosisTriggered,
     RewriteAttempted,
+    RewriteCommitted,
     new_run_id,
     null_sink,
 )
@@ -568,6 +569,29 @@ class TestGenerator:
                 elapsed_seconds=outcome.rewrite_elapsed,
             ))
 
+            # Emit RewriteCommitted regardless of strategy or success.
+            # This is the data the variance experiment uses to
+            # partition the failure space: the verifier counts are
+            # the candidate's isolated pass/fail (before any
+            # transactional replacement), and `replaced` is whether
+            # the generator swapped the production-path file. A
+            # success=True outcome with replaced=False would be a
+            # transactional_replacement_failure -- the candidate
+            # passed in isolation but the loop didn't commit it.
+            replaced = bool(
+                outcome.success and outcome.new_test_file is not None
+            )
+            self._publish(RewriteCommitted(
+                run_id=run_id,
+                component_id=test_file.component_id,
+                strategy=outcome.strategy.value,
+                failure_classification=outcome.failure_classification,
+                isolated_passed=outcome.isolated_passed,
+                isolated_failed=outcome.isolated_failed,
+                replaced=replaced,
+                success=outcome.success,
+            ))
+
             # Transactional commit: replace the test_file with the
             # candidate only on success.
             if outcome.success and outcome.new_test_file is not None:
@@ -579,13 +603,11 @@ class TestGenerator:
         # rewrite of one component doesn't overwrite another
         # component's on-disk tests.
         #
-        # IMPORTANT: this re-run does NOT emit VerificationCompleted
-        # events. The metric counters (diagnosis_trigger_rate,
-        # rewrite_attempt_rate) are computed from phase-3 events
-        # only. Phase-4 VerificationCompleted events would inflate
-        # the failure-count denominators and make the metrics look
-        # worse than they are. The re-run's job is to update
-        # test_registry state, not the metrics.
+        # IMPORTANT: this re-run emits VerificationCompleted(rerun=True)
+        # events. The collector counts rerun events separately from
+        # phase-3 events, so the original metrics (diagnosis_trigger_rate,
+        # rewrite_attempt_rate) are unchanged. The rerun events feed
+        # the new verification_pass_rate_after_rewrite metric only.
         if any(o.success for o in rewrites_attempted):
             for test_file in test_files:
                 if test_file.verified:
@@ -594,6 +616,16 @@ class TestGenerator:
                 if not valid:
                     continue
                 result = self.verifier.run_tests(test_file)
+                # The rerun flag distinguishes phase-4 events from
+                # phase-3 events in the collector. Counts kept separate.
+                self._publish(VerificationCompleted(
+                    run_id=run_id,
+                    component_id=test_file.component_id,
+                    passed=len(result.passed) if hasattr(result, "passed") else 0,
+                    failed=len(result.failed),
+                    failure_ids=tuple(result.failed),
+                    rerun=True,
+                ))
                 if result.all_passed:
                     test_file.verified = True
                     self.test_registry.mark_verified(test_file.path)

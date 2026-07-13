@@ -85,10 +85,15 @@ class VerificationCompleted(GeneratorEvent):
     ``passed + failed`` equals the total test count from TestsGenerated minus
     any skipped. ``failure_ids`` lists the names of failing tests in case
     the diagnosis agent needs them.
+
+    ``rerun`` is True when this event comes from the phase-4 full-suite
+    re-run (after a successful rewrite). The collector counts rerun
+    events separately to drive ``verification_pass_rate_after_rewrite``.
     """
     passed: int
     failed: int
     failure_ids: tuple[str, ...] = ()
+    rerun: bool = False
 
 
 # --- diagnosis ----------------------------------------------------------
@@ -169,6 +174,40 @@ class GenerationRecorded(GeneratorEvent):
     generated_test_count: int = 0
 
 
+# --- rewrite outcome -----------------------------------------------------
+
+@dataclass(frozen=True)
+class RewriteCommitted(GeneratorEvent):
+    """Outcome of the per-component rewrite transaction.
+
+    Emitted by the generator after the coordinator returns, regardless
+    of strategy. Captures the data the variance experiment needs to
+    partition the failure space:
+
+      isolated_passed / isolated_failed: the candidate's verifier
+        result (what the coordinator saw).
+      replaced: whether the generator committed the candidate to the
+        production path on disk. False on success implies a
+        transactional_replacement_failure even when isolated_passed
+        was True.
+      strategy / failure_classification: what was attempted and why.
+        A strategy that doesn't match the failure_classification
+        (e.g. test_rewrite on CODE_BUG) is a strategy_mismatch.
+
+    The benchmark uses this event to classify every unsuccessful
+    rewrite into one of: no_tests_generated,
+    invalid_generated_tests, verifier_failure,
+    transactional_replacement_failure, strategy_mismatch, other.
+    """
+    component_id: str
+    strategy: str
+    failure_classification: str
+    isolated_passed: int
+    isolated_failed: int
+    replaced: bool
+    success: bool
+
+
 # --- sink contract ------------------------------------------------------
 
 class _NullSink:
@@ -194,6 +233,8 @@ __all__ = [
     "VerificationCompleted",
     "DiagnosisTriggered",
     "RewriteAttempted",
+    "GenerationRecorded",
+    "RewriteCommitted",
     "new_run_id",
     "null_sink",
 ]

@@ -38,6 +38,19 @@ The five numbers tell a consistent story:
       the bottleneck the rewrite loop exposes. The metric
       separates "model is wrong" from "model is silent."
 
+  verification_pass_rate_before_rewrite:
+      Of all components considered, what fraction passed
+      verification in phase 3, before the rewrite loop ran.
+      User-facing "did your tests pass before we tried to
+      repair?" Derived from initial_total and failed_components:
+      (initial_total - failed_components) / initial_total.
+
+  verification_pass_rate_after_rewrite:
+      Of all components that had a phase-4 re-run event, what
+      fraction passed the re-run verification. NaN when no
+      re-runs occurred (nothing to repair). This is the
+      post-loop user-facing pass rate.
+
   net_improvement = final - initial.
 """
 
@@ -50,9 +63,9 @@ from dataclasses import dataclass
 class AcceptanceReport:
     """Closed-schema benchmark result.
 
-    All six rates are floating-point fractions in [0.0, 1.0]. NaN is
-    permitted when denominators are zero; it signals "no data" rather
-    than zero.
+    All eight rates are floating-point fractions in [0.0, 1.0].
+    NaN is permitted when denominators are zero; it signals "no
+    data" rather than zero.
     """
     initial_acceptance_rate: float
     diagnosis_trigger_rate: float
@@ -60,6 +73,8 @@ class AcceptanceReport:
     rewrite_success_rate: float
     final_acceptance_rate: float
     generation_success_rate: float
+    verification_pass_rate_before_rewrite: float
+    verification_pass_rate_after_rewrite: float
 
     def net_improvement(self) -> float:
         """final - initial; positive means the repair loop improved the result."""
@@ -78,7 +93,9 @@ class AcceptanceReport:
         """
         expected = {"initial_acceptance_rate", "diagnosis_trigger_rate",
                     "rewrite_attempt_rate", "rewrite_success_rate",
-                    "final_acceptance_rate", "generation_success_rate"}
+                    "final_acceptance_rate", "generation_success_rate",
+                    "verification_pass_rate_before_rewrite",
+                    "verification_pass_rate_after_rewrite"}
         unknown = set(payload) - expected
         if unknown:
             raise ValueError(f"Unknown fields in AcceptanceReport payload: {sorted(unknown)}")
@@ -89,6 +106,12 @@ class AcceptanceReport:
             rewrite_success_rate=float(payload["rewrite_success_rate"]),
             final_acceptance_rate=float(payload["final_acceptance_rate"]),
             generation_success_rate=float(payload["generation_success_rate"]),
+            verification_pass_rate_before_rewrite=float(
+                payload["verification_pass_rate_before_rewrite"]
+            ),
+            verification_pass_rate_after_rewrite=float(
+                payload["verification_pass_rate_after_rewrite"]
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -99,6 +122,8 @@ class AcceptanceReport:
             "rewrite_success_rate": self.rewrite_success_rate,
             "final_acceptance_rate": self.final_acceptance_rate,
             "generation_success_rate": self.generation_success_rate,
+            "verification_pass_rate_before_rewrite": self.verification_pass_rate_before_rewrite,
+            "verification_pass_rate_after_rewrite": self.verification_pass_rate_after_rewrite,
             "net_improvement": self.net_improvement(),
         }
 

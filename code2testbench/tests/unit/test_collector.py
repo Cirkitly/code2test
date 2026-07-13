@@ -240,6 +240,183 @@ def test_collector_records_rewrite_event_metadata():
     assert e.success is True
 
 
+def test_collector_accepts_rewrite_committed_event():
+    """RewriteCommitted is observational; the collector must accept it
+    without raising 'unknown event type'. The variance experiment
+    walks these events to classify failures.
+    """
+    from code2test.events import RewriteCommitted
+    sink = EventCollector()
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="c", passed=0, failed=1,
+        failure_ids=("a",),
+    ))
+    sink.emit(RewriteAttempted(
+        run_id="r", component_id="c", failure_id="a",
+        success=False, strategy="test_rewrite",
+        failure_classification="TEST_WRONG",
+    ))
+    sink.emit(RewriteCommitted(
+        run_id="r", component_id="c",
+        strategy="test_rewrite", failure_classification="TEST_WRONG",
+        isolated_passed=0, isolated_failed=1,
+        replaced=False, success=False,
+    ))
+    report = sink.report()
+    # The committed event is in the events list for the variance
+    # script to walk.
+    assert any(isinstance(e, RewriteCommitted) for e in sink.events)
+    # It doesn't change counters; the existing metrics hold.
+    assert report.rewrite_attempt_rate == pytest.approx(1.0)
+    assert report.rewrite_success_rate == pytest.approx(0.0)
+
+
+def test_collector_rerun_flag_routes_to_separate_metric():
+    """VerificationCompleted(rerun=True) feeds
+    verification_pass_rate_after_rewrite. The phase-3 events with
+    rerun=False (or absent) do not count toward the after-rewrite
+    rate. This keeps the original metrics unchanged while making
+    the post-rewrite pass rate observable.
+    """
+    sink = EventCollector()
+    # Phase-3: 2 components, both with failures (initial pass rate 0/2).
+    sink.emit(IntentExtracted(
+        run_id="r", component_id="a", confidence=0.9, accepted=True,
+    ))
+    sink.emit(IntentExtracted(
+        run_id="r", component_id="b", confidence=0.9, accepted=True,
+    ))
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="a",
+        passed=0, failed=1, failure_ids=("t1",),
+    ))
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="b",
+        passed=0, failed=1, failure_ids=("t2",),
+    ))
+    # Phase-4 re-run: only component 'a' gets re-verified, and it
+    # now passes.
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="a",
+        passed=1, failed=0, failure_ids=(),
+        rerun=True,
+    ))
+    report = sink.report()
+    # before-rewrite: 0 of 2 components passed = 0.0
+    assert report.verification_pass_rate_before_rewrite == pytest.approx(0.0)
+    # after-rewrite: 1 of 1 component passed = 1.0
+    assert report.verification_pass_rate_after_rewrite == pytest.approx(1.0)
+    # original metrics unchanged: phase-3 events still feed them.
+    assert report.initial_acceptance_rate == pytest.approx(1.0)
+    assert report.diagnosis_trigger_rate == pytest.approx(1.0)
+
+
+def test_collector_rerun_components_passed_zero_when_no_pass():
+    """When every rerun component still fails, the after-rewrite rate
+    is 0.0, not NaN. NaN only when no rerun events occurred at all.
+    """
+    sink = EventCollector()
+    sink.emit(IntentExtracted(
+        run_id="r", component_id="a", confidence=0.9, accepted=True,
+    ))
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="a",
+        passed=0, failed=1, failure_ids=("t1",),
+    ))
+    # Rerun happens; component still fails.
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="a",
+        passed=0, failed=1, failure_ids=("t1",),
+        rerun=True,
+    ))
+    report = sink.report()
+    assert report.verification_pass_rate_after_rewrite == pytest.approx(0.0)
+    assert e.elapsed_seconds == pytest.approx(4.2)
+    assert e.success is True
+
+
+def test_collector_accepts_rewrite_committed_event():
+    """RewriteCommitted is observational; the collector must accept it
+    without raising 'unknown event type'. The variance experiment
+    walks these events to classify failures.
+    """
+    from code2test.events import RewriteCommitted
+    sink = EventCollector()
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="c", passed=0, failed=1,
+        failure_ids=("a",),
+    ))
+    sink.emit(RewriteAttempted(
+        run_id="r", component_id="c", failure_id="a",
+        success=False, strategy="test_rewrite",
+        failure_classification="TEST_WRONG",
+    ))
+    sink.emit(RewriteCommitted(
+        run_id="r", component_id="c",
+        strategy="test_rewrite", failure_classification="TEST_WRONG",
+        isolated_passed=0, isolated_failed=1,
+        replaced=False, success=False,
+    ))
+    report = sink.report()
+    assert any(isinstance(e, RewriteCommitted) for e in sink.events)
+    assert report.rewrite_attempt_rate == pytest.approx(1.0)
+    assert report.rewrite_success_rate == pytest.approx(0.0)
+
+
+def test_collector_rerun_flag_routes_to_separate_metric():
+    """VerificationCompleted(rerun=True) feeds
+    verification_pass_rate_after_rewrite. The phase-3 events with
+    rerun=False (or absent) do not count toward the after-rewrite
+    rate. This keeps the original metrics unchanged while making
+    the post-rewrite pass rate observable.
+    """
+    sink = EventCollector()
+    sink.emit(IntentExtracted(
+        run_id="r", component_id="a", confidence=0.9, accepted=True,
+    ))
+    sink.emit(IntentExtracted(
+        run_id="r", component_id="b", confidence=0.9, accepted=True,
+    ))
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="a",
+        passed=0, failed=1, failure_ids=("t1",),
+    ))
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="b",
+        passed=0, failed=1, failure_ids=("t2",),
+    ))
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="a",
+        passed=1, failed=0, failure_ids=(),
+        rerun=True,
+    ))
+    report = sink.report()
+    assert report.verification_pass_rate_before_rewrite == pytest.approx(0.0)
+    assert report.verification_pass_rate_after_rewrite == pytest.approx(1.0)
+    assert report.initial_acceptance_rate == pytest.approx(1.0)
+
+
+def test_collector_rerun_components_passed_zero_when_no_pass():
+    """When every rerun component still fails, the after-rewrite rate
+    is 0.0, not NaN. NaN only when no rerun events occurred at all.
+    """
+    sink = EventCollector()
+    sink.emit(IntentExtracted(
+        run_id="r", component_id="a", confidence=0.9, accepted=True,
+    ))
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="a",
+        passed=0, failed=1, failure_ids=("t1",),
+    ))
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="a",
+        passed=0, failed=1, failure_ids=("t1",),
+        rerun=True,
+    ))
+    report = sink.report()
+    assert report.verification_pass_rate_after_rewrite == pytest.approx(0.0)
+
+
 def test_collector_unknown_event_raises():
     sink = EventCollector()
     class Surprise:

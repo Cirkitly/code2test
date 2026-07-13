@@ -1,6 +1,6 @@
 """Unit tests for code2testbench.report.AcceptanceReport.
 
-Verifies the six-number schema, the net_improvement helper, and JSON
+Verifies the eight-number schema, the net_improvement helper, and JSON
 round-trip. These tests do NOT touch code2test/ -- that's the M1D.1
 architectural invariant.
 """
@@ -16,7 +16,7 @@ from code2testbench.report import AcceptanceReport
 
 
 def _r(initial, diagnosis, rewrite_attempt, rewrite_success, final,
-       generation_success=1.0):
+       generation_success=1.0, vpr_before=1.0, vpr_after=1.0):
     """Convenience constructor that keeps the positional order obvious."""
     return AcceptanceReport(
         initial_acceptance_rate=initial,
@@ -25,6 +25,8 @@ def _r(initial, diagnosis, rewrite_attempt, rewrite_success, final,
         rewrite_success_rate=rewrite_success,
         final_acceptance_rate=final,
         generation_success_rate=generation_success,
+        verification_pass_rate_before_rewrite=vpr_before,
+        verification_pass_rate_after_rewrite=vpr_after,
     )
 
 
@@ -51,12 +53,16 @@ def test_from_dict_round_trip():
         "rewrite_success_rate": 0.40,
         "final_acceptance_rate": 0.66,
         "generation_success_rate": 1.0,
+        "verification_pass_rate_before_rewrite": 0.75,
+        "verification_pass_rate_after_rewrite": 0.50,
     }
     r = AcceptanceReport.from_dict(src)
     assert r.initial_acceptance_rate == 0.50
     assert r.final_acceptance_rate == 0.66
     assert r.rewrite_success_rate == 0.40
     assert r.generation_success_rate == 1.0
+    assert r.verification_pass_rate_before_rewrite == 0.75
+    assert r.verification_pass_rate_after_rewrite == 0.50
     assert r.to_dict() == {**src, "net_improvement": pytest.approx(0.16)}
 
 
@@ -69,6 +75,8 @@ def test_from_dict_rejects_unknown_keys():
             "rewrite_success_rate": 0.5,
             "final_acceptance_rate": 0.5,
             "generation_success_rate": 0.5,
+            "verification_pass_rate_before_rewrite": 0.5,
+            "verification_pass_rate_after_rewrite": 0.5,
             "extra_field": "no",  # not allowed
         })
 
@@ -84,6 +92,8 @@ def test_to_dict_contains_net_improvement():
         "rewrite_success_rate",
         "final_acceptance_rate",
         "generation_success_rate",
+        "verification_pass_rate_before_rewrite",
+        "verification_pass_rate_after_rewrite",
         "net_improvement",
     }
 
@@ -118,9 +128,51 @@ def test_generation_success_rate_round_trip():
         "rewrite_success_rate": 0.5,
         "final_acceptance_rate": 0.5,
         "generation_success_rate": 0.75,
+        "verification_pass_rate_before_rewrite": 0.5,
+        "verification_pass_rate_after_rewrite": 0.5,
     }
     r = AcceptanceReport.from_dict(src)
     assert r.generation_success_rate == 0.75
     d = r.to_dict()
     assert d["generation_success_rate"] == 0.75
     assert "generation_success_rate" in d
+
+
+def test_verification_pass_rates_distinguish_before_and_after():
+    """verification_pass_rate_before_rewrite is the user-facing "did
+    tests pass before we tried to repair?" number. verification_pass_
+    rate_after_rewrite is "did tests pass after the loop ran?"
+
+    The two metrics differ in two ways:
+      - denominator: before uses _initial_total (all components
+        considered), after uses _rerun_components_total (only those
+        that the loop re-verified).
+      - meaning: before is a closed-form rate; after is a conditional
+        rate (given the loop engaged).
+
+    A 1-component corpus with 1 failed component, where the rewrite
+    succeeds and the rerun passes, gives before=0.0 and after=1.0.
+    """
+    r = _r(
+        initial=1.0, diagnosis=1.0, rewrite_attempt=1.0,
+        rewrite_success=1.0, final=1.0,
+        generation_success=1.0,
+        vpr_before=0.0,
+        vpr_after=1.0,
+    )
+    assert r.verification_pass_rate_before_rewrite == 0.0
+    assert r.verification_pass_rate_after_rewrite == 1.0
+
+
+def test_verification_pass_rate_after_rewrite_nan_when_no_rerun():
+    """When no components had a rerun event (the loop had nothing
+    to repair), the after-rewrite rate is NaN -- no signal.
+    """
+    r = _r(
+        initial=1.0, diagnosis=1.0, rewrite_attempt=1.0,
+        rewrite_success=1.0, final=1.0,
+        generation_success=1.0,
+        vpr_before=1.0,
+        vpr_after=float("nan"),
+    )
+    assert math.isnan(r.verification_pass_rate_after_rewrite)
