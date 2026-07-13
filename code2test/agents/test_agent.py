@@ -129,16 +129,22 @@ class TestAgent:
         self._agent = None  # legacy shim; harmless
         self._on_generation_record = on_generation_record
 
-    def _make_generation_recorder(self, component_id: str):
+    def _make_generation_recorder(self, component_id: str, run_id: str):
         """Build a per-call callback for the provider's on_record.
 
         The provider fills model/prompt_hash/raw_response/parsed_response/
         validation_errors/generated_test_count. The test_agent adds
-        component_id and, if a record callback was supplied at
-        construction, publishes the event through it.
+        component_id and run_id, then publishes the event through
+        on_generation_record if one was supplied at construction.
+
+        ``run_id`` is the generator's correlation id for the current
+        run; we accept it as a parameter because the test_agent
+        doesn't store it directly. The generator passes it in at
+        generation time.
         """
         def _publish(record: Dict[str, Any]) -> None:
             record["component_id"] = component_id
+            record["run_id"] = run_id
             event = GenerationRecorded(**record)
             if self._on_generation_record is not None:
                 self._on_generation_record(event)
@@ -152,7 +158,8 @@ class TestAgent:
         self,
         component: Dict[str, Any],
         intent: Intent,
-        framework: TestFramework = TestFramework.PYTEST
+        framework: TestFramework = TestFramework.PYTEST,
+        run_id: str = "unknown",
     ) -> TestFile:
         """
         Generate unit tests for a component.
@@ -182,9 +189,10 @@ class TestAgent:
             # instrumentation to the benchmark's GenerationRecorded
             # event. The provider fills in model/prompt_hash/raw_response/
             # parsed_response/validation_errors/generated_test_count;
-            # the test_agent adds component_id and publishes the event.
+            # the test_agent adds component_id and run_id and publishes
+            # the event.
             component_id = component.get("id", component.get("name", "unknown"))
-            on_record = self._make_generation_recorder(component_id)
+            on_record = self._make_generation_recorder(component_id, run_id)
 
             result = self._provider.apredict(
                 TEST_SYSTEM_PROMPT, prompt, TestGenerationResult,
@@ -234,7 +242,8 @@ class TestAgent:
         module: Dict[str, Any],
         child_components: List[Dict[str, Any]],
         intents: Dict[str, Intent],
-        framework: TestFramework = TestFramework.PYTEST
+        framework: TestFramework = TestFramework.PYTEST,
+        run_id: str = "unknown",
     ) -> TestFile:
         """
         Generate integration tests for a module.

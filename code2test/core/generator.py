@@ -370,6 +370,7 @@ class TestGenerator:
                         component,
                         intent,
                         self.config.framework,
+                        run_id=self._run_id or new_run_id(),
                     )
 
                     if test_file.test_cases:

@@ -264,8 +264,20 @@ class PydanticAIProvider(Provider):
         content = response.choices[0].message.content or ""
         record["raw_response"] = content
 
-        payload = self._extract_json(content)
-        record["parsed_response"] = payload
+        try:
+            payload = self._extract_json(content)
+            record["parsed_response"] = payload
+        except ValueError as exc:
+            # _extract_json raises when there's no JSON object at all.
+            # We capture the failure mode into the record and re-raise
+            # so the caller's exception path still fires. Critical: the
+            # record MUST fire here, otherwise the benchmark can't see
+            # "model returned empty string" as a distinct failure from
+            # "no LLM call was made at all".
+            record["validation_errors"] = f"{type(exc).__name__}: {exc}"
+            if on_record is not None:
+                on_record(record)
+            raise
 
         try:
             instance = schema.model_validate_json(payload)

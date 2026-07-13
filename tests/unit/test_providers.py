@@ -407,6 +407,37 @@ def test_pydantic_ai_provider_predict_prompt_hash_differs_on_input_change():
     assert records_a[0]["prompt_hash"] != records_b[0]["prompt_hash"]
 
 
+def test_pydantic_ai_provider_predict_records_empty_content_failure():
+    """When the model returns empty content (the documented MiniMax-M3
+    symptom on this corpus), the callback fires so the benchmark
+    can distinguish "no LLM call made" from "model returned nothing."
+
+    Without this, generation_success_rate would silently drop to 0
+    on a real run and we wouldn't know whether the LLM was silent or
+    whether phase 2 short-circuited before the LLM was called.
+    """
+    choice = type("Choice", (), {"message": type("Msg", (), {"content": ""})()})()
+    mock_response = type("Resp", (), {"choices": [choice]})()
+    client = type("C", (), {"chat": type("CC", (), {"completions": type(
+        "CCC", (), {"create": lambda self, **k: mock_response})()})()})()
+    records = []
+    p = PydanticAIProvider(model_name="m", api_key="k")
+    p._client = client
+    with pytest.raises(ValueError, match="does not contain JSON"):
+        p.predict("sys", "user", Out, on_record=records.append)
+    assert len(records) == 1
+    r = records[0]
+    # raw_response captured (empty string).
+    assert r["raw_response"] == ""
+    # parsed_response is None because extraction failed.
+    assert r["parsed_response"] is None
+    # validation_errors captured.
+    assert r["validation_errors"] is not None
+    assert "does not contain JSON" in r["validation_errors"]
+    # generated_test_count stays 0 because no parsed instance.
+    assert r["generated_test_count"] == 0
+
+
 def test_pydantic_ai_provider_predict_count_tests_field_when_present():
     """For schemas with a list-typed field named `tests` (or `results`
     or `items`), the counter is populated. This is what makes
