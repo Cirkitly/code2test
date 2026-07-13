@@ -105,10 +105,22 @@ def _run_once(
         "--out", str(out_path.relative_to(bench_root)),
     ]
     t0 = time.monotonic()
-    proc = subprocess.run(
-        cmd, cwd=str(bench_root), capture_output=True, text=True,
-        timeout=timeout, env=env,
-    )
+    try:
+        proc = subprocess.run(
+            cmd, cwd=str(bench_root), capture_output=True, text=True,
+            timeout=timeout, env=env,
+        )
+    except subprocess.TimeoutExpired:
+        # Individual-run timeout is informational, not fatal. The
+        # experiment continues with the remaining runs; this run
+        # is recorded as a 'timeout' category so the variance
+        # report can surface API latency issues.
+        return {
+            "run_id": run_id, "elapsed_seconds": time.monotonic() - t0,
+            "exit_code": -1, "stderr_tail": f"timeout after {timeout}s",
+            "metrics": {}, "events": [],
+            "_category": "timeout",
+        }
     elapsed = time.monotonic() - t0
     if proc.returncode != 0:
         return {
