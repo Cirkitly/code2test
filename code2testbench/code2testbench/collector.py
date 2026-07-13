@@ -29,6 +29,7 @@ from typing import Iterable, List
 
 from code2test.events import (
     DiagnosisTriggered,
+    GenerationRecorded,
     IntentExtracted,
     RewriteAttempted,
     TestsGenerated,
@@ -65,6 +66,16 @@ class EventCollector:
         # suite passed more tests than before the rewrite.
         self._final_total = 0
         self._final_accept = 0
+
+        # Generation success tracking. Each GenerationRecorded event
+        # increments _generation_requested; _generation_succeeded is
+        # incremented when the event's generated_test_count > 0.
+        # generation_success_rate = succeeded / requested; it answers
+        # "of all phase-2 LLM calls, what fraction produced tests?"
+        # A non-trivial low number here is the bottleneck signal the
+        # benchmark exists to surface.
+        self._generation_requested = 0
+        self._generation_succeeded = 0
 
         # Sanity check: duplicate component_ids in InitialAcceptance? Track raw events.
         self._events: List = []
@@ -109,6 +120,11 @@ class EventCollector:
             # Informational; not a counter contributor.
             pass
 
+        elif isinstance(event, GenerationRecorded):
+            self._generation_requested += 1
+            if event.generated_test_count > 0 and not event.validation_errors:
+                self._generation_succeeded += 1
+
         else:
             # Unknown event type: fail loudly so the catalog can be updated.
             raise TypeError(
@@ -134,6 +150,9 @@ class EventCollector:
             rewrite_attempt_rate=_safe_ratio(self._rewrite_attempted, self._failed_components),
             rewrite_success_rate=_safe_ratio(self._rewrite_success, self._rewrite_attempted),
             final_acceptance_rate=_safe_ratio(self._final_accept, self._final_total),
+            generation_success_rate=_safe_ratio(
+                self._generation_succeeded, self._generation_requested
+            ),
         )
 
     # --- introspection -----------------------------------------------------

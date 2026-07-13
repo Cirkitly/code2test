@@ -30,6 +30,14 @@ The five numbers tell a consistent story:
       After repair, what fraction of components passed verification?
       This is the user-facing "does it work" number.
 
+  generation_success_rate:
+      Of all LLM calls in phase 2, what fraction produced a
+      non-empty test list? Per-call metric, distinct from
+      final_acceptance_rate. Low numbers here mean the LLM is
+      being asked to generate tests but is not producing any --
+      the bottleneck the rewrite loop exposes. The metric
+      separates "model is wrong" from "model is silent."
+
   net_improvement = final - initial.
 """
 
@@ -42,7 +50,7 @@ from dataclasses import dataclass
 class AcceptanceReport:
     """Closed-schema benchmark result.
 
-    All five rates are floating-point fractions in [0.0, 1.0]. NaN is
+    All six rates are floating-point fractions in [0.0, 1.0]. NaN is
     permitted when denominators are zero; it signals "no data" rather
     than zero.
     """
@@ -51,6 +59,7 @@ class AcceptanceReport:
     rewrite_attempt_rate: float
     rewrite_success_rate: float
     final_acceptance_rate: float
+    generation_success_rate: float
 
     def net_improvement(self) -> float:
         """final - initial; positive means the repair loop improved the result."""
@@ -69,7 +78,7 @@ class AcceptanceReport:
         """
         expected = {"initial_acceptance_rate", "diagnosis_trigger_rate",
                     "rewrite_attempt_rate", "rewrite_success_rate",
-                    "final_acceptance_rate"}
+                    "final_acceptance_rate", "generation_success_rate"}
         unknown = set(payload) - expected
         if unknown:
             raise ValueError(f"Unknown fields in AcceptanceReport payload: {sorted(unknown)}")
@@ -79,6 +88,7 @@ class AcceptanceReport:
             rewrite_attempt_rate=float(payload["rewrite_attempt_rate"]),
             rewrite_success_rate=float(payload["rewrite_success_rate"]),
             final_acceptance_rate=float(payload["final_acceptance_rate"]),
+            generation_success_rate=float(payload["generation_success_rate"]),
         )
 
     def to_dict(self) -> dict:
@@ -88,6 +98,7 @@ class AcceptanceReport:
             "rewrite_attempt_rate": self.rewrite_attempt_rate,
             "rewrite_success_rate": self.rewrite_success_rate,
             "final_acceptance_rate": self.final_acceptance_rate,
+            "generation_success_rate": self.generation_success_rate,
             "net_improvement": self.net_improvement(),
         }
 

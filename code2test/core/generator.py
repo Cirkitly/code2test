@@ -161,7 +161,16 @@ class TestGenerator:
     @property
     def test_agent(self) -> TestAgent:
         if self._test_agent is None:
-            self._test_agent = TestAgent(provider=self.provider)
+            def _on_generation_record(event) -> None:
+                # The test_agent forwards per-LLM-call instrumentation
+                # here. We publish it into the same sink that
+                # IntentExtracted / TestsGenerated / etc. flow through,
+                # so the benchmark's collector sees every event.
+                self._publish(event)
+            self._test_agent = TestAgent(
+                provider=self.provider,
+                on_generation_record=_on_generation_record,
+            )
         return self._test_agent
 
     @property

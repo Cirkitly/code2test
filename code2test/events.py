@@ -134,6 +134,41 @@ class RewriteAttempted(GeneratorEvent):
     elapsed_seconds: float = 0.0
 
 
+# --- observability -------------------------------------------------------
+
+@dataclass(frozen=True)
+class GenerationRecorded(GeneratorEvent):
+    """One LLM call inside a phase-2 (test generation) invocation.
+
+    Emitted exactly once per ``predict()`` call from the test_agent.
+    Carries the diagnostic data the benchmark needs to answer
+    "why did generation succeed or fail."
+
+    Fields:
+      component_id: who triggered the call. Set by the test_agent;
+        the provider doesn't know it.
+      model: model name passed to the openai SDK.
+      prompt_hash: sha256 of the composed system+user prompt. Stable
+        across runs of the same input; varies when input changes.
+      raw_response: the model's full reply string, including any
+         `` ... `` blocks and prose. Not truncated.
+      parsed_response: the JSON extracted by the provider's tolerant
+         extractor. None if extraction failed.
+      validation_errors: None on success; exception class and
+         message on schema-validation failure.
+      generated_test_count: the count of items in the schema's
+         list-typed field (e.g. ``tests``). 0 for non-list schemas
+         or when validation failed before we could count.
+    """
+    component_id: str
+    model: str
+    prompt_hash: str
+    raw_response: Optional[str] = None
+    parsed_response: Optional[str] = None
+    validation_errors: Optional[str] = None
+    generated_test_count: int = 0
+
+
 # --- sink contract ------------------------------------------------------
 
 class _NullSink:

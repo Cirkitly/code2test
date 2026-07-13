@@ -1,6 +1,6 @@
 """Unit tests for code2testbench.report.AcceptanceReport.
 
-Verifies the five-number schema, the net_improvement helper, and JSON
+Verifies the six-number schema, the net_improvement helper, and JSON
 round-trip. These tests do NOT touch code2test/ -- that's the M1D.1
 architectural invariant.
 """
@@ -15,7 +15,8 @@ import pytest
 from code2testbench.report import AcceptanceReport
 
 
-def _r(initial, diagnosis, rewrite_attempt, rewrite_success, final):
+def _r(initial, diagnosis, rewrite_attempt, rewrite_success, final,
+       generation_success=1.0):
     """Convenience constructor that keeps the positional order obvious."""
     return AcceptanceReport(
         initial_acceptance_rate=initial,
@@ -23,6 +24,7 @@ def _r(initial, diagnosis, rewrite_attempt, rewrite_success, final):
         rewrite_attempt_rate=rewrite_attempt,
         rewrite_success_rate=rewrite_success,
         final_acceptance_rate=final,
+        generation_success_rate=generation_success,
     )
 
 
@@ -48,11 +50,13 @@ def test_from_dict_round_trip():
         "rewrite_attempt_rate": 0.12,
         "rewrite_success_rate": 0.40,
         "final_acceptance_rate": 0.66,
+        "generation_success_rate": 1.0,
     }
     r = AcceptanceReport.from_dict(src)
     assert r.initial_acceptance_rate == 0.50
     assert r.final_acceptance_rate == 0.66
     assert r.rewrite_success_rate == 0.40
+    assert r.generation_success_rate == 1.0
     assert r.to_dict() == {**src, "net_improvement": pytest.approx(0.16)}
 
 
@@ -64,6 +68,7 @@ def test_from_dict_rejects_unknown_keys():
             "rewrite_attempt_rate": 0.5,
             "rewrite_success_rate": 0.5,
             "final_acceptance_rate": 0.5,
+            "generation_success_rate": 0.5,
             "extra_field": "no",  # not allowed
         })
 
@@ -78,6 +83,7 @@ def test_to_dict_contains_net_improvement():
         "rewrite_attempt_rate",
         "rewrite_success_rate",
         "final_acceptance_rate",
+        "generation_success_rate",
         "net_improvement",
     }
 
@@ -101,3 +107,20 @@ def test_rewrite_success_rate_independent_from_final():
     # net_improvement = -0.35: the run got worse despite every rewrite
     # producing a passing test.
     assert r.net_improvement() < 0
+
+
+def test_generation_success_rate_round_trip():
+    """The new rate round-trips through from_dict/to_dict without loss."""
+    src = {
+        "initial_acceptance_rate": 0.5,
+        "diagnosis_trigger_rate": 0.5,
+        "rewrite_attempt_rate": 0.5,
+        "rewrite_success_rate": 0.5,
+        "final_acceptance_rate": 0.5,
+        "generation_success_rate": 0.75,
+    }
+    r = AcceptanceReport.from_dict(src)
+    assert r.generation_success_rate == 0.75
+    d = r.to_dict()
+    assert d["generation_success_rate"] == 0.75
+    assert "generation_success_rate" in d

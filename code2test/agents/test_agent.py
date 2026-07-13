@@ -6,7 +6,7 @@ LLM-powered agent for generating tests from inferred intents.
 
 import logging
 import asyncio
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Callable, Optional
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -18,6 +18,7 @@ from code2test.core.models import (
     TestStatus,
     TestFramework,
 )
+from code2test.events import GenerationRecorded
 from code2test.providers import Provider, get_provider
 from code2test.config import Config
 
@@ -101,6 +102,7 @@ class TestAgent:
         self,
         model: str = "stub",
         provider: Provider | None = None,
+        on_generation_record: Optional[Callable[[Any], None]] = None,
     ) -> None:
         """Initialize test agent.
 
@@ -109,6 +111,11 @@ class TestAgent:
                 supplied. Defaults to "stub" so v1.0 has a sensible
                 offline default.
             provider: A pre-built Provider. Preferred over `model`.
+            on_generation_record: optional callback invoked once per
+                LLM call with a fully-populated GenerationRecorded
+                event. The generator passes a callback that publishes
+                the event into its sink. When None, the test_agent
+                records nothing -- safe for offline callers.
         """
         self.model = model
         if provider is None:
@@ -120,6 +127,22 @@ class TestAgent:
         else:
             self._provider = provider
         self._agent = None  # legacy shim; harmless
+        self._on_generation_record = on_generation_record
+
+    def _make_generation_recorder(self, component_id: str):
+        """Build a per-call callback for the provider's on_record.
+
+        The provider fills model/prompt_hash/raw_response/parsed_response/
+        validation_errors/generated_test_count. The test_agent adds
+        component_id and, if a record callback was supplied at
+        construction, publishes the event through it.
+        """
+        def _publish(record: Dict[str, Any]) -> None:
+            record["component_id"] = component_id
+            event = GenerationRecorded(**record)
+            if self._on_generation_record is not None:
+                self._on_generation_record(event)
+        return _publish
 
     def _get_agent(self):
         """Deprecated. Returns self._provider for legacy callers."""
@@ -155,8 +178,17 @@ class TestAgent:
         
         try:
             # The provider seam: one call, one schema, one result.
+            # The on_record callback bridges the provider's per-call
+            # instrumentation to the benchmark's GenerationRecorded
+            # event. The provider fills in model/prompt_hash/raw_response/
+            # parsed_response/validation_errors/generated_test_count;
+            # the test_agent adds component_id and publishes the event.
+            component_id = component.get("id", component.get("name", "unknown"))
+            on_record = self._make_generation_recorder(component_id)
+
             result = self._provider.apredict(
                 TEST_SYSTEM_PROMPT, prompt, TestGenerationResult,
+                on_record=on_record,
             )
 
             # Convert to TestCase objects. Defensive: a stub or partial
