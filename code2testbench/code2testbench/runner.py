@@ -51,7 +51,7 @@ def _build_config(provider_name: str, model: str, threshold: float):
     )
 
 
-def _run_one_repo(repo_path: Path, components_dir: Path, config, sink):
+def _run_one_repo(repo_path: Path, components_dir: Path, config, sink, enable_rewrite: bool = False):
     """Run the generator against `components_dir`; events flow to sink.
 
     v1.0 simplification: we run a single TestGenerator.generate_tests_for_module
@@ -60,6 +60,9 @@ def _run_one_repo(repo_path: Path, components_dir: Path, config, sink):
 
     NOTE: this is a thin harness. Real component discovery remains a v1.1
     task once the corpus vendoring lands.
+
+    v1.1: ``enable_rewrite`` gates the phase-4 rewrite loop. Off by
+    default; v1.0 behavior is preserved unchanged.
     """
     from code2test.core.generator import TestGenerator
     from code2test.core.models import GenerationConfig, TestFramework
@@ -68,9 +71,17 @@ def _run_one_repo(repo_path: Path, components_dir: Path, config, sink):
     name = repo.name
 
     # Build components dict from *.py functions in components_dir.
+    # We skip test_*.py files because the verifier writes them
+    # into components_dir; without this filter a subsequent harness
+    # run would see the previously-generated tests as a fresh
+    # "component" to test. Architecture invariant: harness input
+    # is source code, harness output is test files, never
+    # re-ingest.
     components: dict = {}
     if components_dir.is_dir():
         for fp in sorted(components_dir.glob("*.py")):
+            if fp.name.startswith("test_"):
+                continue
             key = fp.stem
             components[key] = {
                 "id": key,
@@ -101,6 +112,9 @@ def _run_one_repo(repo_path: Path, components_dir: Path, config, sink):
         model=config.model,
         base_url=config.base_url,
         api_key=config.api_key,
+        # v1.1: forward the rewrite flag so phase 4 runs when
+        # the operator asked for it. Default False preserves v1.0.
+        enable_rewrite=enable_rewrite,
     )
     gen = TestGenerator(
         repo_path=str(repo_path),
@@ -116,6 +130,9 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--provider", default="stub", choices=["stub", "openai"])
     parser.add_argument("--model", default="")
     parser.add_argument("--confidence", type=float, default=0.5)
+    parser.add_argument("--enable-rewrite", action="store_true",
+                        help="Phase 4: enable the rewrite loop. Off by default; "
+                             "the v1.0 behavior is preserved unchanged.")
     parser.add_argument("--out", default="latest_report.json",
                         help="Where to write the JSON report.")
     parser.add_argument("--manifest", default="",
@@ -145,7 +162,7 @@ def main(argv: Optional[list] = None) -> int:
         if not comp_dir.is_dir():
             comp_dir = repo_path
         try:
-            _run_one_repo(repo_path, comp_dir, config, sink)
+            _run_one_repo(repo_path, comp_dir, config, sink, args.enable_rewrite)
         except Exception as exc:  # noqa: BLE001
             print(f"[harness] repo {repo.get('name')} failed: {exc}",
                   file=sys.stderr)

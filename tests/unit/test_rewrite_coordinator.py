@@ -74,7 +74,17 @@ def _make_diagnosis(cause: DiagnosisCause) -> Diagnosis:
     )
 
 
-def _make_verifier(*, all_passed: bool, syntax_valid: bool = True) -> Any:
+def _make_verification_result(*, failed: List[str]) -> Any:
+    """A bare-bones verification result with a .failed list."""
+    result = MagicMock()
+    result.failed = failed
+    result.all_passed = (len(failed) == 0)
+    result.passed = []
+    result.elapsed_seconds = 0.05  # realistic for local pytest run
+    return result
+
+
+def _verifier(*, all_passed: bool, syntax_valid: bool = True) -> Any:
     """Build a mock verifier that always passes or fails."""
     verifier = MagicMock()
     verifier.validate_syntax.return_value = (syntax_valid, "")
@@ -83,6 +93,11 @@ def _make_verifier(*, all_passed: bool, syntax_valid: bool = True) -> Any:
     result.failed = [] if all_passed else ["t1", "t2"]
     verifier.run_tests.return_value = result
     return verifier
+
+
+# Backward-compat alias used by existing tests; identical to _verifier.
+def _make_verifier(*, all_passed: bool, syntax_valid: bool = True) -> Any:
+    return _verifier(all_passed=all_passed, syntax_valid=syntax_valid)
 
 
 def _make_test_agent(new_test_file: TestFile) -> Any:
@@ -95,6 +110,25 @@ def _make_intent_agent(new_intent: Intent) -> Any:
     agent = MagicMock()
     agent.infer_intent = AsyncMock(return_value=new_intent)
     return agent
+
+
+def _test_cases_with_diagnosis(
+    failing: List[str], passing: List[str], cause: DiagnosisCause
+) -> List[TestCase]:
+    """Build test_cases with the failed ones carrying ``diagnosis``."""
+    cases = []
+    for name in failing:
+        cases.append(TestCase(
+            name=name, intent_text="", test_code="def test(): pass",
+            status=TestStatus.FAILED, failure_message="x",
+            diagnosis=_make_diagnosis(cause),
+        ))
+    for name in passing:
+        cases.append(TestCase(
+            name=name, intent_text="", test_code="def test(): pass",
+            status=TestStatus.PASSED,
+        ))
+    return cases
 
 
 def _run(coro):
@@ -159,7 +193,8 @@ def test_coordinator_skip_strategy_does_not_call_agents():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "comp"}, intent=_make_intent(),
-        diagnosis=_make_diagnosis(DiagnosisCause.CODE_BUG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.CODE_BUG),
     ))
 
     assert outcome.strategy is Strategy.SKIP
@@ -184,7 +219,8 @@ def test_coordinator_skip_carries_telemetry():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1", "t2", "t3"], []),
         component={"id": "comp"}, intent=_make_intent(),
-        diagnosis=_make_diagnosis(DiagnosisCause.CODE_BUG),
+        verification_result=_make_verification_result(failed=["t1", "t2", "t3"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1", "t2", "t3"], passing=[], cause=DiagnosisCause.CODE_BUG),
     ))
     assert outcome.failure_classification == "CODE_BUG"
     assert outcome.strategy is Strategy.SKIP
@@ -213,7 +249,11 @@ def test_coordinator_test_rewrite_success_commits_candidate():
     outcome = _run(coord.attempt_rewrite(
         run_id="r", component_id="comp",
         original_test_file=original, component={"id": "comp"},
-        intent=_make_intent(), diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        intent=_make_intent(),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(
+            failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG,
+        ),
     ))
     assert outcome.strategy is Strategy.TEST_REWRITE
     assert outcome.success is True
@@ -249,7 +289,11 @@ def test_coordinator_test_rewrite_failure_discards_candidate():
     outcome = _run(coord.attempt_rewrite(
         run_id="r", component_id="comp",
         original_test_file=original, component={"id": "comp"},
-        intent=_make_intent(), diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        intent=_make_intent(),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(
+            failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG,
+        ),
     ))
     assert outcome.success is False
     assert outcome.new_test_file is None
@@ -273,7 +317,8 @@ def test_coordinator_test_rewrite_syntax_failure_short_circuits():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "comp"}, intent=_make_intent(),
-        diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG),
     ))
     assert outcome.success is False
     assert outcome.new_test_file is None
@@ -300,10 +345,11 @@ def test_coordinator_test_rewrite_records_elapsed_time():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "comp"}, intent=_make_intent(),
-        diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG),
     ))
-    assert outcome.elapsed_seconds >= 0.0
-    assert outcome.elapsed_seconds < 5.0  # mocked; should be near-zero
+    assert outcome.rewrite_elapsed >= 0.0
+    assert outcome.rewrite_elapsed < 5.0  # mocked; should be near-zero
 
 
 # ---------- RewriteCoordinator: INTENT_REWRITE path ----------------------
@@ -329,7 +375,8 @@ def test_coordinator_intent_rewrite_re_extracts_intent_then_rewrites():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "comp"}, intent=original_intent,
-        diagnosis=_make_diagnosis(DiagnosisCause.INTENT_WRONG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.INTENT_WRONG),
     ))
     assert outcome.strategy is Strategy.INTENT_REWRITE
     assert outcome.success is True
@@ -368,7 +415,8 @@ def test_coordinator_per_component_invariant_enforced():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "comp"}, intent=_make_intent(),
-        diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG),
     ))
     assert out1.success is True
 
@@ -377,7 +425,8 @@ def test_coordinator_per_component_invariant_enforced():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "comp"}, intent=_make_intent(),
-        diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG),
     ))
     assert out2.strategy is Strategy.SKIP
     assert "per-component invariant" in out2.explanation
@@ -403,13 +452,15 @@ def test_coordinator_per_run_reset_for_different_components():
         run_id="r", component_id="a",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "a"}, intent=_make_intent("a"),
-        diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG),
     ))
     out_b = _run(coord.attempt_rewrite(
         run_id="r", component_id="b",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "b"}, intent=_make_intent("b"),
-        diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG),
     ))
     assert out_a.success is True
     assert out_b.success is True
@@ -434,11 +485,12 @@ def test_rewrite_outcome_carries_tests_before_and_after():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1", "t2", "t3"], ["p1"]),
         component={"id": "comp"}, intent=_make_intent(),
-        diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        verification_result=_make_verification_result(failed=["t1", "t2", "t3"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1", "t2", "t3"], passing=["p1"], cause=DiagnosisCause.TEST_WRONG),
     ))
     assert outcome.tests_before == 3   # 3 failed in original
     assert outcome.tests_after == 0    # verifier said all passed
-    assert outcome.elapsed_seconds >= 0.0
+    assert outcome.rewrite_elapsed >= 0.0
     assert outcome.failure_classification == "TEST_WRONG"
 
 
@@ -457,7 +509,8 @@ def test_already_attempted_reflects_invariant_state():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "comp"}, intent=_make_intent(),
-        diagnosis=_make_diagnosis(DiagnosisCause.CODE_BUG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.CODE_BUG),
     ))
     assert coord.already_attempted("r", "comp")
     assert not coord.already_attempted("r", "other")
@@ -480,7 +533,8 @@ def test_exception_during_rewrite_returns_failure_outcome_not_raises():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "comp"}, intent=_make_intent(),
-        diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG),
     ))
     assert outcome.success is False
     assert outcome.new_test_file is None
@@ -517,7 +571,8 @@ def test_coordinator_writes_candidate_to_temp_path_during_verification():
         run_id="r", component_id="comp",
         original_test_file=_make_test_file(["t1"], []),
         component={"id": "comp"}, intent=_make_intent(),
-        diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG),
     ))
     # The verifier was called once. The path argument must NOT be
     # the production path "f_test.py"; it must be a temp variant.
@@ -551,7 +606,11 @@ def test_coordinator_failure_preserves_original_test_file_object():
     outcome = _run(coord.attempt_rewrite(
         run_id="r", component_id="comp",
         original_test_file=original, component={"id": "comp"},
-        intent=_make_intent(), diagnosis=_make_diagnosis(DiagnosisCause.TEST_WRONG),
+        intent=_make_intent(),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(
+            failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG,
+        ),
     ))
     assert outcome.success is False
     assert outcome.new_test_file is None
@@ -559,3 +618,158 @@ def test_coordinator_failure_preserves_original_test_file_object():
     # the coordinator does not mutate it.
     assert original.test_cases[0].status == TestStatus.FAILED
     assert len(original.test_cases) == 1
+
+
+
+# ---------- Telemetry separation: LLM vs verifier latency -----------------
+
+def test_coordinator_records_separate_verification_and_rewrite_timing():
+    """rewrite_elapsed covers the coordinator's full work. verification_before_seconds
+    is caller-supplied. verification_after_seconds is the candidate's
+    verifier run. The three are independent measurements; combining
+    them tells us how the budget split between LLM call and verifier.
+    """
+    candidate = _make_test_file([], ["t1"])
+    verifier = MagicMock()
+    verifier.validate_syntax.return_value = (True, "")
+    result = MagicMock()
+    result.all_passed = True
+    result.failed = []
+    verifier.run_tests.return_value = result
+    verifier.repo_path = "/tmp/does-not-exist"
+    test_agent = _make_test_agent(candidate)
+
+    coord = RewriteCoordinator(
+        test_agent=test_agent,
+        intent_agent=_make_intent_agent(_make_intent()),
+        verifier=verifier,
+    )
+    # Caller-supplied: the original test file's verifier took 1.5s
+    # before the rewrite was triggered.
+    verification = MagicMock()
+    verification.failed = ["t1"]
+    verification.all_passed = False
+    verification.passed = []
+    verification.elapsed_seconds = 1.5
+
+    outcome = _run(coord.attempt_rewrite(
+        run_id="r", component_id="comp",
+        original_test_file=_make_test_file(["t1"], []),
+        component={"id": "comp"}, intent=_make_intent(),
+        verification_result=verification,
+        test_cases=_test_cases_with_diagnosis(
+            failing=["t1"], passing=[], cause=DiagnosisCause.TEST_WRONG,
+        ),
+    ))
+    assert outcome.verification_before_seconds == pytest.approx(1.5)
+    assert outcome.verification_after_seconds >= 0.0
+    assert outcome.rewrite_elapsed >= outcome.verification_after_seconds
+
+
+def test_skip_outcome_records_zero_verification_after_seconds():
+    """A SKIP strategy does no verifier run on a candidate. The
+    verification_after_seconds field is exactly zero, not just
+    non-negative.
+    """
+    coord = RewriteCoordinator(
+        test_agent=_make_test_agent(_make_test_file([], [])),
+        intent_agent=_make_intent_agent(_make_intent()),
+        verifier=_make_verifier(all_passed=True),
+    )
+    outcome = _run(coord.attempt_rewrite(
+        run_id="r", component_id="comp",
+        original_test_file=_make_test_file(["t1"], []),
+        component={"id": "comp"}, intent=_make_intent(),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(
+            failing=["t1"], passing=[], cause=DiagnosisCause.CODE_BUG,
+        ),
+    ))
+    assert outcome.strategy is Strategy.SKIP
+    assert outcome.verification_after_seconds == 0.0
+
+
+# ---------- _pick_representative policy ----------------------------------
+
+def test_pick_representative_uses_pre_attached_diagnosis():
+    """The coordinator prefers a pre-attached diagnosis on a failed
+    test case over calling the diagnosis agent. Pre-attached is
+    deterministic and free.
+    """
+    diagnosis_agent = MagicMock()
+    diagnosis_agent.diagnose_failure = AsyncMock(
+        side_effect=AssertionError("should not be called")
+    )
+    coord = RewriteCoordinator(
+        test_agent=_make_test_agent(_make_test_file([], [])),
+        intent_agent=_make_intent_agent(_make_intent()),
+        verifier=_make_verifier(all_passed=True),
+        diagnosis_agent=diagnosis_agent,
+    )
+    outcome = _run(coord.attempt_rewrite(
+        run_id="r", component_id="comp",
+        original_test_file=_make_test_file(["t1"], []),
+        component={"id": "comp"}, intent=_make_intent(),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=_test_cases_with_diagnosis(
+            failing=["t1"], passing=[], cause=DiagnosisCause.CODE_BUG,
+        ),
+    ))
+    assert outcome.failure_classification == "CODE_BUG"
+    diagnosis_agent.diagnose_failure.assert_not_called()
+
+
+def test_pick_representative_falls_back_to_diagnosis_agent():
+    """If no test case has an attached diagnosis, the coordinator
+    calls the diagnosis_agent for the first failing test case.
+    """
+    candidate_diag = _make_diagnosis(DiagnosisCause.TEST_WRONG)
+    diagnosis_agent = MagicMock()
+    diagnosis_agent.diagnose_failure = AsyncMock(return_value=candidate_diag)
+    coord = RewriteCoordinator(
+        test_agent=_make_test_agent(_make_test_file([], ["t1"])),
+        intent_agent=_make_intent_agent(_make_intent()),
+        verifier=_make_verifier(all_passed=True),
+        diagnosis_agent=diagnosis_agent,
+    )
+    failing_cases = [TestCase(
+        name="t1", intent_text="", test_code="def test(): pass",
+        status=TestStatus.FAILED, failure_message="x", diagnosis=None,
+    )]
+    outcome = _run(coord.attempt_rewrite(
+        run_id="r", component_id="comp",
+        original_test_file=_make_test_file(["t1"], []),
+        component={"id": "comp"}, intent=_make_intent(),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=failing_cases,
+    ))
+    diagnosis_agent.diagnose_failure.assert_called_once()
+    assert outcome.failure_classification == "TEST_WRONG"
+    assert outcome.strategy is Strategy.TEST_REWRITE
+
+
+def test_pick_representative_falls_back_to_synthetic_code_bug():
+    """With no pre-attached diagnosis and no diagnosis_agent, the
+    coordinator synthesizes a CODE_BUG classification. Safe default:
+    SKIP, not a guessed rewrite.
+    """
+    coord = RewriteCoordinator(
+        test_agent=_make_test_agent(_make_test_file([], [])),
+        intent_agent=_make_intent_agent(_make_intent()),
+        verifier=_make_verifier(all_passed=True),
+        diagnosis_agent=None,
+    )
+    failing_cases = [TestCase(
+        name="t1", intent_text="", test_code="def test(): pass",
+        status=TestStatus.FAILED, failure_message="x", diagnosis=None,
+    )]
+    outcome = _run(coord.attempt_rewrite(
+        run_id="r", component_id="comp",
+        original_test_file=_make_test_file(["t1"], []),
+        component={"id": "comp"}, intent=_make_intent(),
+        verification_result=_make_verification_result(failed=["t1"]),
+        test_cases=failing_cases,
+    ))
+    assert outcome.failure_classification == "CODE_BUG"
+    assert outcome.strategy is Strategy.SKIP
+    assert outcome.success is False

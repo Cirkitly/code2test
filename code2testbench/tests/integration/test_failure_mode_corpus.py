@@ -112,8 +112,6 @@ def test_harness_reports_diagnosis_on_failure_modes():
         )
         assert out_path.exists()
         payload = json.loads(out_path.read_text())
-        # We expect diagnosis_trigger_rate > 0 because every test
-        # against the buggy implementation should trigger diagnosis.
         dtr = payload.get("diagnosis_trigger_rate")
         assert isinstance(dtr, float)
         # Allow 0.0 if the LLM produced no test cases (a known edge),
@@ -121,6 +119,164 @@ def test_harness_reports_diagnosis_on_failure_modes():
         assert dtr > 0.0 or dtr != dtr, (
             f"diagnosis_trigger_rate={dtr} but the failure-mode "
             "corpus was designed to trigger diagnosis on every test"
+        )
+    finally:
+        if out_path.exists():
+            out_path.unlink()
+
+
+def test_harness_diagnosis_rate_is_architecturally_exact():
+    """Architectural invariant: every failed test triggers diagnosis.
+    On the failure-mode corpus with --confidence 0.0, this is exact.
+
+    Skipped if OPENAI_API_KEY is not set.
+    """
+    if not os.environ.get("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY not set")
+
+    out_path = _REPO_ROOT / "latest_report_failure_modes.json"
+    try:
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "code2testbench.runner",
+                "--provider", "openai",
+                "--model", os.environ.get("OPENAI_MODEL", "MiniMax-M3"),
+                "--confidence", "0.0",
+                "--manifest", str(_MANIFEST.relative_to(_REPO_ROOT)),
+                "--out", str(out_path.relative_to(_REPO_ROOT)),
+            ],
+            capture_output=True, text=True,
+            cwd=str(_REPO_ROOT),
+            timeout=600,
+        )
+        assert result.returncode == 0, result.stderr[-400:]
+        assert out_path.exists()
+        payload = json.loads(out_path.read_text())
+        dtr = payload.get("diagnosis_trigger_rate")
+        # Diagnosis is an architectural property. If any failure
+        # exists at all, every one of them triggers diagnosis.
+        # NaN is acceptable (no failures triggered diagnosis
+        # because no failures existed).
+        if dtr == dtr:  # not NaN
+            assert dtr == 1.0, (
+                f"diagnosis_trigger_rate={dtr}; expected exactly 1.0 "
+                "on the failure-mode corpus"
+            )
+    finally:
+        if out_path.exists():
+            out_path.unlink()
+
+
+def test_harness_rewrite_attempt_rate_is_architecturally_exact():
+    """Architectural invariant: every failed component gets exactly
+    one rewrite attempt. Per-component invariant enforced in the
+    generator's phase 4.
+    """
+    if not os.environ.get("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY not set")
+
+    out_path = _REPO_ROOT / "latest_report_failure_modes.json"
+    try:
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "code2testbench.runner",
+                "--provider", "openai",
+                "--model", os.environ.get("OPENAI_MODEL", "MiniMax-M3"),
+                "--confidence", "0.0",
+                "--enable-rewrite",
+                "--manifest", str(_MANIFEST.relative_to(_REPO_ROOT)),
+                "--out", str(out_path.relative_to(_REPO_ROOT)),
+            ],
+            capture_output=True, text=True,
+            cwd=str(_REPO_ROOT),
+            timeout=600,
+        )
+        assert result.returncode == 0, result.stderr[-400:]
+        assert out_path.exists()
+        payload = json.loads(out_path.read_text())
+        rar = payload.get("rewrite_attempt_rate")
+        # If any rewrites were attempted, every failure was rewritten.
+        # NaN is acceptable (no failures -> no rewrites).
+        if rar == rar:  # not NaN
+            assert rar == 1.0, (
+                f"rewrite_attempt_rate={rar}; expected exactly 1.0 "
+                "when --enable-rewrite is on and failures exist"
+            )
+    finally:
+        if out_path.exists():
+            out_path.unlink()
+
+
+def test_harness_rewrite_success_rate_is_non_negative():
+    """Architectural floor: rewrite_success_rate is a fraction in
+    [0.0, 1.0]. The exact number depends on the LLM and the corpus;
+    we don't assert that here. We only assert it's not negative.
+    """
+    if not os.environ.get("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY not set")
+
+    out_path = _REPO_ROOT / "latest_report_failure_modes.json"
+    try:
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "code2testbench.runner",
+                "--provider", "openai",
+                "--model", os.environ.get("OPENAI_MODEL", "MiniMax-M3"),
+                "--confidence", "0.0",
+                "--enable-rewrite",
+                "--manifest", str(_MANIFEST.relative_to(_REPO_ROOT)),
+                "--out", str(out_path.relative_to(_REPO_ROOT)),
+            ],
+            capture_output=True, text=True,
+            cwd=str(_REPO_ROOT),
+            timeout=600,
+        )
+        assert result.returncode == 0, result.stderr[-400:]
+        assert out_path.exists()
+        payload = json.loads(out_path.read_text())
+        rsr = payload.get("rewrite_success_rate")
+        if rsr == rsr:  # not NaN
+            assert rsr >= 0.0
+    finally:
+        if out_path.exists():
+            out_path.unlink()
+
+
+def test_harness_final_acceptance_rate_exceeds_initial():
+    """Central claim: after rewrites, more tests pass than before.
+
+    We don't assert exact numbers; we assert the direction. The
+    measured numbers will inform the SLOs in SLO.md.
+    """
+    if not os.environ.get("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY not set")
+
+    out_path = _REPO_ROOT / "latest_report_failure_modes.json"
+    try:
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "code2testbench.runner",
+                "--provider", "openai",
+                "--model", os.environ.get("OPENAI_MODEL", "MiniMax-M3"),
+                "--confidence", "0.0",
+                "--enable-rewrite",
+                "--manifest", str(_MANIFEST.relative_to(_REPO_ROOT)),
+                "--out", str(out_path.relative_to(_REPO_ROOT)),
+            ],
+            capture_output=True, text=True,
+            cwd=str(_REPO_ROOT),
+            timeout=600,
+        )
+        assert result.returncode == 0, result.stderr[-400:]
+        assert out_path.exists()
+        payload = json.loads(out_path.read_text())
+        initial = payload.get("initial_acceptance_rate")
+        final = payload.get("final_acceptance_rate")
+        assert initial is not None and final is not None
+        assert final > initial, (
+            f"final_acceptance_rate={final} did not exceed "
+            f"initial_acceptance_rate={initial}; the rewrite loop "
+            "did not improve the benchmark"
         )
     finally:
         if out_path.exists():

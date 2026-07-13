@@ -36,6 +36,9 @@ from code2test.events import (
 )
 from code2test.providers.base import Provider
 
+# The rewrite loop lives in its own module; the generator orchestrates.
+from code2test.agents.rewrite_coordinator import RewriteCoordinator
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,6 +83,15 @@ class TestGenerator:
         # through the `provider` property so we don't pay SDK-import cost
         # on a TestGenerator that never makes an LLM call.
         self._provider: Optional[Provider] = None
+        # Phase 3 stores the most recent VerificationResult per
+        # component here so phase 4 can pass it to the rewrite
+        # coordinator without re-running the verifier.
+        self._last_verification: Dict[str, Any] = {}
+        # The rewrite coordinator is constructed lazily so its
+        # dependencies (the agents) are available. We hold a
+        # reference once built and reuse across phase-4 calls within
+        # one run, so the per-component idempotency set is consistent.
+        self._rewrite_coordinator: Optional[RewriteCoordinator] = None
         # run_id is created on first generate_tests_for_module call and reused
         # across phases so a sink can correlate events for the same generation.
         self._run_id: Optional[str] = None
@@ -157,8 +169,29 @@ class TestGenerator:
         if self._diagnosis_agent is None:
             self._diagnosis_agent = DiagnosisAgent(provider=self.provider)
         return self._diagnosis_agent
-        return self._diagnosis_agent
-    
+
+    @property
+    def rewrite_coordinator(self) -> RewriteCoordinator:
+        """Lazily-built rewrite coordinator.
+
+        Built on first access. Reused across the lifetime of this
+        TestGenerator, so the per-component idempotency set carries
+        across phase-4 calls within one run.
+
+        When ``self.config.enable_rewrite`` is False the generator
+        never calls into this property, so the coordinator's
+        dependencies are never constructed. Phase 4 gates on the
+        flag and is a no-op otherwise.
+        """
+        if self._rewrite_coordinator is None:
+            self._rewrite_coordinator = RewriteCoordinator(
+                test_agent=self.test_agent,
+                intent_agent=self.intent_agent,
+                verifier=self.verifier,
+                diagnosis_agent=self.diagnosis_agent,
+            )
+        return self._rewrite_coordinator
+
     async def generate_tests_for_module(
         self,
         module_path: str,
@@ -185,11 +218,22 @@ class TestGenerator:
         
         # Phase 2: Generate tests
         test_files = await self._generate_tests_phase(components, intents)
-        
+
         # Phase 3: Verify and refine (if not dry-run)
         if not self.config.dry_run:
             test_files = await self._verify_and_refine_phase(test_files, components, intents)
-        
+
+        # Phase 4: Repair loop (when enabled). Only runs after phase 3
+        # because we need verification_results to drive strategy
+        # selection. When disabled, this is a no-op; v1.0 behavior
+        # is preserved unchanged.
+        if not self.config.dry_run and getattr(
+            self.config, "enable_rewrite", False
+        ):
+            test_files = await self._rewrite_phase(
+                test_files, components, intents,
+            )
+
         # Build test suite
         suite = TestSuite(
             module_path=module_path,
@@ -392,6 +436,11 @@ class TestGenerator:
                 failed=len(result.failed),
                 failure_ids=tuple(result.failed),
             ))
+            # Stash the verification result so phase 4 can pass it
+            # to the rewrite coordinator without re-running the
+            # verifier. We capture per-component_id; the rewrite
+            # coordinator reads this when it's called.
+            self._last_verification[test_file.component_id] = result
 
             # Diagnose failures
             if not result.all_passed:
@@ -425,9 +474,124 @@ class TestGenerator:
             if result.all_passed:
                 test_file.verified = True
                 self.test_registry.mark_verified(test_file.path)
-        
+
         return test_files
-    
+
+    async def _rewrite_phase(
+        self,
+        test_files: List[TestFile],
+        components: Dict[str, Dict[str, Any]],
+        intents: Dict[str, Intent],
+    ) -> List[TestFile]:
+        """Phase 4: repair loop.
+
+        For each test_file that failed verification, ask the rewrite
+        coordinator for one repair attempt. On success the candidate
+        replaces the original in the returned list. The coordinator
+        enforces the per-component invariant (one attempt per
+        component per run).
+
+        After all rewrites are attempted, the full suite is
+        re-verified exactly once to confirm no regressions in
+        non-rewritten components. This is what catches a rewrite
+        that traded one test for another.
+
+        Telemetry: every rewrite attempt emits a RewriteAttempted
+        event with three timing fields (verification_before_seconds,
+        rewrite_elapsed, verification_after_seconds) plus
+        strategy, failure_classification, success, tests_before,
+        tests_after.
+        """
+        # The architecture is:
+        #   VerificationCompleted (phase 3)
+        #       |
+        #   rewrite_coordinator (per failing component)
+        #       |
+        #   VerificationCompleted (phase 4 final re-run)
+        run_id = self._run_id or new_run_id()
+        rewrites_attempted: List[Any] = []
+        rewrite_indices: Dict[str, int] = {}
+
+        for index, test_file in enumerate(test_files):
+            if test_file.verified:
+                continue
+            verification_result = self._last_verification.get(
+                test_file.component_id
+            )
+            if verification_result is None:
+                # No verification record; nothing to drive a rewrite.
+                continue
+            if getattr(verification_result, "all_passed", True):
+                # Nothing to fix; phase 3 already marked verified.
+                continue
+
+            component = components.get(test_file.component_id, {})
+            intent = intents.get(test_file.component_id)
+            if intent is None:
+                continue
+
+            outcome = await self.rewrite_coordinator.attempt_rewrite(
+                run_id=run_id,
+                component_id=test_file.component_id,
+                original_test_file=test_file,
+                component=component,
+                intent=intent,
+                verification_result=verification_result,
+                test_cases=test_file.test_cases,
+                framework=test_file.framework,
+            )
+            rewrites_attempted.append(outcome)
+            rewrite_indices[test_file.component_id] = index
+
+            # Emit the event. Six fields populated by the coordinator;
+            # we add component_id, failure_id (we use the first failed
+            # test name), and the run_id.
+            failed_ids = list(getattr(verification_result, "failed", []))
+            first_failure_id = failed_ids[0] if failed_ids else "unknown"
+            self._publish(RewriteAttempted(
+                run_id=run_id,
+                component_id=test_file.component_id,
+                failure_id=first_failure_id,
+                strategy=outcome.strategy.value,
+                failure_classification=outcome.failure_classification,
+                success=outcome.success,
+                elapsed_seconds=outcome.rewrite_elapsed,
+            ))
+
+            # Transactional commit: replace the test_file with the
+            # candidate only on success.
+            if outcome.success and outcome.new_test_file is not None:
+                test_files[index] = outcome.new_test_file
+
+        # Full-suite re-run after every successful rewrite to detect
+        # silent regressions. One re-run, not per-rewrite, because
+        # the verifier's per-test-file write semantics means a
+        # rewrite of one component doesn't overwrite another
+        # component's on-disk tests.
+        #
+        # IMPORTANT: this re-run does NOT emit VerificationCompleted
+        # events. The metric counters (diagnosis_trigger_rate,
+        # rewrite_attempt_rate) are computed from phase-3 events
+        # only. Phase-4 VerificationCompleted events would inflate
+        # the failure-count denominators and make the metrics look
+        # worse than they are. The re-run's job is to update
+        # test_registry state, not the metrics.
+        if any(o.success for o in rewrites_attempted):
+            for test_file in test_files:
+                if test_file.verified:
+                    continue
+                valid, _ = self.verifier.validate_syntax(test_file)
+                if not valid:
+                    continue
+                result = self.verifier.run_tests(test_file)
+                if result.all_passed:
+                    test_file.verified = True
+                    self.test_registry.mark_verified(test_file.path)
+                else:
+                    test_file.verified = False
+
+        return test_files
+
     def get_stats(self) -> Dict[str, Any]:
         """Get generation statistics."""
         intent_stats = self.intent_db.get_stats()

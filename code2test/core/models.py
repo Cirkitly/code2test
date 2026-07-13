@@ -267,3 +267,10 @@ class GenerationConfig(BaseModel):
     provider: str = "openai"
     base_url: str = "https://api.minimax.io/v1"
     api_key: str = ""
+
+    # v1.1: when True, phase 4 (rewrite loop) runs after phase 3.
+    # Default False preserves v1.0's behavior: generate -> verify, no
+    # repair. The CLI runner gets --enable-rewrite to flip this; the
+    # integration test asserts the loop produces measurable signals
+    # when enabled.
+    enable_rewrite: bool = False

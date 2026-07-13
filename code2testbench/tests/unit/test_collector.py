@@ -61,13 +61,25 @@ def test_collector_counts_diagnosis_triggered():
     assert report.diagnosis_trigger_rate == pytest.approx(0.5)
 
 
-def test_collector_counts_rewrite_attempts():
+def test_collector_counts_rewrite_attempts_per_component():
+    """rewrite_attempt_rate is per-component: denominator is the count
+    of components with at least one failure, NOT the count of
+    failed tests.
+
+    Scenario: 1 component had 3 failed tests, 2 rewrites were attempted.
+    The architecture's per-component invariant means at most one
+    rewrite per component; the 2nd RewriteAttempted here is a
+    synthetic test of the metric counter, not the architectural
+    behavior. rewrite_attempt_rate = 2/1 = 2.0 (more attempts than
+    failing components indicates the per-component invariant was
+    violated, which is itself a signal).
+    """
     sink = EventCollector()
+    # One component, three failed tests. Component-failed count: 1.
     sink.emit(VerificationCompleted(
         run_id="r", component_id="c",
         passed=1, failed=3, failure_ids=("a", "b", "c"),
     ))
-    # only 2 of 3 failures trigger rewrites
     sink.emit(RewriteAttempted(
         run_id="r", component_id="c", failure_id="a", success=True,
     ))
@@ -75,8 +87,87 @@ def test_collector_counts_rewrite_attempts():
         run_id="r", component_id="c", failure_id="b", success=False,
     ))
     report = sink.report()
-    # 2 attempts out of 3 failures = 0.6666...
-    assert report.rewrite_attempt_rate == pytest.approx(2/3)
+    # Per-component denominator: 1 failing component, 2 attempts.
+    # This is the architectural signal that an invariant was violated
+    # in production: per-component invariant should be 1 rewrite per
+    # failing component.
+    assert report.rewrite_attempt_rate == pytest.approx(2.0)
+
+
+def test_collector_rewrite_attempt_rate_one_per_component():
+    """Normal case: one component with one failure, one rewrite
+    attempt. Rate is 1.0 / 1 = 1.0.
+    """
+    sink = EventCollector()
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="c",
+        passed=1, failed=4, failure_ids=("a", "b", "c", "d"),
+    ))
+    sink.emit(RewriteAttempted(
+        run_id="r", component_id="c", failure_id="a", success=True,
+    ))
+    report = sink.report()
+    assert report.rewrite_attempt_rate == pytest.approx(1.0)
+
+
+def test_collector_rewrite_attempt_rate_two_components():
+    """Two components each had failures; both got rewrite attempts.
+    Rate is 2/2 = 1.0.
+    """
+    sink = EventCollector()
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="a", passed=1, failed=2,
+        failure_ids=("t1", "t2"),
+    ))
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="b", passed=1, failed=1,
+        failure_ids=("t3",),
+    ))
+    sink.emit(RewriteAttempted(
+        run_id="r", component_id="a", failure_id="t1", success=False,
+    ))
+    sink.emit(RewriteAttempted(
+        run_id="r", component_id="b", failure_id="t3", success=True,
+    ))
+    report = sink.report()
+    assert report.rewrite_attempt_rate == pytest.approx(1.0)
+
+
+def test_collector_rewrite_attempt_rate_nan_when_no_failures():
+    """When no components had failures, the rewrite_attempt_rate
+    denominator is zero and the rate is NaN -- no signal.
+    """
+    sink = EventCollector()
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="c", passed=3, failed=0,
+        failure_ids=(),
+    ))
+    report = sink.report()
+    assert report.rewrite_attempt_rate != report.rewrite_attempt_rate  # NaN
+
+
+def test_collector_rewrite_attempt_rate_partial_does_not_dilute():
+    """If only some failing components get rewrites, the rate is
+    < 1.0 per-component. Crucially, this is NOT diluted by the
+    number of failed tests in those components -- a component with
+    10 failed tests and 1 rewrite contributes 1/1, not 1/10.
+    """
+    sink = EventCollector()
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="a", passed=0, failed=10,
+        failure_ids=tuple(f"t{i}" for i in range(10)),
+    ))
+    sink.emit(VerificationCompleted(
+        run_id="r", component_id="b", passed=0, failed=1,
+        failure_ids=("q1",),
+    ))
+    # Only component 'a' got a rewrite attempt.
+    sink.emit(RewriteAttempted(
+        run_id="r", component_id="a", failure_id="t1", success=True,
+    ))
+    report = sink.report()
+    assert report.rewrite_attempt_rate == pytest.approx(0.5)  # 1/2
+
 
 
 def test_collector_counts_final_acceptance_as_successful_rewrites():

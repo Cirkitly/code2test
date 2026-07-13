@@ -52,6 +52,11 @@ class EventCollector:
         # Rewrite attempted: a repair was actually attempted.
         self._rewrites_total = 0
         self._rewrite_attempted = 0
+        # Per-component counter for failed-components. Set on each
+        # VerificationCompleted with failed > 0. Used as the
+        # rewrite_attempt_rate denominator so the ratio is per-
+        # component, not per-failed-test.
+        self._failed_components = 0
         # Rewrite success: of rewrites attempted, what fraction produced
         # a passing test. Per-event metric, distinct from final_acceptance_rate.
         self._rewrite_success = 0
@@ -76,9 +81,19 @@ class EventCollector:
                 self._initial_accept += 1
 
         elif isinstance(event, VerificationCompleted):
-            # Each failed test is a candidate for diagnosis and rewrite.
+            # The number of failed TESTS in this component's test file.
+            # Used as the denominator for diagnosis_trigger_rate
+            # (per-test metric). NOT used as the rewrite denominator;
+            # see _failed_components below for that.
             self._diagnostics_total += event.failed
             self._rewrites_total += event.failed
+            # Per-component: increment failed_components if this
+            # component had any failures. The rewrite_attempt_rate
+            # denominator is components-with-failures, not failed
+            # tests; this keeps the ratio well-defined when one
+            # component has many failing tests.
+            if event.failed > 0:
+                self._failed_components += 1
 
         elif isinstance(event, DiagnosisTriggered):
             self._diagnosis_triggered += 1
@@ -111,7 +126,12 @@ class EventCollector:
         return AcceptanceReport(
             initial_acceptance_rate=_safe_ratio(self._initial_accept, self._initial_total),
             diagnosis_trigger_rate=_safe_ratio(self._diagnosis_triggered, self._diagnostics_total),
-            rewrite_attempt_rate=_safe_ratio(self._rewrite_attempted, self._rewrites_total),
+            # rewrite_attempt_rate is per-component: the denominator is
+            # the count of components that had at least one failed
+            # test, not the count of failed tests. With per-test
+            # denominator the metric dilutes as a single failing
+            # component generates many failed tests.
+            rewrite_attempt_rate=_safe_ratio(self._rewrite_attempted, self._failed_components),
             rewrite_success_rate=_safe_ratio(self._rewrite_success, self._rewrite_attempted),
             final_acceptance_rate=_safe_ratio(self._final_accept, self._final_total),
         )
