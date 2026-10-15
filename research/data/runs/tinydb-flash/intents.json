@@ -1,0 +1,184 @@
+[
+  {
+    "component": "tinydb.database.TinyDB",
+    "intent": "The main class of TinyDB",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.middlewares.CachingMiddleware",
+    "intent": "Add some caching to TinyDB",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.middlewares.Middleware",
+    "intent": "The base class for all Middlewares",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.mypy_plugin.TinyDBPlugin",
+    "intent": "**Primary purpose:** `TinyDBPlugin` is a mypy plugin that teaches mypy to understand tinydb's `with_typehint(...)` mixin helper (`tinydb.utils.with_typehint`). The helper is a runtime no-op (`def with_typehint(baseclass): return baseclass`) used to build classes such as `class Table(with_typehint(TableBase))` so the resulting class *inherits* type hints from `TableBase` for editors/IDEs. PyCharm/Pyright resolve this natively, but mypy does not; this plugin patches mypy's semantic analysis so mypy treats `with_typehint(X)` as if the class directly inherited from `X`, making annotations from `X` visible on the new class.\n\n**Expected inputs / constraints**\n- `__init__(options: Options)`: receives mypy's run `Options`; must forward it to `Plugin.__init__` and initialize per-run state (`self.named_placeholders: Dict[str, str] = {}`, currently unused/vestigial in this code).\n- `get_dynamic_class_hook(fullname: str)`: called by mypy for every class-definition base expression. Must return a hook only when `fullname == 'tinydb.utils.with_typehint'`; for all other names it must return `None` (no interception, zero side effects).\n- Inside the hook, `DynamicClassDefContext` provides:\n  - `ctx.call.args[0]` \u2014 only the *first positional argument* is inspected; extra positional or keyword arguments are unsupported/undefined.\n  - `klass` must be a `NameExpr` (a bare class name). Attribute access (`mod.Base`), call expressions (`with_typehint(make_base())`), and chained `with_typehint(with_typehint(X))` are not supported.\n  - `klass.fullname` must be non-`None` (name resolvable in mypy's symbol table).\n  - `self.lookup_fully_qualified(type_name)` must return a qualified name (target class known to mypy).\n  - `ctx.name` is the name of the class currently being defined.\n\n**Expected outputs**\n- `get_dynamic_class_hook` returns `Optional[Callable[[DynamicClassDefContext], None]]` (annotated via the `CB[DynamicClassDef]` alias): the hook for `with_typehint`, otherwise `None`.\n- The hook itself returns `None`; its \"output\" is the registered symbol-table entry.\n\n**Side effects / state changes**\n- Calls `ctx.api.add_symbol_table_node(ctx.name, qualified)`, adding a node to the current module's symbol table that binds the newly defined class name to the target class's fully-qualified name. This mutates mypy's semantic-analysis state so that attribute lookup and type checking on the new class resolve through the hinted base class.\n- No I/O, no mutation of user data; effects are scoped to the ongoing mypy build.\n\n**Error conditions**\n- The three `assert`s (argument is a `NameExpr`, `fullname` is not `None`, `lookup_fully_qualified` succeeds) are internal invariant checks. Violating them (e.g. `with_typehint(some_call())` or a forward/local reference) raises `AssertionError` and aborts type checking with an internal mypy error rather than a user-friendly diagnostic.\n- The hook must be robust to being invoked on unexpected argument shapes; ideally unsupported forms would emit a mypy error message instead of crashing.\n\n**Unclear / needs clarification**\n- Intent and lifecycle of `self.named_placeholders` (declared but never read/written here): cache for qualified names, placeholder for a planned feature, or dead code?\n- Should unsupported argument shapes produce a proper mypy error message (`ctx.api.fail(...)`) rather than `assert`?\n- Only one mixin argument is handled \u2014 is multi-argument or nested `with_typehint` intentionally unsupported?\n- The declared return type `CB[DynamicClassDef]` appears to omit `Optional`, yet `None` is returned; is this an intentional shorthand/alias or a latent typing bug?\n- Plugin registration (setuptools entry point, e.g. `mypy` \u2192 `tinydb.mypy_plugin:TinyDBPlugin`) is not shown, so the exact packaging contract is unverified.",
+    "confidence": 0.86,
+    "static_confidence": 0.5,
+    "source": "model"
+  },
+  {
+    "component": "tinydb.mypy_plugin.plugin",
+    "intent": "Function 'plugin'",
+    "confidence": 0.7,
+    "static_confidence": 0.7,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.operations.add",
+    "intent": "Add ``n`` to a given field in the document",
+    "confidence": 0.635,
+    "static_confidence": 0.635,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.operations.decrement",
+    "intent": "Decrement a given field in the document by 1",
+    "confidence": 0.635,
+    "static_confidence": 0.635,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.operations.delete",
+    "intent": "Delete a given field from the document",
+    "confidence": 0.605,
+    "static_confidence": 0.605,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.operations.increment",
+    "intent": "Increment a given field in the document by 1",
+    "confidence": 0.635,
+    "static_confidence": 0.635,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.operations.set",
+    "intent": "`set(field, val)` is an operation factory in TinyDB's public operations module. It returns a `transform(doc)` callable that assigns `val` to `doc[field]` in place, for use as an update action (e.g. `db.update(operations.set('status', 'archived'), cond=...)`). Requirements: `field` must be a hashable key (conventionally a str) and `val` a value serializable by the active storage; the returned callable must be passed a mutable mapping and performs an upsert (creates the key if missing, unlike the sibling `delete` operation). It returns `None` and mutates the given document in place with no copying or validation, propagating any `TypeError` from an unhashable field or non-assignable document rather than handling it. `set` deliberately shadows the builtin of the same name inside `tinydb/operations.py`.",
+    "confidence": 0.86,
+    "static_confidence": 0.59,
+    "source": "model"
+  },
+  {
+    "component": "tinydb.operations.subtract",
+    "intent": "Subtract ``n`` to a given field in the document",
+    "confidence": 0.635,
+    "static_confidence": 0.635,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.queries.Query",
+    "intent": "TinyDB Queries",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.queries.QueryInstance",
+    "intent": "A query instance",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.queries.QueryLike",
+    "intent": "A typing protocol that acts like a query",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.queries.is_sequence",
+    "intent": "Performs boolean check operation",
+    "confidence": 0.65,
+    "static_confidence": 0.65,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.queries.where",
+    "intent": "A shorthand for ``Query()[key]``",
+    "confidence": 0.76,
+    "static_confidence": 0.76,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.storages.JSONStorage",
+    "intent": "Store the data in a JSON file",
+    "confidence": 0.605,
+    "static_confidence": 0.605,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.storages.MemoryStorage",
+    "intent": "Store the data as JSON in memory",
+    "confidence": 0.605,
+    "static_confidence": 0.605,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.storages.Storage",
+    "intent": "The abstract base class for all Storages",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.storages.touch",
+    "intent": "Create a file if it doesn't exist yet",
+    "confidence": 0.99,
+    "static_confidence": 0.99,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.table.Document",
+    "intent": "A document stored in the database",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.table.Table",
+    "intent": "Represents a single TinyDB table",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.utils.FrozenDict",
+    "intent": "An immutable dictionary",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.utils.LRUCache",
+    "intent": "A least-recently used (LRU) cache with a fixed cache size",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.utils.freeze",
+    "intent": "Freeze an object by making it immutable and thus hashable",
+    "confidence": 0.65,
+    "static_confidence": 0.65,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.utils.with_typehint",
+    "intent": "Add type hints from a specified class to a base class:\n\n>>> class Foo(with_typehint(Bar)):",
+    "confidence": 0.99,
+    "static_confidence": 0.99,
+    "source": "static"
+  }
+]

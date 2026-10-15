@@ -1,0 +1,246 @@
+{
+  "generation": {
+    "components": 13,
+    "components_with_tests": 13,
+    "acceptance_rate": 1.0,
+    "tests_generated": 302,
+    "first_run_passed": 231,
+    "first_run_pass_rate": 0.765,
+    "tests_kept": 300,
+    "tests_xfail": 0,
+    "tests_dropped": 2,
+    "files_removed": 0,
+    "repair_rounds": 13,
+    "diagnoses": {
+      "TEST_WRONG": 2
+    },
+    "llm_failures": 0
+  },
+  "mutation_score": 1.0,
+  "mutants_total": 80,
+  "mutants_killed": 80,
+  "diagnosis_accuracy": 0.9666666666666667,
+  "diagnosis_by_expected_cause": {
+    "CODE_BUG": {
+      "cases": 15,
+      "correct": 14
+    },
+    "TEST_WRONG": {
+      "cases": 15,
+      "correct": 15
+    }
+  },
+  "survivors": [],
+  "diagnosis_cases": [
+    {
+      "test": "test_underscore_camel_case_expression_becomes_snake_case",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test asserts exactly the documented happy path in the docstring of `underscore`, and the implementation raises `re.PatternError: bad escape (end of pattern)` before producing any output. The fault is a corrupted replacement template in the first `re.sub` call: `'\\\\1_\\\\'` ends with a dangling bac",
+      "correct": true
+    },
+    {
+      "test": "test_camelize_with_uppercase_first_letter_false_produces_lower_camel_case",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test's assertion matches the documented behavior: the docstring for `camelize` explicitly shows `camelize(\"device_type\", False)` -> `'deviceType'`, and the stated intent (produce lowerCamelCase when `uppercase_first_letter=False`) agrees. The implementation, however, slices the UpperCamelCase re",
+      "correct": true
+    },
+    {
+      "test": "test_parameterize_collapses_separator_runs_produced_from_junk",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "Tracing the shown implementation: `re.sub('(?i)[^a-z0-9\\\\-_]+', '-', \"a  --  b\")` turns each whitespace run into a separator while the existing literal dashes are preserved, giving `\"a\" + \"-\" + \"--\" + \"-\" + \"b\"` == `\"a----b\"`. The very next step in the component, `re.sub('%s{2,}' % re_sep, separator",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_registers_plural_and_singular_rules_for_matching_first_letters",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test expects PLURALS[3] == (\"C[hH][iI][lL][dD]$\", \"Kids\"), but the implementation produced (\"C[hH][iI][lL][dD]\", \"Kids\") \u2014 the rule pattern is missing the end-of-string anchor '$'. Inspecting _irregular's 'different first letters' branch, three of the four PLURALS inserts use '{}...${}' and both",
+      "correct": true
+    },
+    {
+      "test": "test_ordinal_returns_second_and_third_suffixes",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test's expectation matches both the stated intent (\"suffix ... such as 1st, 2nd, 3rd, 4th\") and the component's own doctests, which explicitly document `ordinal(2) -> 'nd'` and `ordinal(1002) -> 'nd'`. The implementation instead contains a typo in its suffix lookup table: `{1: 'st', 2: 'n', 3: '",
+      "correct": true
+    },
+    {
+      "test": "test_humanize_only_strips_one_trailing_id_suffix",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The stated intent says to strip a *trailing* \"_id\" only, and the test correctly encodes that intent (asserting \"My id\" for \"my_id_id\", with a trace that assumes an end-anchored \"_id$\" pattern). The component under test uses `re.sub('_id', '', word)`, which is NOT anchored to the end of the string, s",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_registers_plural_and_singular_rules_for_matching_first_letters",
+      "expected": "CODE_BUG",
+      "actual": "TEST_WRONG",
+      "explanation": "The only failing assertion is a white-box check of the internal rule text: it expects SINGULARS[0] to be (\"k[iI][dD][sS]$\", \"child\"), but the component registers that lowercase rule without the `$` anchor (its uppercase twin SINGULARS[1] does have `$`). The component code is a faithful copy of the r",
+      "correct": false
+    },
+    {
+      "test": "test_camelize_with_uppercase_first_letter_false_produces_lower_camel_case",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test's expectation exactly matches both the stated intent and the function's own docstring/doctest, which documents `camelize(\"device_type\", False)` -> `'deviceType'`. The implementation contains an off-by-one indexing bug: `string[1].lower() + camelize(string)[1:]` takes the SECOND character of",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_registers_plural_and_singular_rules_for_matching_first_letters",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "In the different-first-letter branch of _irregular, the fourth PLURALS.insert builds the replacement as plural[0].lower() + plural[2:], which skips the second character of the plural word. For (\"child\", \"kids\") this yields the rule ('k[iI][dD][sS]$', 'kds') instead of ('k[iI][dD][sS]$', 'kids'), so ",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_registers_plural_and_singular_rules_for_matching_first_letters",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "In the case-sensitive branch of `_irregular`, the fourth inserted PLURALS rule uses `plural[1].lower() + plural[1:]` as the replacement instead of `plural[0].lower() + plural[1:]`. For `_irregular(\"child\", \"kids\")` this yields ('k[iI][dD][sS]$', 'iids') instead of ('k[iI][dD][sS]$', 'kids'), which i",
+      "correct": true
+    },
+    {
+      "test": "test_titleize_man_from_the_boondocks",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly implements the stated intent: it calls `titleize(\"man from the boondocks\")` and asserts the documented result `\"Man From The Boondocks\"`, which matches the function's own docstring examples. The failure is a `re.PatternError` raised at compile time inside `titleize`, before any as",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_registers_plural_and_singular_rules_for_matching_first_letters",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "All of the failing expectations in this test file are consistent with a single defect in the branch condition of `_irregular`: it compares `singular[0].upper() == plural[1].upper()` \u2014 the *second* character of the plural \u2014 instead of the first character of the plural. For `_irregular(\"person\", \"peop",
+      "correct": true
+    },
+    {
+      "test": "test_dasherize_replaces_single_underscore_with_dash",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly implements the stated intent: `dasherize(\"puni_puni\")` should produce `\"puni-puni\"`, which matches the docstring example in the component itself. The test's assertion is a direct, faithful expression of the intent, so it is not TEST_WRONG. The intent (\"Replace underscores with das",
+      "correct": true
+    },
+    {
+      "test": "test_humanize_replaces_underscores_with_spaces_and_capitalizes_first_word",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The failure is raised inside the component under test, not the test. The test calls `humanize(\"employee_salary\")` and expects `\"Employee salary\"`, which exactly matches the documented example in the docstring. However, the implementation line `re.sub('(?i)([a-z\\\\d]*', lambda m: m.group(1).lower(), w",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_registers_plural_and_singular_rules_for_matching_first_letters",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "In the different-first-letters branch of _irregular, the third PLURALS.insert uses `plural[1].upper()` where every other rule uses `plural[0]` for the pinned first letter. For _irregular(\"child\", \"kids\") this yields the pattern 'I[iI][dD][sS]$' instead of 'K[iI][dD][sS]$'. The rule is internally inc",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_rules_take_priority_over_the_built_in_rules",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The failing assertion is the test's own baseline sanity-check line: `assert pluralize('person') == 'peopl'`. The docstring immediately above it states that \"`pluralize('person')` already returns `'people'` thanks to the rules that ship with the library\" \u2014 so the intended baseline value is 'people', ",
+      "correct": true
+    },
+    {
+      "test": "test_tableize_accepts_the_word_parameter_as_a_keyword_argument",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's actual goal \u2014 verifying that the parameter is named `word` and can be passed as a keyword argument \u2014 succeeds: `tableize(word='RawScaledScorer')` is invoked without a TypeError, proving the keyword API exists. The only mismatch is the assertion's expected value. The implementation `plural",
+      "correct": true
+    },
+    {
+      "test": "test_camelize_converts_multiple_underscored_words",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The implementation `camelize` uses `re.sub(r\"(?:^|_)(.)\", lambda m: m.group(1).upper(), string)`, which capitalizes the character at the start and after every underscore, producing 'SomeLongWordHere' from 'some_long_word_here'. That is exactly the documented behavior (\"All underscore separated words",
+      "correct": true
+    },
+    {
+      "test": "test_dasherize_maps_trailing_underscore_to_trailing_dash",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component `dasherize` simply performs `word.replace('_', '-')`, which exactly matches the stated intent (\"Replace underscores with dashes in the string\"). For the input `'puni_'` that yields `'puni-'`, which is the correct behavior. The test itself is internally inconsistent: its name (\"maps_tra",
+      "correct": true
+    },
+    {
+      "test": "test_parameterize_strips_both_leading_and_trailing_separators",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component `parameterize()` explicitly lowercases its result (`return string.lower()`), and its own docstring example shows lowercase output (`parameterize(u\"Donald E. Knuth\") -> 'donald-e-knuth'`). The stated intent is only about replacing special characters for a 'pretty' URL \u2014 it says nothing ",
+      "correct": true
+    },
+    {
+      "test": "test_titleize_x_men_the_last_stand",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The production code is correct: `titleize('x-men: the last stand')` returns `'X Men: The Last Stand'`, which matches both the module docstring example (`>>> titleize(\"x-men: the last stand\")` \u2192 `'X Men: The Last Stand'`) and the stated intent (hyphens become spaces, each word capitalized). The test'",
+      "correct": true
+    },
+    {
+      "test": "test_parameterize_replaces_punctuation_and_spaces_with_the_separator",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The code behaves exactly as documented: it transliterates, replaces each maximal run of unwanted characters with a single separator, collapses repeated separators, strips leading/trailing separators, and lowercases. For 'Some Random: Text; with (stuff)! 123' the digits are allowed characters ([^a-z0",
+      "correct": true
+    },
+    {
+      "test": "test_titleize_raiders_of_the_lost_ark",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component's docstring explicitly documents `titleize(\"raiders_of_the_lost_ark\")` -> `'Raiders Of The Lost Ark'`, and the implementation (underscore -> humanize -> .title() -> capitalization regex) correctly produces that full string. The failure output confirms the actual value is 'Raiders Of Th",
+      "correct": true
+    },
+    {
+      "test": "test_humanize_is_exposed_as_a_public_callable",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test asserts `humanize_callable('employee_salary') == 'Employee salar'`, which is a typo \u2014 the final 'y' is missing. The component under test's docstring explicitly documents `humanize(\"employee_salary\")` returning `'Employee salary'`, and the implementation (`re.sub(r\"_id$\", \"\", word)` \u2192 `word.",
+      "correct": true
+    },
+    {
+      "test": "test_parameterize_returns_the_documented_url_fragment",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component's own docstring documents `parameterize(u\"Donald E. Knuth\")` as returning `'donald-e-knuth'`, and the implementation indeed produces `'donald-e-knuth'` (spaces become the separator, output is lowercased, nothing is truncated). The stated intent \u2014 replacing special characters so the str",
+      "correct": true
+    },
+    {
+      "test": "test_underscore_splits_long_acronym_prefix",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's expected value is a truncated typo. Its own docstring states the intent: \"'HTTPServer' splits at the HTTP|Server boundary, giving 'http_server'\" \u2014 yet the assertion compares against 'http_serve' (a chopped-off final 'r'). The component behaves exactly as intended: the first regex `([A-Z]+",
+      "correct": true
+    },
+    {
+      "test": "test_tableize_converts_dashes_to_underscores",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component `tableize` is implemented as `pluralize(underscore(word))`, and its docstring explicitly documents both steps (e.g. `tableize('egg_and_ham') == 'egg_and_hams'`). The stated intent \u2014 \"Create the name of a table like Rails does for models to table names\" \u2014 necessarily includes pluralizat",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_registers_rules_in_front_of_previously_registered_ones",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component code registers `child` -> `children` and prepends the rules to PLURALS, so `pluralize('child')` correctly returns `'children'`. The test's intermediate assertion expects the nonsensical value `'childre'` (an obvious typo/truncation of `'children'`), which no implementation of `_irregul",
+      "correct": true
+    },
+    {
+      "test": "test_pluralize_appends_s_to_a_regular_noun",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test name `test_pluralize_appends_s_to_a_regular_noun` states that regular nouns get an \"s\" appended, but the assertion `assert pluralize('post') == 'post'` asserts the opposite. The failure output confirms the inversion: the code actually returned 'posts' (correct behavior) while the test expec",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_handles_non_ascii_words",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test registers the irregular pair `_irregular('caf\u00e9', 'caf\u00e9s')` and then asserts `pluralize('caf\u00e9') == 'caf\u00e9'` \u2014 i.e. that pluralizing the singular form leaves it unchanged. That directly contradicts the documented purpose of `_irregular` (add rules mapping singular\u2194plural) and the very rule jus",
+      "correct": true
+    }
+  ]
+}
