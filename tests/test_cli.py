@@ -90,7 +90,7 @@ def test_verify_fix_does_not_overwrite_hand_edited_tests(repo, monkeypatch):
 def test_verify_diagnose_explains_failure(repo, monkeypatch):
     use_model(monkeypatch, scripted([tests_reply(PASSING)]))
     assert run("test", "--auto", "--confidence", "0", ".").exit_code == 0
-    (repo / "calc/ops.py").write_text(SOURCE.replace("return a + b", "return a - b"))
+    (repo / "calc/ops.py").write_text(SOURCE.replace("return a + b", "return a - b - 0"))
 
     use_model(monkeypatch, scripted([tests_reply(PASSING)], diagnosis="CODE_BUG"))
     result = run("verify", "--diagnose", "tests")

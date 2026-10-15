@@ -85,6 +85,9 @@ class TestVerifier:
         if env.get("PYTHONPATH"):
             extra_paths.append(env["PYTHONPATH"])
         env["PYTHONPATH"] = os.pathsep.join(extra_paths)
+        # Test files are rewritten within seconds during repair; .pyc caches are keyed on
+        # mtime (1s resolution) + size, so a cached file could run a stale version.
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
             report_path = f.name
