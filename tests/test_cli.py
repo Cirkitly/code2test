@@ -126,6 +126,22 @@ def test_interactive_mode_saves_accepted_tests(repo, monkeypatch):
     assert (repo / GENERATED).exists()
 
 
+def test_interactive_edit_is_stored_and_reused(repo, monkeypatch):
+    use_model(monkeypatch, scripted([tests_reply(PASSING)]))
+
+    # confirm batch, edit intent, type it, accept tests, confirm save
+    result = run("test", ".", input="y\ne\nAdds two integers, also negative ones\ny\ny\n")
+    assert result.exit_code == 0, result.output
+    assert "Tests saved" in result.output and "│ 1 " in result.output.split("Tests saved")[1][:20]
+
+    shown = run("intent", "show", "add")
+    assert "Adds two integers, also negative ones" in shown.output
+
+    # The next session starts from the edited intent instead of re-inferring it
+    result = run("test", ".", input="y\nn\n")
+    assert "Adds two integers, also negative ones" in result.output
+
+
 def test_interactive_mode_declined_save_leaves_no_file(repo, monkeypatch):
     use_model(monkeypatch, scripted([tests_reply(PASSING)]))
 

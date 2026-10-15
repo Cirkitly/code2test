@@ -271,21 +271,28 @@ def run_interactive_generation(
     async def run():
         skipped = 0
         generated = 0
+        tests_saved = 0
 
         for comp_id, component in components.items():
-            # Extract intent
-            intent = generator.intent_extractor.extract_intent(component, {})
+            # An intent the user edited earlier is kept; otherwise infer it from the code
+            stored = generator.intent_db.get_intent(comp_id)
+            if stored is not None and stored.user_edited:
+                intent = stored
+            else:
+                intent = generator.intent_extractor.extract_intent(component, {})
 
             # Present intent
             if not auto_accept or intent.needs_clarification():
                 action = session.present_intent(intent, component.get("name", ""))
 
                 if action == UserAction.SKIP:
+                    generator.intent_db.save_intent(intent)
                     skipped += 1
                     continue
                 elif action == UserAction.EDIT_INTENT:
                     new_text = session.edit_intent(intent)
                     intent.update_intent(new_text)
+            generator.intent_db.save_intent(intent)
 
             # Generate tests
             test_file = await generator.test_agent.generate_unit_tests(component, intent)
@@ -303,6 +310,7 @@ def run_interactive_generation(
                     continue
                 elif action == UserAction.EDIT_INTENT:
                     intent.update_intent(session.edit_intent(intent))
+                    generator.intent_db.save_intent(intent)
                     test_file = await generator.test_agent.generate_unit_tests(component, intent)
                     if not test_file.test_cases:
                         display.warning(f"No tests generated for {comp_id}")
@@ -323,19 +331,13 @@ def run_interactive_generation(
 
             if auto_accept or session.confirm_save(test_file.path):
                 generated += 1
+                tests_saved += test_file.total_tests
                 display.success(f"Saved {test_file.path} ({test_file.total_tests} tests)")
             else:
                 (generator.repo_path / test_file.path).unlink(missing_ok=True)
                 generator.test_registry.delete_test(test_file.path)
                 skipped += 1
 
-        # Show summary
-        display.show_summary_table(
-            {
-                "total_intents": len(components),
-                "total_test_files": generated,
-                "skipped": skipped,
-            }
-        )
+        display.show_session_summary(len(components), generated, tests_saved, skipped)
 
     asyncio.run(run())
