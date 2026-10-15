@@ -156,3 +156,18 @@ def test_intent_export_json_is_valid_json(repo, monkeypatch):
     data = json.loads(run("intent", "export", "--format", "json").output)
     assert [i["component_id"] for i in data] == ["calc.ops.add"]
     assert "narrow terminal" in data[0]["evidence"]["docstring"]
+
+
+def test_rejected_api_key_fails_the_run(repo, monkeypatch):
+    from pydantic_ai.exceptions import ModelHTTPError
+    from pydantic_ai.models.function import FunctionModel
+
+    def reject(messages, info):
+        raise ModelHTTPError(401, "gpt-4o-mini", {"code": "invalid_api_key"})
+
+    use_model(monkeypatch, FunctionModel(reject))
+    result = run("test", "--auto", "--confidence", "0", ".")
+    assert result.exit_code == 1, result.output
+    assert "HTTP 401" in result.output
+    assert "Generated 0 tests" not in result.output
+    assert not (repo / GENERATED).exists()

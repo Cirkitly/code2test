@@ -12,6 +12,7 @@ from pydantic_ai import Agent
 from pydantic import BaseModel
 
 from code2test.core.models import Intent, IntentEvidence
+from code2test.agents.errors import raise_if_fatal
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,7 @@ class IntentAgent:
             )
             
         except Exception as e:
+            raise_if_fatal(e)
             logger.error(f"Intent inference failed: {e}")
             # Return low-confidence fallback
             return Intent(

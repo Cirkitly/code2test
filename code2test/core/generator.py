@@ -27,6 +27,7 @@ from code2test.storage.test_registry import TestRegistry
 from code2test.agents.intent_agent import IntentAgent
 from code2test.agents.test_agent import TestAgent
 from code2test.agents.diagnosis_agent import DiagnosisAgent
+from code2test.agents.errors import raise_if_fatal
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,7 @@ class TestGenerator:
                         "dependencies": component.get("dependencies", []),
                     })
                 except Exception as e:
+                    raise_if_fatal(e)
                     logger.warning(f"LLM intent inference failed for {comp_id}: {e}")
                     return
             if inferred.confidence > intent.confidence:
@@ -257,6 +259,7 @@ class TestGenerator:
                         return test_file
                             
                 except Exception as e:
+                    raise_if_fatal(e)
                     logger.error(f"Test generation failed for {comp_id}: {e}")
                     return None
                     
@@ -371,6 +374,7 @@ class TestGenerator:
                             tc, tc.failure_message or "", component, intent
                         )
                     except Exception as e:
+                        raise_if_fatal(e)
                         logger.error(f"Diagnosis failed: {e}")
                 tc.diagnosis = diagnosis
                 if diagnosis and diagnosis.cause == DiagnosisCause.CODE_BUG:

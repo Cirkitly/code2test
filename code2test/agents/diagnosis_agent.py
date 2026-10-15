@@ -16,6 +16,7 @@ from code2test.core.models import (
     Diagnosis,
     DiagnosisCause,
 )
+from code2test.agents.errors import raise_if_fatal
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +161,7 @@ class DiagnosisAgent:
             )
             
         except Exception as e:
+            raise_if_fatal(e)
             logger.error(f"Diagnosis failed: {e}")
             # Return fallback diagnosis
             return Diagnosis(

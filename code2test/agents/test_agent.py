@@ -22,6 +22,7 @@ from code2test.core.models import (
     TestStatus,
     TestFramework,
 )
+from code2test.agents.errors import raise_if_fatal
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +245,7 @@ class TestAgent:
             )
             
         except Exception as e:
+            raise_if_fatal(e)
             logger.error(f"Test generation failed: {e}")
             # Return empty test file
             return TestFile(
@@ -339,6 +341,7 @@ Use pytest syntax with appropriate fixtures."""
             )
             
         except Exception as e:
+            raise_if_fatal(e)
             logger.error(f"Integration test generation failed: {e}")
             return TestFile(
                 path=os.path.join(self.output_dir, "integration", f"test_{module.get('name', 'module')}.py"),
@@ -443,6 +446,7 @@ Use pytest syntax with appropriate fixtures."""
         try:
             result = await self._get_agent().run(prompt, output_type=TestGenerationResult)
         except Exception as e:
+            raise_if_fatal(e)
             logger.error(f"Test repair failed: {e}")
             return test_file
 
