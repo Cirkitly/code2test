@@ -78,6 +78,14 @@ code2test verify --fix tests/      # repair failing generated tests after the co
 ```
 `--fix` only touches files code2test generated and that you haven't edited since.
 
+### Measuring test quality
+Every `code2test test --auto` run ends with its metrics (also saved to `.code2test/metrics.json`): how many components got tests, how many generated tests passed before any repair, and how many were repaired, kept as `xfail` or dropped.
+
+```bash
+code2test benchmark .     # after code2test test
+```
+`benchmark` injects small bugs (mutants) into the tested code one at a time and reports the share the generated tests catch, and checks the diagnosis agent against failures whose cause is known. Your source is restored after every mutant. Results go to `.code2test/benchmark.json`.
+
 ### Reviewing intents
 ```bash
 code2test intent show add          # by function/class name
