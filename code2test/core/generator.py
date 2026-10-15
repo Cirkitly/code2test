@@ -21,6 +21,7 @@ from code2test.core.models import (
     DiagnosisCause,
 )
 from code2test.core.intent import IntentExtractor
+from code2test.core.metrics import RunMetrics
 from code2test.core.verifier import TestVerifier, defined_test_names, test_file_for_classname
 from code2test.storage.intent_db import IntentDatabase
 from code2test.storage.test_registry import TestRegistry
@@ -70,6 +71,7 @@ class TestGenerator:
         self.intent_db = IntentDatabase(db_path)
         self.test_registry = TestRegistry(db_path)
         self.verifier = TestVerifier(str(repo_path))
+        self.metrics = RunMetrics()
         
         # LLM agents (lazy init)
         self._intent_agent: Optional[IntentAgent] = None
@@ -119,6 +121,7 @@ class TestGenerator:
             TestSuite with all generated tests
         """
         logger.info(f"Generating tests for module: {module_path}")
+        self.metrics = RunMetrics(components=len(components))
         
         # Phase 1: Extract intents
         intents = await self._extract_intents_phase(components)
@@ -139,6 +142,8 @@ class TestGenerator:
         )
         
         logger.info(f"Generated {suite.total_tests} tests across {len(test_files)} files")
+        if not self.config.dry_run:
+            self.metrics.save(self.repo_path / ".code2test" / "metrics.json")
         
         return suite
     
@@ -253,7 +258,10 @@ class TestGenerator:
                         self.config.framework,
                     )
                     
+                    if not test_file.test_cases:
+                        self.metrics.llm_failures += 1
                     if test_file.test_cases:
+                        self.metrics.file(comp_id, test_file.path).generated = len(test_file.test_cases)
                         self.test_registry.register_test(test_file)
                         if self.on_test_generated:
                             self.on_test_generated(test_file)
@@ -261,6 +269,7 @@ class TestGenerator:
                             
                 except Exception as e:
                     raise_if_fatal(e)
+                    self.metrics.llm_failures += 1
                     logger.error(f"Test generation failed for {comp_id}: {e}")
                     return None
                     
@@ -352,6 +361,7 @@ class TestGenerator:
                     del by_path[path]
                 else:
                     self.verifier.write_test_file(tf)
+                    self.metrics.file(tf.component_id, tf.path).kept = len(tf.test_cases)
                     self.test_registry.register_test(tf)
                     if tf.verified:
                         self.test_registry.mark_verified(tf.path)
@@ -395,12 +405,19 @@ class TestGenerator:
         Returns the final test file, or None if no tests survived (file removed).
         """
         result = await self._run_verifier(test_file)
+        file_metrics = self.metrics.file(test_file.component_id, test_file.path)
+        if not file_metrics.generated:
+            file_metrics.generated = len(test_file.test_cases)
+        file_metrics.first_run_passed = sum(
+            1 for tc in test_file.test_cases if tc.status in (TestStatus.PASSED, TestStatus.SKIPPED)
+        )
 
         for attempt in range(self.config.max_fix_attempts):
             failing = [tc for tc in test_file.test_cases if tc.status == TestStatus.FAILED]
             if result.all_passed or not failing or intent is None:
                 break
             logger.info(f"Repairing {len(failing)} failing test(s) in {test_file.path} (attempt {attempt + 1})")
+            file_metrics.repair_rounds += 1
             test_file = await self.test_agent.fix_tests(test_file, failing, component, intent)
             result = await self._run_verifier(test_file)
 
@@ -434,6 +451,8 @@ class TestGenerator:
                         raise_if_fatal(e)
                         logger.error(f"Diagnosis failed: {e}")
                 tc.diagnosis = diagnosis
+                if diagnosis:
+                    self.metrics.diagnoses[diagnosis.cause.value] += 1
                 if diagnosis and diagnosis.cause == DiagnosisCause.CODE_BUG:
                     reason = f"code2test: possible bug - {diagnosis.explanation}"[:300]
                     tc.test_code = f"@pytest.mark.xfail(reason={reason!r}, strict=False)\n{tc.test_code}"
@@ -468,6 +487,11 @@ class TestGenerator:
                     return self._discard(test_file, "tests still fail after cleanup")
 
         test_file.verified = result.all_passed
+        file_metrics.kept = len(test_file.test_cases)
+        file_metrics.xfail = sum(
+            1 for tc in test_file.test_cases
+            if tc.diagnosis and tc.diagnosis.cause == DiagnosisCause.CODE_BUG
+        )
         self.test_registry.register_test(test_file)
         if test_file.verified:
             self.test_registry.mark_verified(test_file.path)
@@ -479,6 +503,10 @@ class TestGenerator:
         if path.exists():
             path.unlink()
         self.test_registry.delete_test(test_file.path)
+        file_metrics = self.metrics.file(test_file.component_id, test_file.path)
+        file_metrics.kept = 0
+        file_metrics.xfail = 0
+        file_metrics.removed_reason = reason
         logger.warning(f"Removed {test_file.path} for {test_file.component_id}: {reason}")
         return None
 

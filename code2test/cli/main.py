@@ -46,6 +46,7 @@ from code2test.cli.commands.verify import verify_command
 from code2test.cli.commands.intent import intent_command
 from code2test.cli.commands.report import report_command
 from code2test.cli.commands.init import init_command
+from code2test.cli.commands.benchmark import benchmark_command
 
 # Register command groups
 cli.add_command(config_group)
@@ -57,6 +58,7 @@ cli.add_command(verify_command)    # code2test verify
 cli.add_command(intent_command)    # code2test intent
 cli.add_command(report_command)    # code2test report
 cli.add_command(init_command)      # code2test init
+cli.add_command(benchmark_command)  # code2test benchmark
 
 
 def main():
