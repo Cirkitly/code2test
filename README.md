@@ -167,7 +167,7 @@ The benchmark also scores the diagnosis agent on failures whose cause is known. 
 
 ## Results
 
-Measured on two open-source libraries after removing each library's own tests, with two MiniMax models: `MiniMax-M3.1-Flash-Preview` (Flash) and `MiniMax-M3` (M3). Each configuration was run once.
+Measured on two open-source libraries after removing each library's own tests, with two MiniMax models: `MiniMax-M3.1-Flash-Preview` (Flash) and `MiniMax-M3` (M3). The table shows the first run of each configuration.
 
 | Measure | inflection, Flash | inflection, M3 | TinyDB, Flash | TinyDB, M3 | Target |
 | --- | --- | --- | --- | --- | --- |
@@ -185,6 +185,8 @@ The mutation scores show where the generated suites are weak:
 - In inflection, half of the sampled mutants fall in `_irregular`, which builds the rules for irregular words such as *person*/*people*. The Flash run wrote a single test for it that checks only how many rules are added, and caught 9 of its 40 mutants. Outside `_irregular`, the suites caught 38 of 40 (Flash) and 40 of 40 (M3).
 - In TinyDB, most surviving mutants change string literals, such as error messages and the names `Query` uses as hash keys, which tests rarely observe.
 
+A second run of each configuration gave similar results, and one of them kept a test as an expected failure that exposes a real defect in inflection: `singularize("campuses")` returns `"campuse"`.
+
 On these well-documented libraries, nearly every inferred intent came from the docstring. The paper ([`research/paper/main.pdf`](research/paper/main.pdf)) describes the setup, analyzes these results and compares Code2Test with related tools. The generated suites, intents and raw results are in [`research/data/`](research/data/).
 
 ## Limitations
@@ -192,7 +194,7 @@ On these well-documented libraries, nearly every inferred intent came from the d
 - **Python only.** Files in other languages are part of the dependency graph but get no tests; the tool says so when it skips them.
 - **Behavior is inferred, not specified.** Expected values come from the inferred intent and the source. Review generated tests before relying on them, as you would review a colleague's.
 - **Each run calls the model.** A run sends source code to the configured provider and costs API usage: one or more calls per component, plus repairs.
-- **Results come from two libraries and two models of one provider, one run each.** Larger codebases, code with external services, other models and run-to-run variance are not yet measured.
+- **Results come from two libraries and two models of one provider, two runs each.** Larger codebases, code with external services, other models and a proper estimate of run-to-run variance are not yet measured.
 
 ## Development
 

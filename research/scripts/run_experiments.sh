@@ -7,8 +7,9 @@
 #
 # For each subject (inflection 0.5.1, TinyDB 4.8.2) and model (MiniMax-M3.1-Flash-Preview,
 # MiniMax-M3), it downloads the sdist from PyPI, removes the library's own tests, and runs
-# `code2test test --auto`, `code2test verify` and `code2test benchmark`. It then collects
-# the results into research/data/ and research/paper/results.tex.
+# `code2test test --auto`, `code2test verify` and `code2test benchmark`. It does this twice:
+# the first runs are the paper's main results, the second runs show run-to-run variation.
+# It then collects the results into research/data/ and research/paper/results.tex.
 set -euo pipefail
 
 WORK="${1:-$(mktemp -d)}"
@@ -29,8 +30,8 @@ tar xzf inflection-0.5.1.tar.gz && rm -f inflection-0.5.1/test_inflection.py
 tar xzf tinydb-4.8.2.tar.gz && rm -rf tinydb-4.8.2/tests
 
 run() {
-  local subject=$1 source=$2 model=$3
-  local dir="$WORK/runs/$subject-$model"
+  local batch=$1 subject=$2 source=$3 model=$4
+  local dir="$WORK/$batch/$subject-$model"
   rm -rf "$dir" && mkdir -p "$dir/home"
   cp -r "$WORK/subjects/$source" "$dir/project"
   cd "$dir/project"
@@ -40,14 +41,16 @@ run() {
   echo $(( $(date +%s) - start )) > "$dir/seconds.txt"
   code2test verify tests/ > "$dir/verify.log" 2>&1 || true
   code2test benchmark --mutants 80 --diagnoses 15 . > "$dir/benchmark.log" 2>&1
-  echo "done: $subject-$model ($(cat "$dir/seconds.txt") s)"
+  echo "done: $batch/$subject-$model ($(cat "$dir/seconds.txt") s)"
 }
 
-for model in flash m3; do
-  run inflection inflection-0.5.1 "$model" &
-  run tinydb tinydb-4.8.2 "$model" &
+for batch in runs second-runs; do
+  for model in flash m3; do
+    run "$batch" inflection inflection-0.5.1 "$model" &
+    run "$batch" tinydb tinydb-4.8.2 "$model" &
+  done
+  wait
 done
-wait
 
-python "$RESEARCH/scripts/collect_results.py" "$WORK/runs"
+python "$RESEARCH/scripts/collect_results.py" "$WORK/runs" "$WORK/second-runs"
 echo "Results in $RESEARCH/data; rebuild the paper with: make -C $RESEARCH/paper"

@@ -1,0 +1,184 @@
+[
+  {
+    "component": "tinydb.database.TinyDB",
+    "intent": "The main class of TinyDB",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.middlewares.CachingMiddleware",
+    "intent": "Add some caching to TinyDB",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.middlewares.Middleware",
+    "intent": "The base class for all Middlewares",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.mypy_plugin.TinyDBPlugin",
+    "intent": "TinyDBPlugin is a mypy plugin that provides type-checking support for TinyDB's `with_typehint` class decorator, enabling mypy to correctly infer the types of classes dynamically created by the decorator.\n\n**Primary Purpose:**\nThe plugin teaches mypy's type checker that when a class is decorated with `@with_typehint` (defined in `tinydb.utils`), the resulting dynamically-created class should retain the same type identity as the original decorated class. This is a standard mypy plugin pattern used to support runtime class factories (analogous to mypy's built-in handling of `namedtuple`, `dataclass`, etc.).\n\n**Expected Inputs:**\n- `options` (constructor): Standard mypy `Options` object passed to all plugins, used for plugin configuration. The `named_placeholders` dict is initialized but appears reserved for future placeholder/type-tracking state.\n- `get_dynamic_class_hook(fullname)`: A string containing the fully-qualified name of a class being dynamically created by mypy. The hook activates only when `fullname == 'tinydb.utils.with_typehint'`.\n\n**Expected Outputs / Return Values:**\n- Returns a `DynamicClassDef` callback when the hook matches `tinydb.utils.with_typehint`. The callback:\n  1. Extracts the first decorator argument (the original class) as a `NameExpr`.\n  2. Resolves its fully-qualified name via `lookup_fully_qualified`.\n  3. Registers a symbol table node (`ctx.api.add_symbol_table_node`) under `ctx.name`, pointing to the resolved qualified type, effectively making the dynamic class alias the original.\n- Returns `None` for any other `fullname`, deferring to default mypy behavior.\n\n**Side Effects / State Changes:**\n- Mutates mypy's internal symbol table by adding a node that maps the dynamic class name to the original class's qualified type.\n- No persistent side effects on the plugin itself beyond the empty `named_placeholders` dict.\n\n**Error Conditions / Assumptions:**\nThe implementation relies on four invariants, each enforced via `assert` (which will raise `AssertionError` if violated):\n1. The decorator's first argument is a `NameExpr` (i.e., the class is referenced by name, not a complex expression).\n2. The `NameExpr` has a non-`None` `fullname` (i.e., the class is resolvable in the type system).\n3. `lookup_fully_qualified` successfully resolves the class's type to a non-`None` node.\n4. `ctx.call.args` contains at least one element.\n\n**Unclear Aspects:**\n- The `named_placeholders` instance attribute is initialized but never read or written within the visible code; its intended role (e.g., tracking placeholder-type substitutions across hook invocations) is not evident from this snippet.\n- Whether the plugin is expected to be activated automatically (via a `mypy.ini` `[mypy]` `plugins =` directive) or only conditionally.\n- The exact shape of `tinydb.utils.with_typehint` is not shown, so the contract that the decorator receives a single class argument is inferred from the hook's use of `ctx.call.args[0]`.",
+    "confidence": 0.88,
+    "static_confidence": 0.5,
+    "source": "model"
+  },
+  {
+    "component": "tinydb.mypy_plugin.plugin",
+    "intent": "Function 'plugin'",
+    "confidence": 0.7,
+    "static_confidence": 0.7,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.operations.add",
+    "intent": "Add ``n`` to a given field in the document",
+    "confidence": 0.635,
+    "static_confidence": 0.635,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.operations.decrement",
+    "intent": "Decrement a given field in the document by 1",
+    "confidence": 0.635,
+    "static_confidence": 0.635,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.operations.delete",
+    "intent": "Delete a given field from the document",
+    "confidence": 0.605,
+    "static_confidence": 0.605,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.operations.increment",
+    "intent": "Increment a given field in the document by 1",
+    "confidence": 0.635,
+    "static_confidence": 0.635,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.operations.set",
+    "intent": "The `set` function is a higher-order factory function that creates a document transformation closure for TinyDB. It returns an inner `transform` function that, when applied to a document (a dict-like object), sets the specified `field` key to the provided `val` value in-place. This follows a functional transformation pattern commonly used in TinyDB for building query/update operations.\n\n**Inputs:**\n- `field`: A hashable key (typically a string) representing the field name to set in the document\n- `val`: Any value (any Python object) to assign to the field\n\n**Output:**\n- Returns a `transform` callable that accepts a single document (dict-like object) and mutates it in-place by assigning `doc[field] = val`. The transform function returns `None` implicitly.\n\n**Side Effects:**\n- The returned transform function mutates the input document in-place (destructive operation on the passed document).\n\n**Error Conditions:**\n- Will raise `TypeError` if `field` is not hashable or cannot be used as a dict key\n- Will raise `TypeError` if the document is not a dict-like (subscriptable/assignable) object\n- No validation is performed on whether `field` already exists in the document\n- No error handling for unhashable `val` values (though this would only surface if the assignment itself is problematic)",
+    "confidence": 0.95,
+    "static_confidence": 0.59,
+    "source": "model"
+  },
+  {
+    "component": "tinydb.operations.subtract",
+    "intent": "Subtract ``n`` to a given field in the document",
+    "confidence": 0.635,
+    "static_confidence": 0.635,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.queries.Query",
+    "intent": "TinyDB Queries",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.queries.QueryInstance",
+    "intent": "A query instance",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.queries.QueryLike",
+    "intent": "A typing protocol that acts like a query",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.queries.is_sequence",
+    "intent": "Performs boolean check operation",
+    "confidence": 0.65,
+    "static_confidence": 0.65,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.queries.where",
+    "intent": "A shorthand for ``Query()[key]``",
+    "confidence": 0.76,
+    "static_confidence": 0.76,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.storages.JSONStorage",
+    "intent": "Store the data in a JSON file",
+    "confidence": 0.605,
+    "static_confidence": 0.605,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.storages.MemoryStorage",
+    "intent": "Store the data as JSON in memory",
+    "confidence": 0.605,
+    "static_confidence": 0.605,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.storages.Storage",
+    "intent": "The abstract base class for all Storages",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.storages.touch",
+    "intent": "Create a file if it doesn't exist yet",
+    "confidence": 0.99,
+    "static_confidence": 0.99,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.table.Document",
+    "intent": "A document stored in the database",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.table.Table",
+    "intent": "Represents a single TinyDB table",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.utils.FrozenDict",
+    "intent": "An immutable dictionary",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.utils.LRUCache",
+    "intent": "A least-recently used (LRU) cache with a fixed cache size",
+    "confidence": 0.8,
+    "static_confidence": 0.8,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.utils.freeze",
+    "intent": "Freeze an object by making it immutable and thus hashable",
+    "confidence": 0.65,
+    "static_confidence": 0.65,
+    "source": "static"
+  },
+  {
+    "component": "tinydb.utils.with_typehint",
+    "intent": "Add type hints from a specified class to a base class:\n\n>>> class Foo(with_typehint(Bar)):",
+    "confidence": 0.99,
+    "static_confidence": 0.99,
+    "source": "static"
+  }
+]

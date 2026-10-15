@@ -1,0 +1,387 @@
+{
+  "generation": {
+    "components": 13,
+    "components_with_tests": 13,
+    "acceptance_rate": 1.0,
+    "tests_generated": 170,
+    "first_run_passed": 168,
+    "first_run_pass_rate": 0.988,
+    "tests_kept": 170,
+    "tests_xfail": 1,
+    "tests_dropped": 0,
+    "components_reused": 0,
+    "skipped_low_confidence": 0,
+    "files_removed": 0,
+    "repair_rounds": 3,
+    "diagnoses": {
+      "CODE_BUG": 1
+    },
+    "llm_failures": 0
+  },
+  "mutation_score": 0.725,
+  "mutants_total": 80,
+  "mutants_killed": 58,
+  "own_tests_mutation_score": 0.65,
+  "mutants_killed_by_own_tests": 52,
+  "diagnosis_accuracy": 0.9666666666666667,
+  "diagnosis_by_expected_cause": {
+    "CODE_BUG": {
+      "cases": 15,
+      "correct": 14,
+      "unscored": 0
+    },
+    "TEST_WRONG": {
+      "cases": 15,
+      "correct": 15,
+      "unscored": 0
+    }
+  },
+  "diagnosis_error": null,
+  "restored_files": [],
+  "survivors": [
+    {
+      "file": "inflection/__init__.py",
+      "line": 100,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'[' -> '[['"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 102,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 108,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 108,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'(?i)({}){}$' -> '(?i)({}){}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 109,
+      "component": "inflection.__init__._irregular",
+      "mutation": "1 -> 2"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 109,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'\\\\1' -> '\\\\'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 112,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'(?i)({}){}$' -> '(?i)({}){}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 117,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'{}{}$' -> '{}{}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 126,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 127,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 127,
+      "component": "inflection.__init__._irregular",
+      "mutation": "1 -> 2"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 127,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'{}{}$' -> '{}{}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 128,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 130,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 131,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 131,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'{}{}$' -> '{}{}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 132,
+      "component": "inflection.__init__._irregular",
+      "mutation": "1 -> 2"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 132,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 134,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 135,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'{}{}$' -> '{}{}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 138,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 139,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'{}{}$' -> '{}{}'"
+    }
+  ],
+  "diagnosis_cases": [
+    {
+      "test": "test_underscore_transforms_input_to_snake_case",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `underscore` function correctly performs the regex substitutions (converting CamelCase to snake_case) and replaces hyphens with underscores, but the final line is `return None` instead of `return word.lower()`. The function should return the lowercased version of the modified word. The docstring",
+      "correct": true
+    },
+    {
+      "test": "test_pluralize_empty_string_returns_empty",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The falsy guard at the top of `pluralize` incorrectly returns `None` instead of `word`. This contradicts: (1) the function's `-> str` return type annotation, (2) the docstring's documented behavior of returning the original word unchanged (e.g., 'sheep' \u2192 'sheep'), and (3) the natural semantics wher",
+      "correct": true
+    },
+    {
+      "test": "test_parameterize_docstring_example",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly validates the function's own docstring example, which explicitly states that parameterize(\"Donald E. Knuth\") should return 'donald-e-knuth'. The code returns 'donaldeknuth' instead, meaning the transliterate function (or the overall logic) is stripping spaces and periods entirely ",
+      "correct": true
+    },
+    {
+      "test": "test_pluralize_empty_string_returns_empty",
+      "expected": "CODE_BUG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test asserts that `pluralize(\"\")` should return `\"\"`, based on the docstring's claim that there's a \"falsy guard at the top of pluralize\" that returns empty strings unchanged. However, this is a misreading of the code. The actual guard is `if not word and word.lower() in UNCOUNTABLES`, which req",
+      "correct": false
+    },
+    {
+      "test": "test_humanize_does_not_strip_id_when_not_at_end",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The stated intent clearly says to strip a \"trailing `_id`\" (i.e., only when at the end). The test correctly verifies this by checking that `\"user_id_123\"` (where `_id` is in the middle, not the end) should produce `\"User id 123\"`. However, the code uses `re.sub('_id', '', word)` which strips `_id` f",
+      "correct": true
+    },
+    {
+      "test": "test_ordinal_2_returns_nd",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The dictionary literal in the source code contains a typo AND a duplicate key: `{1: 'st', 3: 'nd', 3: 'rd'}`. This should be `{1: 'st', 2: 'nd', 3: 'rd'}`. As a result, the mapping for the digit `2` (which should be 'nd') is completely missing, so ordinal(2) falls through to the default 'th'. The te",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_different_first_letter_capital_preservation",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "In the `else` branch (when first letters differ), the first PLURALS rule uses `plural[1].upper()` instead of `plural[0].upper()` for the replacement. For `_irregular('ox', 'axen')`, this produces replacement 'Xxen' instead of the expected 'Axen'. The other 5 rules in the same branch all correctly us",
+      "correct": true
+    },
+    {
+      "test": "test_underscore_transforms_input_to_snake_case",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The source code's second re.sub call uses a malformed replacement string `'\\\\1_\\\\'`. The trailing `'\\\\'` is an incomplete escape sequence (no character follows the backslash), causing re.PatternError: bad escape (end of pattern). The intent was clearly to insert an underscore between capture group 1",
+      "correct": true
+    },
+    {
+      "test": "test_ordinal_negative_11_returns_th",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The docstring of the `ordinal` function explicitly states that `ordinal(-11)` should return `'th'` (and `ordinal(-1021)` should return `'st'`). However, the implementation incorrectly returns `None` for numbers where `number % 100` is in `(11, 12, 13)`. Since `abs(-11) % 100 == 11`, the function ret",
+      "correct": true
+    },
+    {
+      "test": "test_humanize_replaces_underscores_with_spaces",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The code itself contains a malformed regex pattern on the line `word = re.sub('(?i)([a-z\\\\d]*', lambda m: m.group(1).lower(), word)`. The pattern `'(?i)([a-z\\\\d]*'` has an unclosed parenthesis \u2014 the opening `(` after `(?i)` is never closed. This causes `re.PatternError: missing ), unterminated subpa",
+      "correct": true
+    },
+    {
+      "test": "test_pluralize_uncountable_lowercase_unchanged",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The condition in the `pluralize` function is inverted. The code currently applies plural rules when the word IS an uncountable noun (`word.lower() not in UNCOUNTABLES` is False when word is in UNCOUNTABLES), which is the opposite of the intended behavior. For \"sheep\" (which is in UNCOUNTABLES), the ",
+      "correct": true
+    },
+    {
+      "test": "test_camelize_snake_to_lowercamel_with_false",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `camelize` function's else branch uses `string[1].lower()` instead of `string[0].lower()`. This means it picks the SECOND character of the input string ('e' in \"device_type\") instead of the first ('d'). The result concatenates this lowercase second character with the camelized string minus its f",
+      "correct": true
+    },
+    {
+      "test": "test_transliterate_docstring_example_alamolo",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly implements the stated intent and matches the documented docstring example exactly: `transliterate('\u00e4l\u00e4m\u00f6l\u00f6')` should return `'alamolo'`. The intent description (\"Replace non-ASCII characters with an ASCII approximation\") is accurate. However, the component code has a bug \u2014 it comp",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_different_first_letter_singularize",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "In the else branch (different-first-letter path), the second SINGULARS rule uses `singular[1].lower() + singular[1:]` instead of `singular[0].lower() + singular[1:]`. For _irregular('ox', 'axen'), this produces the rule `a[xX][eE][nN]$ -> 'xx'` instead of the correct `-> 'ox'`. Since this rule is in",
+      "correct": true
+    },
+    {
+      "test": "test_camelize_snake_to_uppercamel_primary",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The function signature has `uppercase_first_letter: bool=False` as default, but the docstring's own example (`camelize(\"device_type\")` \u2192 `'DeviceType'`) and parameter description (\"Defaults to `True`\") both indicate the default should be `True`. Because of this incorrect default, calling `camelize(\"",
+      "correct": true
+    },
+    {
+      "test": "test_humanize_strips_trailing_id",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The code correctly implements the stated intent. For `humanize('author_id')`:\n1. Strip trailing `_id` \u2192 `'author'`\n2. Turn underscores into spaces \u2192 `'author'`\n3. Capitalize first word \u2192 `'Author'`\n\nThe code returns `'Author'`, which matches the intent perfectly (and matches the docstring example). ",
+      "correct": true
+    },
+    {
+      "test": "test_parameterize_docstring_example",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test assertion has a typo: it checks for 'donald-e-knut' instead of 'donald-e-knuth'. Three independent sources confirm the correct expected output is 'donald-e-knuth' (with 'h'): (1) the function's own docstring example, (2) the test's own docstring, and (3) the function's actual output. Only t",
+      "correct": true
+    },
+    {
+      "test": "test_humanize_does_not_strip_id_when_case_differs",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's expected value 'Author i' is nonsensical and doesn't correspond to any code path. The stated intent says to strip a trailing \"_id\" (lowercase), and the test name says the _id should NOT be stripped when case differs. The correct expected value should be 'Author id' (the full string preser",
+      "correct": true
+    },
+    {
+      "test": "test_titleize_hyphen_separated_words_become_separate_words",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test asserts `result == 'Hello Worl'` but the actual (and correct) output is `'Hello World'`. This is clearly a typo in the test \u2014 the letter 'd' is missing from the expected string. The code correctly produces `'Hello World'` for input `'hello-world'`, which is consistent with the function's do",
+      "correct": true
+    },
+    {
+      "test": "test_titleize_uppercase_input_is_normalized",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test contains a typo in its expected value: 'Hello Worl' is missing the final 'd'. The actual code output 'Hello World' is correct \u2014 it matches the documented intent (\"Capitalize all the words\") and is consistent with the function's docstring examples (e.g., 'Man From The Boondocks'). All other ",
+      "correct": true
+    },
+    {
+      "test": "test_singularize_shoes_to_shoe",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test assertion has a typo. It asserts singularize('shoes') == 'sho', but the correct singular of \"shoes\" is \"shoe\". The code correctly returns 'shoe', which matches the test's own docstring (\"'shoes' -> 'shoe'\"), the stated intent of the component (singularize a word), and standard English gramm",
+      "correct": true
+    },
+    {
+      "test": "test_parameterize_transliterates_unicode_characters_to_ascii",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's own docstring explicitly states that '\u00e9' (U+00E9) is transliterated to the bare ASCII 'e', which would produce 'cafe' from 'Caf\u00e9'. Tracing the code confirms this: transliterate('Caf\u00e9') \u2192 'Cafe' \u2192 already all valid chars \u2192 lowercase \u2192 'cafe'. The actual output 'cafe' correctly reflects the",
+      "correct": true
+    },
+    {
+      "test": "test_transliterate_resume_strips_both_accents",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's own docstring correctly states the expected result: \"'r\u00e9sum\u00e9' (with two acute accents) must become 'resume'.\" However, the assertion on the next line contains a typo, expecting 'resum' instead of 'resume' (missing the final 'e'). The code correctly produces 'resume' by stripping both acut",
+      "correct": true
+    },
+    {
+      "test": "test_singularize_documented_camel_octopi_to_camel_octopus",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's expected value is a typo. The docstring of the function explicitly states `>>> singularize(\"CamelOctopi\") 'CamelOctopus'`, and the code correctly returns `'CamelOctopus'`. The test author accidentally dropped the 's' and wrote `'CamelOctopu'` instead of `'CamelOctopus'`. The code's behavi",
+      "correct": true
+    },
+    {
+      "test": "test_singularize_indices_to_index",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test contains a typo in the assertion: it checks for 'inde' instead of 'index'. The docstring explicitly says the rule converts 'indices' to 'index', and the function correctly returns 'index'. The code is working as intended per the stated intent. This is a clear typo in the test assertion wher",
+      "correct": true
+    },
+    {
+      "test": "test_camelize_preserves_non_ascii_letters",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The code's actual output `'HelloW\u00f6rld'` is correct and matches the stated intent perfectly: the non-ASCII `\u00f6` is preserved in the middle of the word, and no transliteration occurs. The test's expected value `'HelloW\u00f6rl'` is missing the final `d` \u2014 it's a typo. Let me trace through: input `hello_w\u00f6rl",
+      "correct": true
+    },
+    {
+      "test": "test_humanize_already_humanized_string",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's expected value 'Employee salar' is a typo \u2014 it's missing the trailing 'y' from 'salary'. The function correctly returns 'Employee salary' for the input 'Employee salary' because the input is already in humanized form (first word capitalized, no underscores, no trailing _id). The stated in",
+      "correct": true
+    },
+    {
+      "test": "test_ordinal_returns_th_for_other_endings",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The code correctly returns 'th' as the ordinal suffix for numbers whose last digit is 0, 4, 5, 6, 7, 8, or 9 (e.g., 4th, 5th, 10th, 100th). The intent clearly states the function returns the suffix to make numbers like \"1st\", \"2nd\", \"3rd\", \"4th\", meaning for \"4th\" the suffix is \"th\", not \"t\". The te",
+      "correct": true
+    },
+    {
+      "test": "test_parameterize_with_empty_separator_removes_interior_special_characters",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test asserts `parameterize('a!!!b', '') == 'a'`, but the correct behavior is to return `'ab'`. The function removes interior special characters (!!!), leaving the surrounding alphanumeric characters intact. The test's own docstring correctly states \"An empty separator causes interior special cha",
+      "correct": true
+    },
+    {
+      "test": "test_singularize_documented_sheep_unchanged",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The function's docstring explicitly documents that singularize(\"sheep\") returns \"sheep\" (unchanged, because sheep is uncountable). The test name itself states \"documented_sheep_unchanged\", confirming the intent. The code correctly returns 'sheep'. However, the test assertion expects 'shee' (with the",
+      "correct": true
+    }
+  ]
+}

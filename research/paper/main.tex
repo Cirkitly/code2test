@@ -63,6 +63,7 @@ A built-in benchmark reports mutation score and the accuracy of the diagnosis on
 On two open-source libraries (426 and 2{,}170 lines) with two MiniMax models, \toolname{} produced passing tests for \MinAcceptance--\MaxAcceptance{} of components.
 Before any repair, \MinFirstRate--\MaxFirstRate{} of generated tests passed, and the suites killed \MinMutationScore--\MaxMutationScore{} of sampled mutants.
 The diagnosis was correct on \MinDiagAccuracy--\MaxDiagAccuracy{} of failures of known cause.
+Second runs gave similar results; one kept a test as an expected failure that exposes a real defect in inflection, which singularizes ``campuses'' to ``campuse''.
 Surviving mutants concentrated in one function that a run tested only structurally and in string literals that tests do not observe, and nearly all intents came from docstrings.
 Because both libraries are mature, the study measures validity and fault detection, not whether intent-first generation avoids locking in bugs; we describe the experiment that would.
 We also report eight failure modes that appeared only with a real model.
@@ -220,11 +221,12 @@ Tests that still fail are classified against the stored intent:
 A suspected code bug is kept, decorated as in Listing~\ref{lst:xfail}.
 Everything else is dropped, and a file that cannot be collected is never kept, because \code{xfail} cannot cover an error at import time.
 
-\begin{lstlisting}[caption={A test kept because the diagnosis suspects a code bug (illustrative).},label={lst:xfail},float=t]
-@pytest.mark.xfail(reason="code2test: possible bug - ordinal() returns "
-                          "'rd' for 13, but 11-13 take 'th'", strict=False)
-def test_ordinal_teens_take_th():
-    assert ordinal(13) == "th"
+\begin{lstlisting}[caption={A test \toolname{} kept as an expected failure, from the second run of inflection with M3 (Section~\ref{sec:second}). The reason is abbreviated.},label={lst:xfail},float=t]
+@pytest.mark.xfail(reason='code2test: possible bug - The stated intent '
+    'is "Return the singular form of a word, the reverse of pluralize." '
+    'The singular of "campuses" is unambiguously "campus" ...', strict=False)
+def test_singularize_campuses_to_campus():
+    assert singularize("campuses") == "campus"
 \end{lstlisting}
 
 \subsection{Whole-suite check}
@@ -289,12 +291,14 @@ MiniMax \code{MiniMax-M3.1-Flash-Preview} (``Flash'') and \code{MiniMax-M3} (``M
 
 \paragraph{Procedure.}
 For each subject and model, one run of \code{code2test test --auto}, then \code{code2test verify}, then \code{code2test benchmark} with 80 sampled mutants and 15 diagnosis cases per expected cause.
+These first runs are the main results.
+A second run of each configuration, made later, shows how much the results vary (Section~\ref{sec:second}).
 The MVP targets come from the project proposal: at least 70\% of components with tests, at least 80\% of tests passing before repair, and at least 75\% diagnosis accuracy.
 
 \begin{table}[t]
 \centering
 \small
-\caption{Results per subject and model (one run each). Test cases count parametrized cases separately. Mutants are sampled from the components that have tests, so the two TinyDB runs use different samples.}
+\caption{Results per subject and model (first runs). Test cases count parametrized cases separately. Mutants are sampled from the components that have tests, so the two TinyDB runs use different samples.}
 \label{tab:results}
 \begin{tabular}{@{}l rr rr@{}}
 \toprule
@@ -335,9 +339,9 @@ The stronger model did not dominate.
 M3 passed more tests before repair than Flash on TinyDB (\TinyDBMThreeFirstRate{} vs.\ \TinyDBFlashFirstRate) but fewer on inflection (\InflectionMThreeFirstRate{} vs.\ \InflectionFlashFirstRate).
 It also wrote fewer tests in every case.
 
-No test was kept as an expected failure in any run, and every diagnosis made during generation was a wrong test.
+No test was kept as an expected failure in any first run, and every diagnosis made during generation was a wrong test.
 On two mature libraries this is the desired outcome: the expected-failure path never accused correct code.
-It also means the expected-failure path was not exercised by real bugs in this study.
+The one test kept as an expected failure across all runs came from a second run and exposes a real defect (Section~\ref{sec:second}).
 
 \paragraph{Where the intents came from.}
 Both libraries document nearly every component.
@@ -373,11 +377,53 @@ The intent (``a convenience function to add appropriate rules to plurals and sin
 This is the misguidance effect~\cite{zhao2026misguidance} in miniature: where the intent is silent, the code decides.
 The cases are synthetic, and the threats below explain why they are likely easier than real failures.
 
+\subsection{Second runs and a real defect}\label{sec:second}
+We ran each configuration a second time, later and with the same pipeline.\footnote{The second runs used a later version of \toolname{} that removed code inherited from CodeWiki which the pipeline does not use. Under that version, the first runs' suites reproduced their verification and mutation results exactly.}
+Table~\ref{tab:second} compares the two runs.
+Every second run met the three targets again.
+The share of tests passing before repair varied most: on inflection it fell from \InflectionFlashFirstRate{} to \InflectionFlashSecondFirstRate{} with Flash and rose from \InflectionMThreeFirstRate{} to \InflectionMThreeSecondFirstRate{} with M3.
+The largest change in mutation score was on TinyDB with Flash, from \TinyDBFlashMutationScore{} to \TinyDBFlashSecondMutationScore.
+The second runs' two diagnosis errors were of the same kind as the first runs' one: failures caused by a mutant, judged to be wrong tests because the agent sided with the mutated code.
+Generation times are not compared, because the second runs shared the machine with other jobs.
+
+\begin{table}[t]
+\centering
+\small
+\caption{First and second run of each configuration (first / second).}
+\label{tab:second}
+\begin{tabular}{@{}l cccc@{}}
+\toprule
+& \multicolumn{2}{c}{inflection} & \multicolumn{2}{c}{TinyDB} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Measure & Flash & M3 & Flash & M3 \\
+\midrule
+Acceptance rate & \InflectionFlashAcceptance{} / \InflectionFlashSecondAcceptance & \InflectionMThreeAcceptance{} / \InflectionMThreeSecondAcceptance & \TinyDBFlashAcceptance{} / \TinyDBFlashSecondAcceptance & \TinyDBMThreeAcceptance{} / \TinyDBMThreeSecondAcceptance \\
+Passing before repair & \InflectionFlashFirstRate{} / \InflectionFlashSecondFirstRate & \InflectionMThreeFirstRate{} / \InflectionMThreeSecondFirstRate & \TinyDBFlashFirstRate{} / \TinyDBFlashSecondFirstRate & \TinyDBMThreeFirstRate{} / \TinyDBMThreeSecondFirstRate \\
+Tests generated & \InflectionFlashGenerated{} / \InflectionFlashSecondGenerated & \InflectionMThreeGenerated{} / \InflectionMThreeSecondGenerated & \TinyDBFlashGenerated{} / \TinyDBFlashSecondGenerated & \TinyDBMThreeGenerated{} / \TinyDBMThreeSecondGenerated \\
+Tests kept as xfail & \InflectionFlashXfail{} / \InflectionFlashSecondXfail & \InflectionMThreeXfail{} / \InflectionMThreeSecondXfail & \TinyDBFlashXfail{} / \TinyDBFlashSecondXfail & \TinyDBMThreeXfail{} / \TinyDBMThreeSecondXfail \\
+Mutation score & \InflectionFlashMutationScore{} / \InflectionFlashSecondMutationScore & \InflectionMThreeMutationScore{} / \InflectionMThreeSecondMutationScore & \TinyDBFlashMutationScore{} / \TinyDBFlashSecondMutationScore & \TinyDBMThreeMutationScore{} / \TinyDBMThreeSecondMutationScore \\
+Diagnosis correct & \InflectionFlashDiagAccuracy{} / \InflectionFlashSecondDiagAccuracy & \InflectionMThreeDiagAccuracy{} / \InflectionMThreeSecondDiagAccuracy & \TinyDBFlashDiagAccuracy{} / \TinyDBFlashSecondDiagAccuracy & \TinyDBMThreeDiagAccuracy{} / \TinyDBMThreeSecondDiagAccuracy \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{A real defect in inflection.}
+In the second run of inflection with M3, one test still failed after repair, was diagnosed as a code bug, and was kept as an expected failure (Listing~\ref{lst:xfail}).
+The test is right.
+inflection 0.5.1 singularizes \emph{campuses} to \emph{campuse} and \emph{campus} to \emph{campu}, and pluralizes \emph{campus} to \emph{campus}.
+Its rule list has entries for \emph{bus}, \emph{alias} and \emph{status}; other words ending in \emph{-us} fall through to catch-all rules that drop or keep a final \emph{s}, so \emph{viruses}, \emph{bonuses} and \emph{censuses} fail the same way.
+Neither inflection's own test suite nor any other generated suite in our runs tests these words.
+The model's explanation names a rule for \emph{campus} that the library does not have, but its verdict is correct.
+A generator that keeps only passing tests would have dropped this test or rewritten it to expect \emph{campuse}.
+
+This is one case in eight runs, on a word the model happened to choose.
+It shows the expected-failure path working on real code; it does not show that intent-first generation avoids locking in bugs in general (Section~\ref{sec:discussion}).
+
 \subsection{RQ4: What a real model broke}\label{sec:failures}
 During development, the tool's own tests used scripted models and passed throughout.
 The first real-model runs exposed the eight failure modes in Table~\ref{tab:failures}.
 Each was fixed with a regression test before the results above were measured.
-On inflection the written suite went from failing to collect (first real run), to 676 of 680 test cases passing (second run), to passing in full from the third run on.
+On inflection the written suite went from failing to collect in the first real-model run during development, to 676 of 680 test cases passing in the next, to passing in full from the third on.
 
 \begin{table}[t]
 \centering
@@ -440,14 +486,14 @@ Real-model failure modes; two-model comparison & -- & Empirical \\
 
 \subsection{The open question}
 The design is motivated by the misguidance effect~\cite{mathews2024design,zhao2026misguidance}, but this paper does not yet show that \toolname{} avoids it.
-Both subjects are mature and, as far as we know, correct.
+Both subjects are mature, and the study was not designed around known bugs; the one defect it found (Section~\ref{sec:second}) came up by chance.
 The decisive experiment uses buggy programs with known fixes, such as Refactory as in Mathews and Nagappan, and BugsInPy, and compares \toolname{} with CoverUp, Cover-Agent and TestAgent under the same model.
 For each tool it would count tests that pass on the buggy version and fail on the fix (bugs locked in) against tests that flag the bug, with and without intent-first generation.
 That study is the natural next step.
 
 \subsection{Threats to validity}\label{sec:threats}
 \begin{itemize}
-  \item \textbf{Scale and variance.} Two small libraries and one run per configuration, so the results carry no estimate of run-to-run variance, and the variance we saw during development is large.
+  \item \textbf{Scale and variance.} Two small libraries and two runs per configuration, which shows that results vary (Table~\ref{tab:second}) but does not estimate by how much. The variance we saw during development was larger.
   In a development run with Flash and an earlier version of the tool, the inflection suite had 33 tests for \code{\_irregular}, several checking irregular words through \code{pluralize} and \code{singularize}, and killed all 80 mutants of its own sample even when only each component's own tests ran.
   Across development runs, TinyDB's mutation score with Flash ranged from 64\% to 79\% under that per-component scoring.
   \item \textbf{Mutants.} The 80 mutants are sampled uniformly from all mutation sites, so large functions dominate the sample: half of inflection's sample falls in \code{\_irregular}. There is no filter for equivalent mutants.
@@ -468,15 +514,16 @@ Each run sends source code to the model provider and costs one or more model cal
 
 \toolname{} infers and stores an explicit intent for each component of a legacy Python codebase.
 It then generates, executes, repairs and diagnoses tests against that intent, and keeps suspected bugs visible as expected failures rather than filtering them out.
-On two libraries and two models it produced passing tests for nearly every component, and at least \MinFirstRate{} of generated tests passed before any repair.
+On two libraries and two models it produced passing tests for nearly every component, and in the first runs at least \MinFirstRate{} of generated tests passed before any repair.
 The suites killed \MinMutationScore--\MaxMutationScore{} of sampled mutants; most survivors sat in behavior a run had tested only structurally, or changed strings that tests do not observe.
-The diagnosis was correct on all but one of the failures of known cause.
+The diagnosis was correct on all but one of the first runs' failures of known cause.
+In a second run, \toolname{} kept a test as an expected failure that exposes a real defect in inflection, where a filter for passing tests would have discarded it.
 Its techniques have precedents; its value lies in the combination, the built-in self-evaluation, and the failure modes we document.
 Whether intent-first generation avoids locking bugs into generated suites is the question we plan to answer next.
 
 \section*{Data Availability}
 The tool, the experiment scripts and all raw results are available at \url{https://github.com/Cirkitly/code2test}, under \code{research/}.
-For each run, the results include the generated test suite, the inferred intents, the run metrics, the benchmark output with every surviving mutant and diagnosis case, and the verification log.
+For each run, first and second, the results include the generated test suite, the inferred intents, the run metrics, the benchmark output with every surviving mutant and diagnosis case, and the verification log.
 \code{research/scripts/run\_experiments.sh} reproduces the runs, given a MiniMax API key.
 
 \bibliographystyle{plainnat}

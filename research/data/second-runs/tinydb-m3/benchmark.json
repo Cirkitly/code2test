@@ -1,0 +1,369 @@
+{
+  "generation": {
+    "components": 26,
+    "components_with_tests": 25,
+    "acceptance_rate": 0.962,
+    "tests_generated": 312,
+    "first_run_passed": 296,
+    "first_run_pass_rate": 0.949,
+    "tests_kept": 305,
+    "tests_xfail": 0,
+    "tests_dropped": 7,
+    "components_reused": 0,
+    "skipped_low_confidence": 0,
+    "files_removed": 1,
+    "repair_rounds": 8,
+    "diagnoses": {
+      "TEST_WRONG": 7
+    },
+    "llm_failures": 0
+  },
+  "mutation_score": 0.7625,
+  "mutants_total": 80,
+  "mutants_killed": 61,
+  "own_tests_mutation_score": 0.7625,
+  "mutants_killed_by_own_tests": 61,
+  "diagnosis_accuracy": 1.0,
+  "diagnosis_by_expected_cause": {
+    "CODE_BUG": {
+      "cases": 15,
+      "correct": 15,
+      "unscored": 0
+    },
+    "TEST_WRONG": {
+      "cases": 15,
+      "correct": 15,
+      "unscored": 0
+    }
+  },
+  "diagnosis_error": null,
+  "restored_files": [],
+  "survivors": [
+    {
+      "file": "tinydb/mypy_plugin.py",
+      "line": 28,
+      "component": "tinydb.mypy_plugin.TinyDBPlugin",
+      "mutation": "IsNot -> Is"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 253,
+      "component": "tinydb.queries.Query",
+      "mutation": "'==' -> '='"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 266,
+      "component": "tinydb.queries.Query",
+      "mutation": "'!=' -> '!'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 279,
+      "component": "tinydb.queries.Query",
+      "mutation": "'<' -> '<<'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 305,
+      "component": "tinydb.queries.Query",
+      "mutation": "'>' -> '>>'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 329,
+      "component": "tinydb.queries.Query",
+      "mutation": "'exists' -> 'exist'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 484,
+      "component": "tinydb.queries.Query",
+      "mutation": "'fragment' -> 'fragmen'"
+    },
+    {
+      "file": "tinydb/storages.py",
+      "line": 57,
+      "component": "tinydb.storages.Storage",
+      "mutation": "'To be overridden!' -> 'To be overridden'"
+    },
+    {
+      "file": "tinydb/storages.py",
+      "line": 104,
+      "component": "tinydb.storages.JSONStorage",
+      "mutation": "'rb+' -> 'rb'"
+    },
+    {
+      "file": "tinydb/storages.py",
+      "line": 104,
+      "component": "tinydb.storages.JSONStorage",
+      "mutation": "'r' -> 'R'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 125,
+      "component": "tinydb.table.Table",
+      "mutation": "', ' -> ','"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 168,
+      "component": "tinydb.table.Table",
+      "mutation": "'Document with ID ' -> 'Document with ID'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 201,
+      "component": "tinydb.table.Table",
+      "mutation": "' already exists' -> ' already exist'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 528,
+      "component": "tinydb.table.Table",
+      "mutation": "'doc_id' -> 'doc_i'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 534,
+      "component": "tinydb.table.Table",
+      "mutation": "Is -> IsNot"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 535,
+      "component": "tinydb.table.Table",
+      "mutation": "\"If you don't specify a search query, you must specify a doc_id. Hint: use a table.Document object.\" -> \"If you don't specify a search query, you must specify a doc_id. Hint: use a table.Document object\""
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 566,
+      "component": "tinydb.table.Table",
+      "mutation": "IsNot -> Is"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 613,
+      "component": "tinydb.table.Table",
+      "mutation": "return value -> None"
+    },
+    {
+      "file": "tinydb/utils.py",
+      "line": 33,
+      "component": "tinydb.utils.with_typehint",
+      "mutation": "return value -> None"
+    }
+  ],
+  "diagnosis_cases": [
+    {
+      "test": "test_set_and_get_item_via_dict_syntax",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `set` method in LRUCache has a logic error in its eviction check. The condition is:\n\n```python\nif self.capacity is not None or self.length > self.capacity:\n    self.cache.popitem(last=False)\n```\n\nThe `or` operator causes the cache to ALWAYS evict the oldest item whenever a capacity is specified ",
+      "correct": true
+    },
+    {
+      "test": "test_storage_property_returns_storage_instance",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `storage` property in the Table class incorrectly returns `None` instead of `self._storage`. Looking at the constructor, the storage instance is properly stored in `self._storage`, and other parts of the code (like `__repr__`) correctly reference `self._storage`. However, the `storage` property ",
+      "correct": true
+    },
+    {
+      "test": "test_map_transforms_value_in_path",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `map()` method builds a new query correctly (sets `_path` and `_hash`), but its final line returns `None` instead of `query`. This causes `Query().num.map(...) == 4` to evaluate as `None == 4`, producing the Python bool `False`. When the test then tries to call `q({'num': 2})`, Python raises `Ty",
+      "correct": true
+    },
+    {
+      "test": "test_lru_property_orders_insertion_from_lru_to_mru",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `lru` property is stubbed to return `None`, but given its name and the test's reasonable expectation, it should return the list of keys in LRU-to-MRU order. With no accesses, insertion order equals LRU-to-MRU order, which matches what the test expects. The internal `OrderedDict` already maintain",
+      "correct": true
+    },
+    {
+      "test": "test_eq_operator_matches_equal_value",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `__lt__` method in the Query class contains an inverted comparison. It implements `lambda value: value >= rhs` (greater than or equal), but the `<` operator should test `lambda value: value < rhs` (less than). This is clearly a typo/copy-paste bug. When `Query().age < 30` is evaluated against `{",
+      "correct": true
+    },
+    {
+      "test": "test_frozendict_is_hashable",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The code's `__hash__` method returns `None`, which is the literal definition of \"not hashable\" in Python. This directly contradicts the class's own docstring which states it \"implements the `__hash__` method\" and the stated intent of being \"an immutable dictionary\" (the entire purpose of an immutabl",
+      "correct": true
+    },
+    {
+      "test": "test_call_invokes_test_function_with_value",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `__or__` method has a logic bug: it uses `if self.is_cacheable() or other.is_cacheable()` instead of `and`. This was probably a typo/thinko by the developer, since the analogous `__and__` method correctly uses `and`. The consequence is that when exactly one operand is uncacheable (hashval=None),",
+      "correct": true
+    },
+    {
+      "test": "test_any_with_query_instance",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `any()` method has an inverted condition in its list-handling branch. It checks `e not in cond` when it should check `e in cond`. This is consistent with the docstring examples, the test expectations, and the parallel implementation in the `all()` method (which correctly uses `e in value`). The ",
+      "correct": true
+    },
+    {
+      "test": "test_all_with_query_instance",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "In the `all()` method's callable branch, the implementation uses `is_sequence(value) or all(...)`. This is a bug \u2014 the `or` should be `and`. When `value` is a sequence, it immediately returns `True` without checking if all elements satisfy the condition. This is inconsistent with the parallel `any()",
+      "correct": true
+    },
+    {
+      "test": "test_repr_includes_name_total_and_storage",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `__repr__` method has a clear bug in this line: `'total={'.format(len(self))`. The string `'total={'` contains an unmatched `{` brace, which Python's `.format()` method interprets as the start of a replacement field. Without a matching `}`, it raises `ValueError: Single '{' encountered in format",
+      "correct": true
+    },
+    {
+      "test": "test_write_and_read_roundtrip",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `read()` method is buggy: it seeks to the end to check the file size, then seeks back to the beginning, but never actually loads/parses the JSON content. It unconditionally returns `None` in both branches (when file is empty and when it has data). The method should use `json.load(self._handle, *",
+      "correct": true
+    },
+    {
+      "test": "test_insert_multiple_returns_list_of_ids",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `insert_multiple` method's docstring clearly states \":returns: a list containing the inserted documents' IDs\". The method correctly builds the `doc_ids` list by appending each new document's ID during the updater function execution. However, at the end of the method, it returns `None` instead of",
+      "correct": true
+    },
+    {
+      "test": "test_query_creation_has_empty_path",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `__getattr__` method in the Query class contains a clear bug: it creates a new query instance of the correct type, sets the `_path` and `_hash` correctly, but then returns `None` instead of `return query`. This causes `MyQuery().name` to return `None` instead of a `MyQuery` instance with `_path ",
+      "correct": true
+    },
+    {
+      "test": "test_first_read_populates_cache_and_returns_storage_data",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `read()` method has an inverted condition. It reads from storage only when the cache is **already populated** (`if self.cache is not None`), which is the exact opposite of the intended caching behavior. On the first call, `self.cache` is `None`, so the condition is false, and the method returns ",
+      "correct": true
+    },
+    {
+      "test": "test_query_creation_has_empty_path",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `Query.__hash__` method returns `None` instead of an integer, which violates Python's requirement that `__hash__` must return an integer. The test correctly asserts that Query instances should be hashable (which is consistent with the intent \"TinyDB Queries\" and the code's own caching infrastruc",
+      "correct": true
+    },
+    {
+      "test": "test_write_increments_modified_count_by_one",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's first assertion `assert middleware._cache_modified_count == 1` incorrectly assumes the counter starts at 1 after fixture setup. However, the code's `__init__` explicitly initializes `self._cache_modified_count = 0`, which matches the failure (actual=0, expected=1). All subsequent assertio",
+      "correct": true
+    },
+    {
+      "test": "test_capacity_zero_evicts_immediately",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test has an internal contradiction. Its docstring and first assertion ('a' not in cache) correctly state that capacity=0 means no item can survive insertion. However, the second assertion (cache.length == 1) directly contradicts this \u2014 if the item was evicted, the length must be 0, not 1. The co",
+      "correct": true
+    },
+    {
+      "test": "test_writes_spanning_multiple_threshold_cycles_trigger_repeated_flushes",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The code correctly produces exactly 2 auto-flushes for 2*WRITE_CACHE_SIZE writes (one per cycle), and _cache_modified_count correctly resets to 0 after each flush. The test's stated intent (\"multiple cycles produce multiple flushes and reset the counter\") is fully satisfied with write_count=2 and _c",
+      "correct": true
+    },
+    {
+      "test": "test_with_typehint_works_with_dataclass_like_class",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test contains a clear typo in the first assertion. It checks `assert Foo.marker == 'foo-marke'` (missing the trailing 'r'), while the second assertion correctly uses `'foo-marker'`, and the class itself defines `marker = 'foo-marker'`. The code under test works perfectly \u2014 `Foo.marker` correctly",
+      "correct": true
+    },
+    {
+      "test": "test_flush_writes_pending_cache_through_to_storage",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test incorrectly expects `write_count == 2` after one `write()` call and one `flush()` call. Tracing through the code: `write()` only updates the cache (no storage write because `_cache_modified_count < WRITE_CACHE_SIZE`), and `flush()` writes to storage once. The actual `write_count` is correct",
+      "correct": true
+    },
+    {
+      "test": "test_unlimited_capacity_never_evicts",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test loops over `range(100)` which inserts exactly 100 items (keys 'key0' through 'key99'). However, it asserts `cache.length == 101`, which is an off-by-one error. The code correctly retains all 100 items because `capacity=None` means nothing is evicted (the `self.capacity is not None` guard is",
+      "correct": true
+    },
+    {
+      "test": "test_flush_with_no_pending_writes_is_a_noop",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's docstring clearly states the intent: \"flush() should not call storage.write() when the pending-write counter is zero.\" When called twice with no pending writes, no writes should occur, so write_count should remain 0. The code correctly implements this noop behavior (the `if self._cache_mo",
+      "correct": true
+    },
+    {
+      "test": "test_document_get_item_returns_value",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test asserts `doc['key'] == 'valu'` but the correct value stored in the dictionary is `'value'`. The `Document` class is a proper subclass of `dict`, so `doc['key']` correctly returns the stored value `'value'`. The test docstring confirms the intent: \"Document supports dict-style item access vi",
+      "correct": true
+    },
+    {
+      "test": "test_create_cache_without_capacity",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test asserts `cache.length == 1` for a freshly created, empty LRUCache, but the code correctly returns `0` for `cache.length` since `self.cache` is an empty OrderedDict. The assertion `cache.capacity is None` passes correctly, but the length assertion is an off-by-one error in the test. A newly ",
+      "correct": true
+    },
+    {
+      "test": "test_document_provides_access_to_content_and_id",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test contains a clear typo: it asserts `doc['name'] == 'Alic'` but the actual value stored (and correct expectation) is `'Alice'` (missing the trailing 'e'). The code correctly stores `'Alice'` in the dict and `5` as `doc_id`, and the intent accurately describes the Document class as providing d",
+      "correct": true
+    },
+    {
+      "test": "test_increment_float_value",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The code correctly implements the intent \"Increment a given field in the document by 1\": starting with 2.5 and adding 1 yields 3.5, which is exactly what the code produces. The intent description accurately describes the code's behavior. The test, however, asserts that the result equals 5.0, which i",
+      "correct": true
+    },
+    {
+      "test": "test_name_property_returns_table_name",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test creates a Table with name 'my_table' and asserts that `table.name == 'my_tabl'`. The Table class correctly stores and returns the name that was passed to its constructor (via `self._name = name` and the `name` property returning `self._name`). The actual returned value 'my_table' is correct",
+      "correct": true
+    },
+    {
+      "test": "test_get_returns_default_for_missing_key",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test contains a typo. It asserts `cache.get('missing', 'fallback') == 'fallbac'` (missing the final 'k'), but the code correctly returns `'fallback'` as expected. The LRU cache implementation is working correctly \u2014 it properly returns the provided default value when a key is missing. The test it",
+      "correct": true
+    },
+    {
+      "test": "test_decrement_from_one_yields_zero",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The code correctly implements the stated intent: decrementing a field by 1. Given `doc = {'value': 1}`, after `transform(doc)`, `doc['value']` becomes `0`. The test's own docstring even states \"Decrementing a 1-valued field should yield 0.\" However, the assertion incorrectly checks `assert doc['valu",
+      "correct": true
+    },
+    {
+      "test": "test_call_forwards_positional_args_to_storage",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test has a clear typo in its assertion. It calls `middleware('some/path')` (passing 'some/path'), and then asserts `middleware.storage.path == 'some/pat'` \u2014 note the missing 'h' at the end. The code correctly forwards the positional argument to the storage class, and the storage stores 'some/pat",
+      "correct": true
+    }
+  ]
+}
