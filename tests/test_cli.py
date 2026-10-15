@@ -214,6 +214,85 @@ def test_report_coverage_in_text_json_and_html(repo, monkeypatch):
     assert "Test Quality" in (repo / "cov.html").read_text()
 
 
+# Project settings from `code2test init` (.code2test/config.json)
+
+
+def _metrics(repo):
+    return json.loads((repo / ".code2test" / "metrics.json").read_text())["summary"]
+
+
+def test_init_writes_only_the_settings_test_uses(repo):
+    result = run("init", "--confidence", "0.7", "--exclude", "*migrations*", ".")
+    assert result.exit_code == 0, result.output
+    config = json.loads((repo / ".code2test" / "config.json").read_text())
+    assert config == {
+        "confidence_threshold": 0.7,
+        "output_dir": "tests",
+        "exclude_patterns": ["*migrations*"],
+    }
+
+    # An existing file is kept unless the user agrees to overwrite it
+    assert run("init", "--confidence", "0.2", ".", input="n\n").exit_code == 0
+    assert (
+        json.loads((repo / ".code2test" / "config.json").read_text())["confidence_threshold"] == 0.7
+    )
+
+
+def test_test_takes_confidence_and_output_dir_from_project_settings(repo, monkeypatch):
+    use_model(monkeypatch, scripted([tests_reply(PASSING)]))
+    assert run("init", "--confidence", "0.95", "--output-dir", "generated", ".").exit_code == 0
+
+    # The scripted intent has confidence 0.9: below the saved threshold, so nothing is generated
+    assert run("test", "--auto", ".").exit_code == 0
+    assert _metrics(repo)["skipped_low_confidence"] == 1
+    assert not (repo / "generated").exists()
+
+    # Options on the command line win over the saved settings
+    assert run("test", "--auto", "--confidence", "0", "--output-dir", "other", ".").exit_code == 0
+    assert (repo / "other" / "calc" / "test_ops_add.py").exists()
+    assert not (repo / "generated").exists()
+
+
+def test_exclude_patterns_add_to_the_built_in_exclusions(repo, monkeypatch):
+    (repo / "calc" / "legacy.py").write_text("def old(x):\n    return x\n")
+    use_model(monkeypatch, scripted([tests_reply(PASSING)]))
+    assert run("init", "--exclude", "*legacy*", "--output-dir", "generated", ".").exit_code == 0
+
+    assert run("test", "--auto", "--confidence", "0", ".").exit_code == 0
+    assert _metrics(repo)["components"] == 1  # only calc.ops.add: legacy.py is excluded
+    assert (repo / "generated" / "calc" / "test_ops_add.py").exists()  # saved output_dir
+
+    # --exclude adds to the built-in exclusions (it used to replace them, so the
+    # generated test files were analyzed as project code on the next run)
+    assert run("test", "--auto", "--confidence", "0", "--exclude", "*nothing*", ".").exit_code == 0
+    assert _metrics(repo)["components"] == 1
+
+
+def test_output_dir_becomes_an_exclude_pattern(tmp_path):
+    patterns = test_cmd_module._relative_dir_patterns
+    assert patterns("generated/", tmp_path) == ["generated"]
+    assert patterns("./out/tests", tmp_path) == ["out/tests"]
+    assert patterns(str(tmp_path / "gen"), tmp_path) == ["gen"]
+    assert patterns(".", tmp_path) == [] and patterns("/elsewhere", tmp_path) == []
+
+
+def test_older_or_invalid_project_settings(repo, monkeypatch):
+    use_model(monkeypatch, scripted([tests_reply(PASSING)]))
+    config = repo / ".code2test" / "config.json"
+    config.parent.mkdir()
+
+    # Files from older versions also stored a language and framework; those keys are ignored
+    config.write_text(
+        json.dumps({"language": "python", "framework": "pytest", "confidence_threshold": 0.0})
+    )
+    assert run("test", "--auto", ".").exit_code == 0
+    assert (repo / GENERATED).exists()
+
+    config.write_text(json.dumps({"confidence_threshold": "high"}))
+    result = CliRunner().invoke(cli, ["test", "--auto", "."])
+    assert result.exit_code == 1 and "confidence_threshold must be a number" in result.output
+
+
 class _Display:
     def __init__(self):
         self.messages = []

@@ -100,7 +100,7 @@ The suite Code2Test writes therefore always passes: every test either passes or 
 | `code2test benchmark [PATH]` | Measure mutation score and diagnosis accuracy of the generated tests |
 | `code2test intent show\|edit\|export [NAME]` | Review or correct inferred intents |
 | `code2test report summary\|coverage` | Summarize stored intents, or report behavioral coverage and diagnostic accuracy |
-| `code2test init` | Write a starter `.code2test/config.json` (the other commands take their settings from options, not from this file) |
+| `code2test init` | Save project defaults for `code2test test` (confidence threshold, output directory, exclude patterns) in `.code2test/config.json` |
 | `code2test config set\|show\|validate` | Store the API key and model (`--api-key`, `--main-model`); `validate` sends the model one test request |
 | `code2test version` | Show the installed version |
 
@@ -110,11 +110,14 @@ The suite Code2Test writes therefore always passes: every test either passes or 
 | --- | --- | --- |
 | `--auto` | off | Run without prompts |
 | `--confidence FLOAT` | 0.6 | Intent confidence needed to generate tests in `--auto` mode |
-| `--output-dir PATH` | `tests` | Where generated tests are written |
-| `--include`, `--exclude GLOB` | | Limit which files are analyzed |
+| `--output-dir PATH` | `tests` | Where generated tests are written, relative to the project root |
+| `--include GLOB` | | Analyze only matching files |
+| `--exclude GLOB` | | Leave matching files out of the analysis; repeatable, and added to the built-in exclusions |
 | `--dry-run` | off | Generate tests (this calls the model) without writing or running test files |
 | `--exit-code` | off | Exit 1 if any written file failed verification (for CI) |
 | `--report html\|json\|all` | none | Write a run report to `<output-dir>/reports/` |
+
+Defaults for `--confidence`, `--output-dir` and extra exclude patterns can be saved per project with `code2test init`, for example `code2test init --confidence 0.7 --exclude "*migrations*"`. They are stored in `.code2test/config.json`; options given on the command line take precedence. The output directory and the usual test, cache and virtual-environment folders are never analyzed.
 
 `PATH` can be the repository, a subdirectory or a single file. Imports, the `tests/` directory and `.code2test/` always resolve to the project root, which is the nearest directory containing `.git`, `pyproject.toml`, `setup.py`, `setup.cfg` or `.code2test`.
 
@@ -172,7 +175,7 @@ The last two come from the most recent `code2test benchmark` run; the report say
 | `.code2test/metrics.json` | Metrics of the last `test --auto` run |
 | `.code2test/benchmark.json` | Results of the last `benchmark` run, including uncaught mutants |
 | `.code2test/dependency_graphs/` | The analyzed dependency graph |
-| `.code2test/config.json` | Starter settings written by `code2test init` (not read by other commands) |
+| `.code2test/config.json` | Project defaults written by `code2test init` and read by `code2test test` |
 | `tests/reports/report.html`, `report.json` | Run reports, when `--report` is used |
 | `tests/reports/coverage.html`, `coverage.json` | Coverage reports from `code2test report coverage --format html\|json` |
 
