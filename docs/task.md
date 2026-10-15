@@ -49,10 +49,13 @@ Python only. Test generation, verification and repair target pytest. Files in ot
 ## Not done
 
 - [ ] Markdown run reports
-- [ ] Intent Alignment Score (proposal Section 7.1), which needs semantic similarity between tests and intents
 - [ ] Settings from `.code2test/config.json` (written by `init`, not read by other commands)
 - [ ] Incremental generation for changed files only (re-runs reuse verified tests per component, whether or not the code changed)
 - [ ] An experiment on code with known bugs, to test whether intent-first generation avoids locking bugs into the suite (see the paper's Discussion)
+
+## Not planned
+
+- **Intent Alignment Score** (proposal Section 7.1). The proposal defines it as the semantic similarity between a test's assertions and the intent text. That measures shared wording, not whether a test checks the intent: a test asserting a wrong value scores like one asserting the right value, and because most intents are docstring summaries, the score would mostly compare tests with docstrings. What it was meant to show is covered by `code2test report coverage`: the behaviors each component's passing tests check, shown next to its intent, the share of injected bugs those tests catch, and diagnostic accuracy. A model-judged alignment check, validated against hand-labelled tests, could replace it in future work.
 
 ## Post-v1
 
