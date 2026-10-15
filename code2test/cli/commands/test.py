@@ -328,10 +328,17 @@ def show_run_metrics(metrics) -> None:
     table = Table(title="Generation Results")
     table.add_column("Metric")
     table.add_column("Value", justify="right")
+    def pct(value) -> str:
+        return "n/a" if value is None else f"{value:.0%}"
+
     table.add_row("Components", str(summary["components"]))
-    table.add_row("Components with tests", f"{summary['components_with_tests']} ({summary['acceptance_rate']:.0%})")
+    table.add_row("Components with passing tests", f"{summary['components_with_tests']} ({pct(summary['acceptance_rate'])})")
+    if summary["components_reused"]:
+        table.add_row("  of which verified in an earlier run", str(summary["components_reused"]))
+    if summary["skipped_low_confidence"]:
+        table.add_row("Skipped (intent below --confidence)", str(summary["skipped_low_confidence"]))
     table.add_row("Tests generated", str(summary["tests_generated"]))
-    table.add_row("Passed on first run", f"{summary['first_run_passed']} ({summary['first_run_pass_rate']:.0%})")
+    table.add_row("Passed on first run", f"{summary['first_run_passed']} ({pct(summary['first_run_pass_rate'])})")
     table.add_row("Tests kept", str(summary["tests_kept"]))
     table.add_row("  of which xfail (possible bugs)", str(summary["tests_xfail"]))
     table.add_row("Tests dropped", str(summary["tests_dropped"]))

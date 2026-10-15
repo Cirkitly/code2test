@@ -20,10 +20,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from code2test.core.models import DiagnosisCause, TestCase, TestFile
+from code2test.core.models import DiagnosisCause, TestCase, TestFile, TestStatus
 from code2test.core.verifier import TestVerifier
 
 logger = logging.getLogger(__name__)
+
+# How much component source the diagnosis agent is shown (see DiagnosisAgent)
+DIAGNOSIS_SOURCE_LIMIT = 16000
 
 
 # ---------------------------------------------------------------------------
@@ -50,12 +53,25 @@ class Mutant:
 
 
 def _docstring_nodes(tree: ast.AST) -> set:
+    """Ids of nodes no test can observe a change in: docstrings and type annotations."""
     ids = set()
+
+    def exclude(node: Optional[ast.AST]) -> None:
+        if node is not None:
+            ids.update(id(n) for n in ast.walk(node))
+
     for node in ast.walk(tree):
         if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             body = getattr(node, "body", [])
             if body and isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], "value", None), ast.Constant):
                 ids.add(id(body[0].value))
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            exclude(node.returns)
+            args = node.args
+            for arg in args.posonlyargs + args.args + args.kwonlyargs + [a for a in (args.vararg, args.kwarg) if a]:
+                exclude(arg.annotation)
+        elif isinstance(node, ast.AnnAssign):
+            exclude(node.annotation)
     return ids
 
 
@@ -63,10 +79,12 @@ def _mutation_sites(node: ast.AST, docstrings: set) -> List[Tuple[ast.AST, str]]
     """(node, kind) pairs inside `node` that can be mutated."""
     sites = []
     for child in ast.walk(node):
-        if isinstance(child, ast.Compare):
+        if isinstance(child, ast.Compare) and id(child) not in docstrings:
             for i, op in enumerate(child.ops):
                 if type(op) in _SWAP_OPS:
                     sites.append((child, f"cmp:{i}"))
+        elif id(child) in docstrings:
+            continue
         elif isinstance(child, (ast.BinOp, ast.BoolOp)) and type(child.op) in _SWAP_OPS:
             sites.append((child, "op"))
         elif isinstance(child, ast.Constant) and id(child) not in docstrings:
@@ -172,12 +190,13 @@ def break_expected_value(test_code: str) -> Optional[str]:
             for side in ("comparators", "left"):
                 value = node.test.comparators[0] if side == "comparators" else node.test.left
                 if isinstance(value, ast.Constant) and not isinstance(value.value, bool):
-                    if isinstance(value.value, int):
-                        value.value += 1
-                    elif isinstance(value.value, float):
-                        value.value += 1.5
-                    elif isinstance(value.value, str):
-                        value.value = _perturb_string(value.value)
+                    old = value.value
+                    if isinstance(old, int):
+                        value.value = old + 1
+                    elif isinstance(old, float):
+                        value.value = old + 1.5
+                    elif isinstance(old, str) and old:
+                        value.value = _perturb_string(old)
                     else:
                         continue
                     return ast.unparse(tree)
@@ -206,6 +225,8 @@ class BenchmarkResult:
     mutants_killed: int = 0
     survivors: List[Dict[str, object]] = field(default_factory=list)
     diagnosis_cases: List[DiagnosisCase] = field(default_factory=list)
+    diagnosis_error: Optional[str] = None     # set when the model could not be reached
+    restored_files: List[str] = field(default_factory=list)  # left mutated by an earlier, killed run
 
     @property
     def mutation_score(self) -> Optional[float]:
@@ -219,7 +240,10 @@ class BenchmarkResult:
     def to_dict(self) -> Dict[str, object]:
         by_label: Dict[str, Dict[str, int]] = {}
         for c in self.diagnosis_cases:
-            row = by_label.setdefault(c.expected, {"cases": 0, "correct": 0})
+            row = by_label.setdefault(c.expected, {"cases": 0, "correct": 0, "unscored": 0})
+            if c.actual is None:
+                row["unscored"] += 1
+                continue
             row["cases"] += 1
             row["correct"] += int(c.correct)
         return {
@@ -228,6 +252,8 @@ class BenchmarkResult:
             "mutants_killed": self.mutants_killed,
             "diagnosis_accuracy": self.diagnosis_accuracy,
             "diagnosis_by_expected_cause": by_label,
+            "diagnosis_error": self.diagnosis_error,
+            "restored_files": self.restored_files,
             "survivors": self.survivors,
             "diagnosis_cases": [{**asdict(c), "correct": c.correct} for c in self.diagnosis_cases],
         }
@@ -254,9 +280,34 @@ class Benchmark:
         by_source: Dict[str, List[TestFile]] = {}
         for tf in self.test_files:
             path = Path(tf.component_path)
-            rel = str(path.relative_to(self.repo_root)) if path.is_absolute() else str(path)
-            by_source.setdefault(rel, []).append(tf)
+            if path.is_absolute():
+                try:
+                    path = path.relative_to(self.repo_root)
+                except ValueError:
+                    logger.warning(f"Skipping {tf.component_id}: {path} is outside {self.repo_root} (repo moved?)")
+                    continue
+            if not (self.repo_root / path).is_file():
+                logger.warning(f"Skipping {tf.component_id}: {path} not found")
+                continue
+            by_source.setdefault(str(path), []).append(tf)
         return by_source
+
+    @property
+    def backup_dir(self) -> Path:
+        return self.repo_root / ".code2test" / "benchmark_backup"
+
+    def restore_leftovers(self) -> List[str]:
+        """Restore source files an earlier, killed run left mutated (from their on-disk backup)."""
+        restored = []
+        if not self.backup_dir.is_dir():
+            return restored
+        for backup in sorted(p for p in self.backup_dir.rglob("*") if p.is_file()):
+            rel = backup.relative_to(self.backup_dir)
+            (self.repo_root / rel).write_bytes(backup.read_bytes())
+            backup.unlink()
+            restored.append(str(rel))
+            logger.warning(f"Restored {rel} from a benchmark backup (an earlier run was interrupted)")
+        return restored
 
     def mutants(self, max_mutants: int) -> List[Mutant]:
         all_mutants: List[Mutant] = []
@@ -268,18 +319,24 @@ class Benchmark:
         return sorted(all_mutants, key=lambda m: (m.file, m.line))
 
     async def run(self, max_mutants: int = 50, max_diagnoses: int = 10) -> BenchmarkResult:
-        result = BenchmarkResult()
-        test_paths = {tf.component_id: [self.repo_root / tf.path] for tf in self.test_files}
+        result = BenchmarkResult(restored_files=self.restore_leftovers())
+        test_paths: Dict[str, List[Path]] = {}
+        for tf in self.test_files:
+            test_paths.setdefault(tf.component_id, []).append(self.repo_root / tf.path)
         code_bug_cases: List[Tuple[TestCase, str, Dict]] = []
 
         for mutant in self.mutants(max_mutants):
             source_path = self.repo_root / mutant.file
-            original = source_path.read_text()
+            backup = self.backup_dir / mutant.file
+            original = source_path.read_bytes()  # bytes: line endings and encoding come back exactly
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            backup.write_bytes(original)        # survives a killed process; restored on the next run
             try:
-                source_path.write_text(mutant.source)
+                source_path.write_bytes(mutant.source.encode("utf-8"))
                 run = self.verifier.run_pytest(test_paths.get(mutant.component_id, []))
             finally:
-                source_path.write_text(original)
+                source_path.write_bytes(original)
+                backup.unlink(missing_ok=True)
 
             result.mutants_total += 1
             if run.ok or run.returncode == 5:
@@ -292,23 +349,30 @@ class Benchmark:
             if failed:
                 case = failed[0]
                 test_case = self._find_test_case(mutant.component_id, case.name)
-                if test_case is not None:
+                source, offset = _component_source(mutant.source, mutant.component_id, mutant.line)
+                # Only cases where the diagnosis agent is shown the mutated line are fair
+                if test_case is not None and offset <= DIAGNOSIS_SOURCE_LIMIT - 500:
                     component = dict(self.components.get(mutant.component_id, {}))
-                    component["source_code"] = _component_source(mutant.source, mutant.component_id)
+                    component["source_code"] = source
                     code_bug_cases.append((test_case, case.message, component))
 
         if len(code_bug_cases) > max_diagnoses:
             code_bug_cases = self.random.sample(code_bug_cases, max_diagnoses)
 
         if self.diagnosis_agent is not None:
-            for test_case, message, component in code_bug_cases:
-                result.diagnosis_cases.append(
-                    await self._diagnose(test_case, message, component, DiagnosisCause.CODE_BUG)
-                )
-            for test_case, message, component in await self._wrong_test_cases(max_diagnoses):
-                result.diagnosis_cases.append(
-                    await self._diagnose(test_case, message, component, DiagnosisCause.TEST_WRONG)
-                )
+            from code2test.agents.errors import ModelAccessError
+            try:
+                for test_case, message, component in code_bug_cases:
+                    result.diagnosis_cases.append(
+                        await self._diagnose(test_case, message, component, DiagnosisCause.CODE_BUG)
+                    )
+                for test_case, message, component in await self._wrong_test_cases(max_diagnoses):
+                    result.diagnosis_cases.append(
+                        await self._diagnose(test_case, message, component, DiagnosisCause.TEST_WRONG)
+                    )
+            except ModelAccessError as e:
+                # Keep the mutation results, which needed no model
+                result.diagnosis_error = str(e)
         return result
 
     def _find_test_case(self, component_id: str, name: str) -> Optional[TestCase]:
@@ -332,20 +396,24 @@ class Benchmark:
             broken = break_expected_value(tc.test_code)
             if broken is None:
                 continue
+            # The whole file, with only this test's expected value changed: helpers and
+            # fixtures defined by sibling tests stay available.
+            target = TestCase(name=tc.name, intent_text=tc.intent_text, test_code=broken)
             probe = TestFile(
                 path=str(Path(tf.path).with_name(f"_c2t_probe_{Path(tf.path).name}")),
                 component_id=tf.component_id, component_path=tf.component_path,
                 imports=tf.imports, fixtures=tf.fixtures,
-                test_cases=[TestCase(name=tc.name, intent_text=tc.intent_text, test_code=broken)],
+                test_cases=[target if other is tc else other.model_copy() for other in tf.test_cases],
             )
             try:
                 verification = self.verifier.run_tests(probe)
             finally:
                 (self.repo_root / probe.path).unlink(missing_ok=True)
-            if verification.all_passed or verification.collection_error:
+            message = target.failure_message or ""
+            # Only a failure of the changed assertion is a TEST_WRONG case with a known cause
+            if verification.collection_error or target.status != TestStatus.FAILED or not _is_assertion_failure(message):
                 continue
-            failing = probe.test_cases[0]
-            cases.append((failing, failing.failure_message or "", self.components.get(tf.component_id, {})))
+            cases.append((target, message, self.components.get(tf.component_id, {})))
         return cases
 
     async def _diagnose(self, test_case: TestCase, message: str, component: Dict,
@@ -355,18 +423,29 @@ class Benchmark:
         if intent is None:
             return case
         diagnosis = await self.diagnosis_agent.diagnose_failure(test_case, message, component, intent)
-        case.actual = diagnosis.cause.value
         case.explanation = diagnosis.explanation[:300]
+        if diagnosis.explanation.startswith("Unable to diagnose"):
+            return case  # the model call failed: not an answer, leave it unscored
+        case.actual = diagnosis.cause.value
         return case
 
 
-def _component_source(module_source: str, component_id: str) -> str:
+def _is_assertion_failure(message: str) -> bool:
+    """True when pytest's failure message is a failed assertion, not some other error."""
+    lines = [l.strip() for l in (message or "").splitlines() if l.strip()]
+    return bool(lines) and (lines[0].startswith("assert ") or lines[0].startswith("AssertionError"))
+
+
+def _component_source(module_source: str, component_id: str, line: int = 0) -> Tuple[str, int]:
+    """The component's source, and the character offset of `line` within it."""
     name = component_id.split(".")[-1]
     try:
         tree = ast.parse(module_source)
     except SyntaxError:
-        return module_source
+        return module_source, 0
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == name:
-            return ast.get_source_segment(module_source, node) or module_source
-    return module_source
+            segment = ast.get_source_segment(module_source, node) or module_source
+            before = segment.splitlines()[: max(0, line - node.lineno)]
+            return segment, sum(len(l) + 1 for l in before)
+    return module_source, 0

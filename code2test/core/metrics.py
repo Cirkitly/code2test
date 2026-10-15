@@ -26,6 +26,8 @@ class FileMetrics:
     repair_rounds: int = 0      # repair calls made for this file
     kept: int = 0               # tests in the file that was written
     xfail: int = 0              # kept tests marked xfail (suspected code bug)
+    passing: int = 0            # kept tests that really pass (not skipped, not xfail)
+    reused: bool = False        # verified in an earlier run and skipped this time
     removed_reason: Optional[str] = None  # set when the whole file was discarded
 
     @property
@@ -41,6 +43,7 @@ class RunMetrics:
     files: Dict[str, FileMetrics] = field(default_factory=dict)
     diagnoses: Counter = field(default_factory=Counter)  # cause -> count
     llm_failures: int = 0       # components whose generation call failed
+    skipped_low_confidence: int = 0  # components below --confidence in --auto mode
 
     def file(self, component_id: str, path: str) -> FileMetrics:
         if path not in self.files:
@@ -67,31 +70,34 @@ class RunMetrics:
 
     @property
     def components_with_tests(self) -> int:
-        return len({f.component_id for f in self.files.values() if f.kept > f.xfail})
+        return len({f.component_id for f in self.files.values() if f.passing > 0})
 
     @property
-    def acceptance_rate(self) -> float:
-        return self.components_with_tests / self.components if self.components else 0.0
+    def acceptance_rate(self) -> Optional[float]:
+        return self.components_with_tests / self.components if self.components else None
 
     @property
-    def first_run_pass_rate(self) -> float:
-        return self.first_run_passed / self.generated if self.generated else 0.0
+    def first_run_pass_rate(self) -> Optional[float]:
+        """Share of tests generated THIS run that passed before repair (None if none were)."""
+        return self.first_run_passed / self.generated if self.generated else None
 
     @property
-    def keep_rate(self) -> float:
-        return self.kept / self.generated if self.generated else 0.0
+    def keep_rate(self) -> Optional[float]:
+        return self.kept / self.generated if self.generated else None
 
     def summary(self) -> Dict[str, object]:
         return {
             "components": self.components,
             "components_with_tests": self.components_with_tests,
-            "acceptance_rate": round(self.acceptance_rate, 3),
+            "acceptance_rate": _round(self.acceptance_rate),
             "tests_generated": self.generated,
             "first_run_passed": self.first_run_passed,
-            "first_run_pass_rate": round(self.first_run_pass_rate, 3),
-            "tests_kept": self.kept,
+            "first_run_pass_rate": _round(self.first_run_pass_rate),
+            "tests_kept": sum(f.kept for f in self.files.values() if not f.reused),
             "tests_xfail": self.xfail,
-            "tests_dropped": self.generated - self.kept,
+            "tests_dropped": sum(f.dropped for f in self.files.values() if not f.reused),
+            "components_reused": len({f.component_id for f in self.files.values() if f.reused}),
+            "skipped_low_confidence": self.skipped_low_confidence,
             "files_removed": sum(1 for f in self.files.values() if f.removed_reason),
             "repair_rounds": sum(f.repair_rounds for f in self.files.values()),
             "diagnoses": dict(self.diagnoses),
@@ -110,6 +116,10 @@ class RunMetrics:
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.to_dict(), indent=2))
+
+
+def _round(value: Optional[float]) -> Optional[float]:
+    return None if value is None else round(value, 3)
 
 
 # MVP targets from docs/proposal.md section 7.3

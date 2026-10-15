@@ -245,11 +245,19 @@ class TestGenerator:
                      is_verified = any(t.verified for t in existing_test_files)
                      if is_verified and self.config.auto_accept:
                          logger.info(f"Skipping {comp_id} (already verified)")
+                         # Still has its passing tests: count it, but not as generated this run
+                         for existing in existing_test_files:
+                             if existing.verified and (self.repo_path / existing.path).exists():
+                                 reused = self.metrics.file(comp_id, existing.path)
+                                 reused.reused = True
+                                 reused.kept = len(existing.test_cases)
+                                 reused.passing = _passing(existing)
                          return None
 
                 # Skip low-confidence intents in auto mode
                 if self.config.auto_accept and intent.confidence < self.config.confidence_threshold:
                     logger.info(f"Skipping {comp_id} (low confidence: {intent.confidence:.0%})")
+                    self.metrics.skipped_low_confidence += 1
                     return None
                 
                 try:
@@ -362,7 +370,10 @@ class TestGenerator:
                     del by_path[path]
                 else:
                     self.verifier.write_test_file(tf)
-                    self.metrics.file(tf.component_id, tf.path).kept = len(tf.test_cases)
+                    file_metrics = self.metrics.file(tf.component_id, tf.path)
+                    file_metrics.kept = len(tf.test_cases)
+                    file_metrics.xfail = sum(1 for tc in tf.test_cases if _is_xfail(tc))
+                    file_metrics.passing = _passing(tf)
                     self.test_registry.register_test(tf)
                     if tf.verified:
                         self.test_registry.mark_verified(tf.path)
@@ -384,6 +395,14 @@ class TestGenerator:
                 for tc in test_file.test_cases:
                     tc.mark_failed(error or "SyntaxError")
                 bad = [tc.name for tc in test_file.test_cases]
+                return VerificationResult(test_file_path=test_file.path, all_passed=False, failed=bad)
+            # Run the tests that do compile, so one broken test doesn't hide the rest's results
+            good = [tc for tc in test_file.test_cases if tc.name not in bad]
+            if good:
+                partial = await asyncio.to_thread(
+                    self.verifier.run_tests, test_file.model_copy(update={"test_cases": good})
+                )
+                return partial.model_copy(update={"all_passed": False, "failed": partial.failed + bad})
             return VerificationResult(test_file_path=test_file.path, all_passed=False, failed=bad)
         return await asyncio.to_thread(self.verifier.run_tests, test_file)
 
@@ -409,9 +428,8 @@ class TestGenerator:
         file_metrics = self.metrics.file(test_file.component_id, test_file.path)
         if not file_metrics.generated:
             file_metrics.generated = len(test_file.test_cases)
-        file_metrics.first_run_passed = sum(
-            1 for tc in test_file.test_cases if tc.status in (TestStatus.PASSED, TestStatus.SKIPPED)
-        )
+        # A skipped test checks nothing, so only real passes count
+        file_metrics.first_run_passed = sum(1 for tc in test_file.test_cases if tc.status == TestStatus.PASSED)
 
         for attempt in range(self.config.max_fix_attempts):
             failing = [tc for tc in test_file.test_cases if tc.status == TestStatus.FAILED]
@@ -492,10 +510,8 @@ class TestGenerator:
 
         test_file.verified = result.all_passed
         file_metrics.kept = len(test_file.test_cases)
-        file_metrics.xfail = sum(
-            1 for tc in test_file.test_cases
-            if tc.diagnosis and tc.diagnosis.cause == DiagnosisCause.CODE_BUG
-        )
+        file_metrics.xfail = sum(1 for tc in test_file.test_cases if _is_xfail(tc))
+        file_metrics.passing = _passing(test_file)
         self.test_registry.register_test(test_file)
         if test_file.verified:
             self.test_registry.mark_verified(test_file.path)
@@ -510,6 +526,7 @@ class TestGenerator:
         file_metrics = self.metrics.file(test_file.component_id, test_file.path)
         file_metrics.kept = 0
         file_metrics.xfail = 0
+        file_metrics.passing = 0
         file_metrics.removed_reason = reason
         logger.warning(f"Removed {test_file.path} for {test_file.component_id}: {reason}")
         return None
@@ -539,3 +556,13 @@ def _first_line(text: Optional[str]) -> str:
         if re.search(r"\w+(Error|Exception):", line):
             return line[:200]
     return lines[0][:200] if lines else "unknown failure"
+
+
+def _is_xfail(tc) -> bool:
+    """A test kept as an expected failure (suspected code bug)."""
+    return bool(tc.diagnosis and tc.diagnosis.cause == DiagnosisCause.CODE_BUG) or "pytest.mark.xfail" in tc.test_code
+
+
+def _passing(test_file: TestFile) -> int:
+    """Tests that really pass: not skipped, not expected failures."""
+    return sum(1 for tc in test_file.test_cases if tc.status == TestStatus.PASSED and not _is_xfail(tc))

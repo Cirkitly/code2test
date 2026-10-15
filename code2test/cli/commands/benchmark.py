@@ -5,6 +5,7 @@ Benchmark command: measure the quality of the tests code2test generated.
 import asyncio
 import json
 import logging
+import signal
 import sys
 from pathlib import Path
 
@@ -59,7 +60,14 @@ def benchmark_command(path: str, mutants: int, diagnoses: int, timeout: int, ver
         display.error("No generated test files found. Run 'code2test test' first.")
         sys.exit(1)
 
-    baseline = Benchmark(repo_root, test_files, {}, {}).verifier.run_pytest([repo_root / tf.path for tf in test_files])
+    # Restore anything an interrupted earlier run left mutated before trusting the baseline
+    restored = Benchmark(repo_root, test_files, {}, {}).restore_leftovers()
+    for path in restored:
+        display.warning(f"Restored {path}: an earlier benchmark run was interrupted while it was mutated")
+
+    baseline = Benchmark(repo_root, test_files, {}, {}, timeout=timeout).verifier.run_pytest(
+        [repo_root / tf.path for tf in test_files]
+    )
     if not baseline.ok:
         display.error("The generated tests don't all pass yet. Run 'code2test verify --fix' first.")
         sys.exit(1)
@@ -80,7 +88,17 @@ def benchmark_command(path: str, mutants: int, diagnoses: int, timeout: int, ver
 
     bench = Benchmark(repo_root, test_files, intents, components, diagnosis_agent=diagnosis_agent, timeout=timeout)
     console.print(f"Running up to {mutants} mutants against {len(test_files)} generated test files...")
+    # A terminated run (CI cancel, closed terminal) must still restore the mutated source:
+    # turn SIGTERM/SIGHUP into KeyboardInterrupt so the restore in Benchmark.run executes.
+    def _interrupt(signum, frame):
+        raise KeyboardInterrupt(f"signal {signum}")
+
+    for sig in (signal.SIGTERM, getattr(signal, "SIGHUP", None)):
+        if sig is not None:
+            signal.signal(sig, _interrupt)
     result = asyncio.run(bench.run(max_mutants=mutants, max_diagnoses=diagnoses))
+    if result.diagnosis_error:
+        display.warning(f"Diagnosis skipped, the model could not be reached: {result.diagnosis_error}")
 
     metrics_path = repo_root / ".code2test" / "metrics.json"
     generation = json.loads(metrics_path.read_text())["summary"] if metrics_path.exists() else {}
@@ -88,11 +106,14 @@ def benchmark_command(path: str, mutants: int, diagnoses: int, timeout: int, ver
     table = Table(title="Benchmark")
     table.add_column("Metric")
     table.add_column("Value", justify="right")
+    def pct(value) -> str:
+        return "n/a" if value is None else f"{value:.0%}"
+
     if generation:
         table.add_row("Components with tests (last run)",
-                      f"{generation['components_with_tests']}/{generation['components']} ({generation['acceptance_rate']:.0%})")
+                      f"{generation['components_with_tests']}/{generation['components']} ({pct(generation['acceptance_rate'])})")
         table.add_row("Tests passing on first run (last run)",
-                      f"{generation['first_run_passed']}/{generation['tests_generated']} ({generation['first_run_pass_rate']:.0%})")
+                      f"{generation['first_run_passed']}/{generation['tests_generated']} ({pct(generation['first_run_pass_rate'])})")
     if result.mutation_score is not None:
         table.add_row("Mutants killed", f"{result.mutants_killed}/{result.mutants_total} ({result.mutation_score:.0%})")
     scored = [c for c in result.diagnosis_cases if c.actual is not None]

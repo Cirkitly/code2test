@@ -139,8 +139,8 @@ class DiagnosisAgent:
             test_name=test_case.name,
             test_code=test_case.test_code,
             intent=intent.intent_text,
-            source_code=(component.get("source_code") or "")[:2000],
-            failure_output=failure_output[:1000],  # Limit size
+            source_code=(component.get("source_code") or "")[:16000],
+            failure_output=failure_output[:3000],  # Limit size
             expected=expected or "Unknown",
             actual=actual or "Unknown",
         )
