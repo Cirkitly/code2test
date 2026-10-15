@@ -8,7 +8,10 @@ detailed file tree representations with filtering capabilities.
 import fnmatch
 from pathlib import Path
 from typing import Dict, List, Optional
-from code2test.src.be.dependency_analyzer.utils.patterns import DEFAULT_IGNORE_PATTERNS, DEFAULT_INCLUDE_PATTERNS
+from code2test.src.be.dependency_analyzer.utils.patterns import (
+    DEFAULT_IGNORE_PATTERNS,
+    DEFAULT_INCLUDE_PATTERNS,
+)
 
 
 class RepoAnalyzer:

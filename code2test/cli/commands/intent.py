@@ -17,14 +17,10 @@ console = Console()
 @click.argument("action", type=click.Choice(["show", "edit", "export"]))
 @click.argument("component", required=False)
 @click.option("--format", type=click.Choice(["text", "json"]), default="text")
-def intent_command(
-    action: str,
-    component: Optional[str],
-    format: str
-) -> None:
+def intent_command(action: str, component: Optional[str], format: str) -> None:
     """
     View or edit inferred intents.
-    
+
     \b
     Examples:
         code2test intent show auth        # Show intents for auth module
@@ -32,19 +28,19 @@ def intent_command(
         code2test intent export --format json  # Export all intents
     """
     display = DisplayManager()
-    
+
     # Import storage
     from code2test.storage import IntentDatabase
-    
+
     # Find database
     db_path = Path.cwd() / ".code2test" / "code2test.db"
-    
+
     if not db_path.exists():
         display.error("No intent database found. Run 'code2test test' first.")
         return
-    
+
     db = IntentDatabase(str(db_path))
-    
+
     if action == "show":
         if component:
             matches = _find_intents(db, component)
@@ -59,24 +55,25 @@ def intent_command(
                     display.show_intent(intent)
             else:
                 display.info("No intents stored yet.")
-    
+
     elif action == "export":
         intents = db.get_all_intents()
-        
+
         if format == "json":
             import json
+
             data = [i.model_dump() for i in intents]
             # plain output: rich would wrap long lines and break the JSON
             click.echo(json.dumps(data, indent=2, default=str))
         else:
             for intent in intents:
                 click.echo(f"{intent.component_id}: {intent.intent_text}")
-    
+
     elif action == "edit":
         if not component:
             display.error("Component name required for edit")
             return
-        
+
         matches = _find_intents(db, component)
         if not matches:
             display.error(f"No intent found for: {component}")
@@ -87,10 +84,10 @@ def intent_command(
                 console.print(f"  {m.component_id}")
             return
         intent = matches[0]
-        
+
         session = InteractiveSession(display)
         new_text = session.edit_intent(intent)
-        
+
         if new_text != intent.intent_text:
             intent.update_intent(new_text)
             db.save_intent(intent)
@@ -112,6 +109,7 @@ def _find_intents(db, query: str) -> list:
     if by_name:
         return by_name
     return [
-        i for i in intents
+        i
+        for i in intents
         if i.component_id.startswith(query + ".") or f".{query}." in f".{i.component_id}"
     ]

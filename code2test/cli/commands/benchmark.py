@@ -20,10 +20,19 @@ console = Console()
 
 @click.command("benchmark")
 @click.argument("path", type=click.Path(exists=True), default=".")
-@click.option("--mutants", type=int, default=50, show_default=True, help="Maximum number of mutants to run")
-@click.option("--diagnoses", type=int, default=10, show_default=True,
-              help="Diagnosis cases per expected cause (0 to skip the LLM part)")
-@click.option("--timeout", type=int, default=120, show_default=True, help="pytest timeout per run, in seconds")
+@click.option(
+    "--mutants", type=int, default=50, show_default=True, help="Maximum number of mutants to run"
+)
+@click.option(
+    "--diagnoses",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Diagnosis cases per expected cause (0 to skip the LLM part)",
+)
+@click.option(
+    "--timeout", type=int, default=120, show_default=True, help="pytest timeout per run, in seconds"
+)
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 def benchmark_command(path: str, mutants: int, diagnoses: int, timeout: int, verbose: bool) -> None:
     """
@@ -63,7 +72,9 @@ def benchmark_command(path: str, mutants: int, diagnoses: int, timeout: int, ver
     # Restore anything an interrupted earlier run left mutated before trusting the baseline
     restored = Benchmark(repo_root, test_files, {}, {}).restore_leftovers()
     for path in restored:
-        display.warning(f"Restored {path}: an earlier benchmark run was interrupted while it was mutated")
+        display.warning(
+            f"Restored {path}: an earlier benchmark run was interrupted while it was mutated"
+        )
 
     baseline = Benchmark(repo_root, test_files, {}, {}, timeout=timeout).verifier.run_pytest(
         [repo_root / tf.path for tf in test_files]
@@ -86,8 +97,13 @@ def benchmark_command(path: str, mutants: int, diagnoses: int, timeout: int, ver
 
         diagnosis_agent = DiagnosisAgent(model=resolve_model(display))
 
-    bench = Benchmark(repo_root, test_files, intents, components, diagnosis_agent=diagnosis_agent, timeout=timeout)
-    console.print(f"Running up to {mutants} mutants against {len(test_files)} generated test files...")
+    bench = Benchmark(
+        repo_root, test_files, intents, components, diagnosis_agent=diagnosis_agent, timeout=timeout
+    )
+    console.print(
+        f"Running up to {mutants} mutants against {len(test_files)} generated test files..."
+    )
+
     # A terminated run (CI cancel, closed terminal) must still restore the mutated source:
     # turn SIGTERM/SIGHUP into KeyboardInterrupt so the restore in Benchmark.run executes.
     def _interrupt(signum, frame):
@@ -98,7 +114,9 @@ def benchmark_command(path: str, mutants: int, diagnoses: int, timeout: int, ver
             signal.signal(sig, _interrupt)
     result = asyncio.run(bench.run(max_mutants=mutants, max_diagnoses=diagnoses))
     if result.diagnosis_error:
-        display.warning(f"Diagnosis skipped, the model could not be reached: {result.diagnosis_error}")
+        display.warning(
+            f"Diagnosis skipped, the model could not be reached: {result.diagnosis_error}"
+        )
 
     metrics_path = repo_root / ".code2test" / "metrics.json"
     generation = json.loads(metrics_path.read_text())["summary"] if metrics_path.exists() else {}
@@ -106,32 +124,50 @@ def benchmark_command(path: str, mutants: int, diagnoses: int, timeout: int, ver
     table = Table(title="Benchmark")
     table.add_column("Metric")
     table.add_column("Value", justify="right")
+
     def pct(value) -> str:
         return "n/a" if value is None else f"{value:.0%}"
 
     if generation:
-        table.add_row("Components with tests (last run)",
-                      f"{generation['components_with_tests']}/{generation['components']} ({pct(generation['acceptance_rate'])})")
-        table.add_row("Tests passing on first run (last run)",
-                      f"{generation['first_run_passed']}/{generation['tests_generated']} ({pct(generation['first_run_pass_rate'])})")
+        table.add_row(
+            "Components with tests (last run)",
+            f"{generation['components_with_tests']}/{generation['components']} ({pct(generation['acceptance_rate'])})",
+        )
+        table.add_row(
+            "Tests passing on first run (last run)",
+            f"{generation['first_run_passed']}/{generation['tests_generated']} ({pct(generation['first_run_pass_rate'])})",
+        )
     if result.mutation_score is not None:
-        table.add_row("Mutants killed (whole suite)", f"{result.mutants_killed}/{result.mutants_total} ({result.mutation_score:.0%})")
-        table.add_row("  by the mutated component's own tests",
-                      f"{result.mutants_killed_by_own_tests}/{result.mutants_total} ({result.own_tests_mutation_score:.0%})")
+        table.add_row(
+            "Mutants killed (whole suite)",
+            f"{result.mutants_killed}/{result.mutants_total} ({result.mutation_score:.0%})",
+        )
+        table.add_row(
+            "  by the mutated component's own tests",
+            f"{result.mutants_killed_by_own_tests}/{result.mutants_total} ({result.own_tests_mutation_score:.0%})",
+        )
     scored = [c for c in result.diagnosis_cases if c.actual is not None]
     if scored:
-        table.add_row("Diagnoses correct", f"{sum(c.correct for c in scored)}/{len(scored)} ({result.diagnosis_accuracy:.0%})")
+        table.add_row(
+            "Diagnoses correct",
+            f"{sum(c.correct for c in scored)}/{len(scored)} ({result.diagnosis_accuracy:.0%})",
+        )
         for cause in ("CODE_BUG", "TEST_WRONG"):
             subset = [c for c in scored if c.expected == cause]
             if subset:
-                table.add_row(f"  when the cause is {cause}", f"{sum(c.correct for c in subset)}/{len(subset)}")
+                table.add_row(
+                    f"  when the cause is {cause}",
+                    f"{sum(c.correct for c in subset)}/{len(subset)}",
+                )
     console.print(table)
 
-    for name, value, target, met in target_rows({
-        "acceptance_rate": generation.get("acceptance_rate"),
-        "first_run_pass_rate": generation.get("first_run_pass_rate"),
-        "diagnosis_accuracy": result.diagnosis_accuracy,
-    }):
+    for name, value, target, met in target_rows(
+        {
+            "acceptance_rate": generation.get("acceptance_rate"),
+            "first_run_pass_rate": generation.get("first_run_pass_rate"),
+            "diagnosis_accuracy": result.diagnosis_accuracy,
+        }
+    ):
         if value is None:
             continue
         mark = "[green]✓[/green]" if met else "[yellow]✗[/yellow]"
@@ -140,7 +176,9 @@ def benchmark_command(path: str, mutants: int, diagnoses: int, timeout: int, ver
     if result.survivors and verbose:
         console.print("\nMutants the tests did not catch:")
         for s in result.survivors[:20]:
-            console.print(f"  {s['file']}:{s['line']} {s['component']}: {s['mutation']}", markup=False)
+            console.print(
+                f"  {s['file']}:{s['line']} {s['component']}: {s['mutation']}", markup=False
+            )
 
     out = repo_root / ".code2test" / "benchmark.json"
     out.write_text(json.dumps({"generation": generation, **result.to_dict()}, indent=2))

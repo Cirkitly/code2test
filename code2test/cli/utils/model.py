@@ -66,7 +66,9 @@ def resolve_model(display) -> str:
 
         else:
             main_model = "openai:gpt-4o-mini"
-            display.info("No model configured; using openai:gpt-4o-mini. "
-                         "Set CODE2TEST_MODEL or run 'code2test config set --main-model' to choose another.")
+            display.info(
+                "No model configured; using openai:gpt-4o-mini. "
+                "Set CODE2TEST_MODEL or run 'code2test config set --main-model' to choose another."
+            )
 
     return main_model

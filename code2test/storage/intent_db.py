@@ -16,18 +16,18 @@ from code2test.core.models import Intent, IntentEvidence
 
 class IntentDatabase:
     """Manages intent storage and retrieval using SQLite."""
-    
+
     def __init__(self, db_path: str):
         """
         Initialize intent database.
-        
+
         Args:
             db_path: Path to SQLite database file
         """
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
-    
+
     @contextmanager
     def _connect(self):
         """Open a connection that commits on success and is always closed."""
@@ -62,95 +62,93 @@ class IntentDatabase:
                 ON intents(confidence)
             """)
             conn.commit()
-    
+
     def save_intent(self, intent: Intent) -> None:
         """
         Save or update an intent.
-        
+
         Args:
             intent: Intent to save
         """
         with self._connect() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO intents 
                 (component_id, component_path, intent_text, confidence, 
                  evidence, user_edited, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                intent.component_id,
-                intent.component_path,
-                intent.intent_text,
-                intent.confidence,
-                intent.evidence.model_dump_json(),
-                1 if intent.user_edited else 0,
-                intent.created_at.isoformat(),
-                intent.updated_at.isoformat(),
-            ))
+            """,
+                (
+                    intent.component_id,
+                    intent.component_path,
+                    intent.intent_text,
+                    intent.confidence,
+                    intent.evidence.model_dump_json(),
+                    1 if intent.user_edited else 0,
+                    intent.created_at.isoformat(),
+                    intent.updated_at.isoformat(),
+                ),
+            )
             conn.commit()
-    
+
     def get_intent(self, component_id: str) -> Optional[Intent]:
         """
         Retrieve intent by component ID.
-        
+
         Args:
             component_id: Unique identifier for the component
-            
+
         Returns:
             Intent if found, None otherwise
         """
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                "SELECT * FROM intents WHERE component_id = ?",
-                (component_id,)
-            )
+            cursor = conn.execute("SELECT * FROM intents WHERE component_id = ?", (component_id,))
             row = cursor.fetchone()
-            
+
             if row is None:
                 return None
-            
+
             return self._row_to_intent(row)
-    
+
     def get_intents_by_path(self, path_prefix: str) -> List[Intent]:
         """
         Get all intents for components under a path.
-        
+
         Args:
             path_prefix: Path prefix to filter by
-            
+
         Returns:
             List of matching intents
         """
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
-                "SELECT * FROM intents WHERE component_path LIKE ?",
-                (f"{path_prefix}%",)
+                "SELECT * FROM intents WHERE component_path LIKE ?", (f"{path_prefix}%",)
             )
             return [self._row_to_intent(row) for row in cursor.fetchall()]
-    
+
     def get_low_confidence_intents(self, threshold: float = 0.6) -> List[Intent]:
         """
         Get intents with confidence below threshold.
-        
+
         Args:
             threshold: Confidence threshold
-            
+
         Returns:
             List of low-confidence intents
         """
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
-                "SELECT * FROM intents WHERE confidence < ? AND user_edited = 0",
-                (threshold,)
+                "SELECT * FROM intents WHERE confidence < ? AND user_edited = 0", (threshold,)
             )
             return [self._row_to_intent(row) for row in cursor.fetchall()]
-    
+
     def get_all_intents(self) -> List[Intent]:
         """
         Get all stored intents.
-        
+
         Returns:
             List of all intents
         """
@@ -162,37 +160,34 @@ class IntentDatabase:
     def get_all_intents_dict(self) -> Dict[str, Intent]:
         """
         Get all stored intents as a dictionary keyed by component_id.
-        
+
         Returns:
             Dictionary of all intents
         """
         intents = self.get_all_intents()
         return {intent.component_id: intent for intent in intents}
-    
+
     def delete_intent(self, component_id: str) -> bool:
         """
         Delete an intent.
-        
+
         Args:
             component_id: Unique identifier for the component
-            
+
         Returns:
             True if deleted, False if not found
         """
         with self._connect() as conn:
-            cursor = conn.execute(
-                "DELETE FROM intents WHERE component_id = ?",
-                (component_id,)
-            )
+            cursor = conn.execute("DELETE FROM intents WHERE component_id = ?", (component_id,))
             conn.commit()
             return cursor.rowcount > 0
-    
+
     def clear_all(self) -> None:
         """Delete all intents."""
         with self._connect() as conn:
             conn.execute("DELETE FROM intents")
             conn.commit()
-    
+
     def _row_to_intent(self, row: sqlite3.Row) -> Intent:
         """Convert database row to Intent model."""
         evidence_data = json.loads(row["evidence"])
@@ -206,7 +201,7 @@ class IntentDatabase:
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
         )
-    
+
     def get_stats(self) -> dict:
         """Get database statistics."""
         with self._connect() as conn:
@@ -217,10 +212,10 @@ class IntentDatabase:
             low_confidence = conn.execute(
                 "SELECT COUNT(*) FROM intents WHERE confidence < 0.6"
             ).fetchone()[0]
-            avg_confidence = conn.execute(
-                "SELECT AVG(confidence) FROM intents"
-            ).fetchone()[0] or 0.0
-            
+            avg_confidence = (
+                conn.execute("SELECT AVG(confidence) FROM intents").fetchone()[0] or 0.0
+            )
+
             return {
                 "total_intents": total,
                 "user_edited": user_edited,

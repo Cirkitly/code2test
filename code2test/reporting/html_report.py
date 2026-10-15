@@ -1,6 +1,7 @@
 """
 HTML Reporting Module.
 """
+
 import datetime
 from typing import Any, Dict, Optional
 
@@ -204,12 +205,23 @@ class HTMLReportGenerator:
     TEMPLATE = TEMPLATE
 
     def _env(self) -> Environment:
-        loader = DictLoader({"style": STYLE, "quality": QUALITY_SECTION,
-                             "report": self.TEMPLATE, "coverage": COVERAGE_TEMPLATE})
+        loader = DictLoader(
+            {
+                "style": STYLE,
+                "quality": QUALITY_SECTION,
+                "report": self.TEMPLATE,
+                "coverage": COVERAGE_TEMPLATE,
+            }
+        )
         return Environment(loader=loader, autoescape=True)
 
-    def generate_report(self, test_suite: TestSuite, intents: Dict[str, Intent], output_path: str,
-                        quality: Optional[Dict[str, Any]] = None) -> str:
+    def generate_report(
+        self,
+        test_suite: TestSuite,
+        intents: Dict[str, Intent],
+        output_path: str,
+        quality: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """
         Generate comprehensive HTML report.
 
@@ -226,25 +238,33 @@ class HTMLReportGenerator:
         total_files = len(test_suite.test_files)
         success_rate = (verified_count / total_files * 100) if total_files > 0 else 0
 
-        html_content = self._env().get_template("report").render(
-            suite=test_suite,
-            intents=intents,
-            quality=quality,
-            timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            verified_count=verified_count,
-            success_rate=success_rate
+        html_content = (
+            self._env()
+            .get_template("report")
+            .render(
+                suite=test_suite,
+                intents=intents,
+                quality=quality,
+                timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                verified_count=verified_count,
+                success_rate=success_rate,
+            )
         )
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             f.write(html_content)
 
         return html_content
 
     def generate_quality_report(self, quality: Dict[str, Any], output_path: str) -> str:
         """Write a standalone page with behavioral coverage and diagnostic accuracy."""
-        html_content = self._env().get_template("coverage").render(
-            quality=quality,
-            timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        html_content = (
+            self._env()
+            .get_template("coverage")
+            .render(
+                quality=quality,
+                timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            )
         )
         with open(output_path, "w") as f:
             f.write(html_content)

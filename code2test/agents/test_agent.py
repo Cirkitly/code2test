@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 class GeneratedTest(BaseModel):
     """A single generated test from LLM."""
+
     name: str
     description: str
     test_code: str
@@ -179,7 +180,9 @@ def _module_api(path: str, skip: Optional[str] = None) -> str:
             lines += [_signature(node) + ":"] + doc(node, "    ") + ["    ..."]
         elif isinstance(node, ast.ClassDef):
             bases = ", ".join(ast.unparse(b) for b in node.bases)
-            lines += [f"class {node.name}({bases}):" if bases else f"class {node.name}:"] + doc(node, "    ")
+            lines += [f"class {node.name}({bases}):" if bases else f"class {node.name}:"] + doc(
+                node, "    "
+            )
             for item in node.body:
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
                     not item.name.startswith("_") or item.name in ("__init__", "__call__")
@@ -210,7 +213,9 @@ def clean_code(code: str) -> str:
         return code
     except SyntaxError:
         pass
-    unescaped = code.replace("\\n", "\n").replace("\\t", "    ").replace('\\"', '"').replace("\\'", "'")
+    unescaped = (
+        code.replace("\\n", "\n").replace("\\t", "    ").replace('\\"', '"').replace("\\'", "'")
+    )
     try:
         compile(unescaped, "<test>", "exec")
         return unescaped
@@ -221,12 +226,12 @@ def clean_code(code: str) -> str:
 class TestAgent:
     """
     LLM agent for test generation.
-    
+
     Generates tests based on inferred intents using the specified test framework.
     """
 
     __test__ = False  # not a pytest test class
-    
+
     def __init__(
         self,
         model: str = "openai:gpt-4o-mini",
@@ -235,7 +240,7 @@ class TestAgent:
     ):
         """
         Initialize test agent.
-        
+
         Args:
             model: LLM model to use for generation
             repo_path: Repository root, used to make source paths relative
@@ -245,7 +250,7 @@ class TestAgent:
         self.repo_path = repo_path
         self.output_dir = output_dir or "tests"
         self._agent = None
-    
+
     def _get_agent(self) -> Agent:
         """Get or create the pydantic-ai agent."""
         if self._agent is None:
@@ -256,27 +261,27 @@ class TestAgent:
                 retries=3,
             )
         return self._agent
-    
+
     async def generate_unit_tests(
         self,
         component: Dict[str, Any],
         intent: Intent,
-        framework: TestFramework = TestFramework.PYTEST
+        framework: TestFramework = TestFramework.PYTEST,
     ) -> TestFile:
         """
         Generate unit tests for a component.
-        
+
         Args:
             component: Component data from AST analysis
             intent: Inferred intent for the component
             framework: Test framework to use
-            
+
         Returns:
             TestFile with generated test cases
         """
         if framework != TestFramework.PYTEST:
             logger.warning(f"Framework {framework} not fully supported, using pytest patterns")
-        
+
         prompt = PYTEST_GENERATION_PROMPT.format(
             name=component.get("name", "unknown"),
             intent=intent.intent_text,
@@ -287,17 +292,17 @@ class TestAgent:
             module_imports=self.module_imports_for(component) or "# none",
             related_api=self.related_api_for(component) or "# none",
         )
-        
+
         try:
             agent = self._get_agent()
-            
+
             # Simple retry loop for 429s without tenacity dependency
             max_retries = 3
             backoff = 2.0
             for attempt in range(max_retries):
                 try:
                     result = await agent.run(prompt, output_type=TestGenerationResult)
-                    break 
+                    break
                 except Exception as e:
                     # Check for rate limit
                     is_rate_limit = "429" in str(e)
@@ -305,26 +310,28 @@ class TestAgent:
                         is_rate_limit = True
 
                     if is_rate_limit and attempt < max_retries - 1:
-                        wait = backoff * (2 ** attempt)
+                        wait = backoff * (2**attempt)
                         logger.warning(f"Rate limited (429), retrying in {wait}s...")
                         await asyncio.sleep(wait)
                     else:
                         raise e
-            
+
             # Convert to TestCase objects
             test_cases = []
             for gen_test in result.output.tests:
-                test_cases.append(TestCase(
-                    name=test_function_name(gen_test.test_code, gen_test.name),
-                    intent_text=gen_test.tests_behavior,
-                    test_code=clean_code(gen_test.test_code),
-                    status=TestStatus.PENDING,
-                ))
-            
+                test_cases.append(
+                    TestCase(
+                        name=test_function_name(gen_test.test_code, gen_test.name),
+                        intent_text=gen_test.tests_behavior,
+                        test_code=clean_code(gen_test.test_code),
+                        status=TestStatus.PENDING,
+                    )
+                )
+
             # Build test file path
             component_path = component.get("file_path", "unknown.py")
             test_path = self._generate_test_path(component_path, component)
-            
+
             return TestFile(
                 path=test_path,
                 component_id=component.get("id", component.get("name", "unknown")),
@@ -335,10 +342,12 @@ class TestAgent:
                 fixtures=[clean_code(f) for f in result.output.fixtures],
                 created_at=datetime.now(),
             )
-            
+
         except Exception as e:
             raise_if_fatal(e)
-            logger.error(f"Test generation failed for {component.get('id', component.get('name'))}: {e}")
+            logger.error(
+                f"Test generation failed for {component.get('id', component.get('name'))}: {e}"
+            )
             # Return empty test file
             return TestFile(
                 path=self._generate_test_path(component.get("file_path", "unknown.py"), component),
@@ -347,23 +356,23 @@ class TestAgent:
                 test_cases=[],
                 framework=framework,
             )
-    
+
     async def generate_integration_tests(
         self,
         module: Dict[str, Any],
         child_components: List[Dict[str, Any]],
         intents: Dict[str, Intent],
-        framework: TestFramework = TestFramework.PYTEST
+        framework: TestFramework = TestFramework.PYTEST,
     ) -> TestFile:
         """
         Generate integration tests for a module.
-        
+
         Args:
             module: Module data
             child_components: Child components in the module
             intents: Intents for child components
             framework: Test framework
-            
+
         Returns:
             TestFile with integration tests
         """
@@ -374,7 +383,7 @@ class TestAgent:
             intent = intents.get(comp_id)
             if intent:
                 component_summaries.append(f"- {comp.get('name')}: {intent.intent_text}")
-        
+
         prompt = f"""Generate integration tests for the following module:
 
 **Module:** {module.get("name", "unknown")}
@@ -392,7 +401,7 @@ Use pytest syntax with appropriate fixtures."""
 
         try:
             agent = self._get_agent()
-            
+
             # Simple retry loop for 429s
             max_retries = 3
             backoff = 2.0
@@ -401,14 +410,16 @@ Use pytest syntax with appropriate fixtures."""
                     result = await agent.run(prompt, output_type=TestGenerationResult)
                     break
                 except Exception as e:
-                    is_rate_limit = "429" in str(e) or (hasattr(e, "status_code") and e.status_code == 429)
+                    is_rate_limit = "429" in str(e) or (
+                        hasattr(e, "status_code") and e.status_code == 429
+                    )
                     if is_rate_limit and attempt < max_retries - 1:
-                        wait = backoff * (2 ** attempt)
+                        wait = backoff * (2**attempt)
                         logger.warning(f"Rate limited (429), retrying in {wait}s...")
                         await asyncio.sleep(wait)
                     else:
                         raise e
-            
+
             test_cases = [
                 TestCase(
                     name=test_function_name(gen_test.test_code, gen_test.name),
@@ -418,10 +429,12 @@ Use pytest syntax with appropriate fixtures."""
                 )
                 for gen_test in result.output.tests
             ]
-            
+
             module_path = module.get("path", "unknown")
-            test_path = os.path.join(self.output_dir, "integration", f"test_{module.get('name', 'module')}.py")
-            
+            test_path = os.path.join(
+                self.output_dir, "integration", f"test_{module.get('name', 'module')}.py"
+            )
+
             return TestFile(
                 path=test_path,
                 component_id=f"module:{module.get('name', 'unknown')}",
@@ -431,18 +444,20 @@ Use pytest syntax with appropriate fixtures."""
                 imports=result.output.imports,
                 fixtures=result.output.fixtures,
             )
-            
+
         except Exception as e:
             raise_if_fatal(e)
             logger.error(f"Integration test generation failed: {e}")
             return TestFile(
-                path=os.path.join(self.output_dir, "integration", f"test_{module.get('name', 'module')}.py"),
+                path=os.path.join(
+                    self.output_dir, "integration", f"test_{module.get('name', 'module')}.py"
+                ),
                 component_id=f"module:{module.get('name', 'unknown')}",
                 component_path=module.get("path", ""),
                 test_cases=[],
                 framework=framework,
             )
-    
+
     def module_path_for(self, component: Dict[str, Any]) -> Optional[str]:
         """Dotted module path for a component's source file, e.g. src/pkg/mod.py -> pkg.mod."""
         rel = component.get("relative_path") or component.get("file_path") or ""
@@ -485,7 +500,10 @@ Use pytest syntax with appropriate fixtures."""
                 continue
             parts = match.group(1).split(".")
             for base in (self.repo_path, os.path.join(self.repo_path, "src")):
-                for candidate in (os.path.join(base, *parts) + ".py", os.path.join(base, *parts, "__init__.py")):
+                for candidate in (
+                    os.path.join(base, *parts) + ".py",
+                    os.path.join(base, *parts, "__init__.py"),
+                ):
                     if os.path.isfile(candidate) and candidate not in files:
                         files.append(candidate)
 
@@ -520,9 +538,15 @@ Use pytest syntax with appropriate fixtures."""
                 lines.append(ast.unparse(node))
             elif isinstance(node, ast.ImportFrom):
                 if node.level:  # resolve relative imports so tests can use them
-                    base = package[: len(package) - node.level + 1] if node.level <= len(package) else []
+                    base = (
+                        package[: len(package) - node.level + 1]
+                        if node.level <= len(package)
+                        else []
+                    )
                     module = ".".join(base + ([node.module] if node.module else []))
-                    names = ", ".join(a.name + (f" as {a.asname}" if a.asname else "") for a in node.names)
+                    names = ", ".join(
+                        a.name + (f" as {a.asname}" if a.asname else "") for a in node.names
+                    )
                     lines.append(f"from {module} import {names}" if module else ast.unparse(node))
                 else:
                     lines.append(ast.unparse(node))
@@ -577,24 +601,30 @@ Use pytest syntax with appropriate fixtures."""
         new_cases = []
         for tc in test_file.test_cases:
             if tc.name in fixed:
-                new_cases.append(TestCase(
-                    name=tc.name,
-                    intent_text=tc.intent_text,
-                    test_code=clean_code(fixed[tc.name].test_code),
-                    status=TestStatus.PENDING,
-                ))
+                new_cases.append(
+                    TestCase(
+                        name=tc.name,
+                        intent_text=tc.intent_text,
+                        test_code=clean_code(fixed[tc.name].test_code),
+                        status=TestStatus.PENDING,
+                    )
+                )
             else:
                 new_cases.append(tc)
 
-        return test_file.model_copy(update={
-            "test_cases": new_cases,
-            "imports": self._ensure_import(
-                list(dict.fromkeys(result.output.imports or test_file.imports)), component
-            ),
-            "fixtures": [clean_code(f) for f in (result.output.fixtures or test_file.fixtures)],
-        })
+        return test_file.model_copy(
+            update={
+                "test_cases": new_cases,
+                "imports": self._ensure_import(
+                    list(dict.fromkeys(result.output.imports or test_file.imports)), component
+                ),
+                "fixtures": [clean_code(f) for f in (result.output.fixtures or test_file.fixtures)],
+            }
+        )
 
-    def _generate_test_path(self, source_path: str, component: Optional[Dict[str, Any]] = None) -> str:
+    def _generate_test_path(
+        self, source_path: str, component: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
         Generate test file path from source path.
 
@@ -645,19 +675,19 @@ Use pytest syntax with appropriate fixtures."""
     def format_test_preview(self, test_file: TestFile) -> str:
         """
         Format test file for user preview.
-        
+
         Args:
             test_file: Generated test file
-            
+
         Returns:
             Formatted preview string
         """
         lines = [
             f"Generated {len(test_file.test_cases)} tests:",
         ]
-        
+
         for tc in test_file.test_cases:
             status_icon = "○"  # pending
             lines.append(f"  {status_icon} {tc.name}")
-        
+
         return "\n".join(lines)

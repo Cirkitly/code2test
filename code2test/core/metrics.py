@@ -21,13 +21,13 @@ class FileMetrics:
 
     component_id: str
     path: str
-    generated: int = 0          # tests the model wrote
-    first_run_passed: int = 0   # tests passing before any repair
-    repair_rounds: int = 0      # repair calls made for this file
-    kept: int = 0               # tests in the file that was written
-    xfail: int = 0              # kept tests marked xfail (suspected code bug)
-    passing: int = 0            # kept tests that really pass (not skipped, not xfail)
-    reused: bool = False        # verified in an earlier run and skipped this time
+    generated: int = 0  # tests the model wrote
+    first_run_passed: int = 0  # tests passing before any repair
+    repair_rounds: int = 0  # repair calls made for this file
+    kept: int = 0  # tests in the file that was written
+    xfail: int = 0  # kept tests marked xfail (suspected code bug)
+    passing: int = 0  # kept tests that really pass (not skipped, not xfail)
+    reused: bool = False  # verified in an earlier run and skipped this time
     removed_reason: Optional[str] = None  # set when the whole file was discarded
 
     @property
@@ -42,7 +42,7 @@ class RunMetrics:
     components: int = 0
     files: Dict[str, FileMetrics] = field(default_factory=dict)
     diagnoses: Counter = field(default_factory=Counter)  # cause -> count
-    llm_failures: int = 0       # components whose generation call failed
+    llm_failures: int = 0  # components whose generation call failed
     skipped_low_confidence: int = 0  # components below --confidence in --auto mode
 
     def file(self, component_id: str, path: str) -> FileMetrics:

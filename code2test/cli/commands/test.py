@@ -28,61 +28,47 @@ console = Console()
     "--auto",
     is_flag=True,
     default=False,
-    help="Auto-accept high-confidence tests without prompting"
+    help="Auto-accept high-confidence tests without prompting",
 )
 @click.option(
     "--confidence",
     type=float,
     default=0.6,
-    help="Minimum confidence threshold for auto-acceptance (0.0-1.0)"
+    help="Minimum confidence threshold for auto-acceptance (0.0-1.0)",
 )
 @click.option(
     "--dry-run",
     is_flag=True,
     default=False,
-    help="Show what would be generated without writing files"
+    help="Show what would be generated without writing files",
 )
 @click.option(
-    "--output-dir",
-    type=click.Path(),
-    default="tests",
-    help="Output directory for generated tests"
+    "--output-dir", type=click.Path(), default="tests", help="Output directory for generated tests"
 )
 @click.option(
     "--framework",
     type=click.Choice(["pytest", "unittest"]),
     default="pytest",
-    help="Test framework (v1 generates pytest tests; unittest is not supported yet)"
+    help="Test framework (v1 generates pytest tests; unittest is not supported yet)",
 )
 @click.option(
-    "--include",
-    type=str,
-    default=None,
-    help="Glob pattern for files to include (e.g., '*.py')"
+    "--include", type=str, default=None, help="Glob pattern for files to include (e.g., '*.py')"
 )
 @click.option(
-    "--exclude",
-    type=str,
-    default=None,
-    help="Glob pattern for files to exclude (e.g., '*test*')"
+    "--exclude", type=str, default=None, help="Glob pattern for files to exclude (e.g., '*test*')"
 )
 @click.option(
     "--exit-code/--no-exit-code",
     default=False,
-    help="Return non-zero exit code if tests fail or verification fails"
+    help="Return non-zero exit code if tests fail or verification fails",
 )
 @click.option(
     "--report",
     type=click.Choice(["none", "html", "json", "all"]),
     default="none",
-    help="Generate reports after test generation"
+    help="Generate reports after test generation",
 )
-@click.option(
-    "--verbose", "-v",
-    is_flag=True,
-    default=False,
-    help="Enable verbose logging"
-)
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Enable verbose logging")
 def test_command(
     path: str,
     auto: bool,
@@ -94,14 +80,14 @@ def test_command(
     exclude: Optional[str],
     exit_code: bool,
     report: str,
-    verbose: bool
+    verbose: bool,
 ) -> None:
     """
     Generate tests for a code repository or module.
-    
+
     Analyzes the code using intent-first analysis and generates comprehensive
     test suites with human-in-the-loop verification.
-    
+
     \b
     Examples:
         code2test test src/auth/          # Generate tests for auth module
@@ -110,24 +96,24 @@ def test_command(
         code2test test --confidence 0.8   # Only accept high-confidence
     """
     display = DisplayManager(quiet=not verbose)
-    
+
     # Setup logging
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.WARNING)
-    
+
     # Validate confidence
     if not 0.0 <= confidence <= 1.0:
         display.error("Confidence must be between 0.0 and 1.0")
         sys.exit(1)
-    
+
     main_model = resolve_model(display)
     target_path = Path(path).resolve()
     repo_path = find_repo_root(target_path)
     display.info(f"Using model: {main_model}")
     display.info(f"Analyzing: {target_path}")
-    
+
     try:
         # Create configuration
         config = GenerationConfig(
@@ -138,105 +124,119 @@ def test_command(
             framework=TestFramework.PYTEST if framework == "pytest" else TestFramework.UNITTEST,
             model=main_model,
         )
-        
+
         # Build include/exclude patterns
         include_patterns = [include] if include else None
-        
+
         # More specific default exclude patterns to avoid excluding the repo itself if it has "test" in the name
-        default_excludes = ["tests", "test", "*_test.py", "test_*.py", "*__pycache__*", "*.pyc", ".git", ".tox", ".env", "venv"]
+        default_excludes = [
+            "tests",
+            "test",
+            "*_test.py",
+            "test_*.py",
+            "*__pycache__*",
+            "*.pyc",
+            ".git",
+            ".tox",
+            ".env",
+            "venv",
+        ]
         exclude_patterns = [exclude] if exclude else default_excludes
-        
+
         # Analyze codebase
         display.info("Parsing codebase...")
-        
+
         # Use the existing dependency analyzer
         # Use the existing dependency analyzer
         # We need to construct Config correctly as it requires many fields
         # and patterns go into agent_instructions
         agent_instructions = {
             "include_patterns": include_patterns,
-            "exclude_patterns": exclude_patterns
+            "exclude_patterns": exclude_patterns,
         }
-        
+
         repo_config = Config(
             repo_path=str(repo_path),
             output_dir=output_dir,
             dependency_graph_dir=str(repo_path / ".code2test" / "dependency_graphs"),
             docs_dir=str(repo_path / ".code2test" / "docs"),
             max_depth=2,
-            llm_base_url="", # Not used for static analysis
+            llm_base_url="",  # Not used for static analysis
             llm_api_key="",
             main_model="",
             cluster_model="",
-            agent_instructions=agent_instructions
+            agent_instructions=agent_instructions,
         )
-        
+
         builder = DependencyGraphBuilder(repo_config)
         components, leaf_nodes = builder.build_dependency_graph()
-        
+
         if not components:
             display.warning("No components found to analyze")
             sys.exit(0)
-            
+
         display.success(f"Found {len(components)} components")
-        
+
         # Convert Node objects to dictionaries for compatibility
         # and map 'depends_on' to 'dependencies'
         components_dict = {}
         for k, v in components.items():
-            if hasattr(v, 'model_dump'):
+            if hasattr(v, "model_dump"):
                 data = v.model_dump()
             else:
                 data = v.dict()
-            
+
             # Map depends_on to dependencies
-            if 'depends_on' in data:
-                data['dependencies'] = list(data['depends_on'])
+            if "depends_on" in data:
+                data["dependencies"] = list(data["depends_on"])
             else:
-                data['dependencies'] = []
-                
+                data["dependencies"] = []
+
             components_dict[k] = data
-            
+
         # Test generation and verification currently target Python (pytest) only
         # Only generate for the requested file/directory (the whole repo is analyzed for context)
         components = {
-            k: v for k, v in components_dict.items()
-            if str(v.get("file_path", "")).endswith(".py") and _is_within(v.get("file_path", ""), repo_path, target_path)
+            k: v
+            for k, v in components_dict.items()
+            if str(v.get("file_path", "")).endswith(".py")
+            and _is_within(v.get("file_path", ""), repo_path, target_path)
         }
         skipped_other = len(components_dict) - len(components)
         if skipped_other:
-            display.warning(f"Skipping {skipped_other} non-Python components (only Python test generation is supported)")
+            display.warning(
+                f"Skipping {skipped_other} non-Python components (only Python test generation is supported)"
+            )
         if not components:
             display.warning("No Python components found to test")
             sys.exit(0)
-        
+
         # Create generator
         generator = TestGenerator(
             repo_path=str(repo_path),
             config=config,
         )
-        
+
         if auto:
             # Non-interactive batch mode
             display.info("Running in auto mode...")
-            
+
             async def run_batch():
-                suite = await generator.generate_tests_for_module(
-                    str(repo_path),
-                    components
-                )
+                suite = await generator.generate_tests_for_module(str(repo_path), components)
                 return suite
-            
+
             suite = asyncio.run(run_batch())
-            
+
             if not dry_run:
                 show_run_metrics(generator.metrics)
             else:
                 display.show_summary_table(generator.get_stats())
-            
+
             if not dry_run:
-                display.success(f"Generated {suite.total_tests} tests in {len(suite.test_files)} files")
-                
+                display.success(
+                    f"Generated {suite.total_tests} tests in {len(suite.test_files)} files"
+                )
+
                 # Handle reporting
                 if report != "none":
                     display.info(f"Generating {report} report...")
@@ -247,28 +247,35 @@ def test_command(
                         report_dir = Path(output_dir) / "reports"
                         report_dir.mkdir(parents=True, exist_ok=True)
                         intents = generator.intent_db.get_all_intents_dict()
-                        quality = quality_report(repo_path, generator.test_registry.get_all_tests(), intents)
+                        quality = quality_report(
+                            repo_path, generator.test_registry.get_all_tests(), intents
+                        )
 
                         if report in ["html", "all"]:
                             html_path = report_dir / "report.html"
                             html_gen = HTMLReportGenerator()
-                            html_gen.generate_report(suite, intents, str(html_path), quality=quality)
+                            html_gen.generate_report(
+                                suite, intents, str(html_path), quality=quality
+                            )
                             display.success(f"HTML report generated: {html_path}")
 
                         if report in ["json", "all"]:
                             json_path = report_dir / "report.json"
                             json_gen = JSONReportGenerator()
-                            json_gen.generate_report(suite, intents, str(json_path), quality=quality)
+                            json_gen.generate_report(
+                                suite, intents, str(json_path), quality=quality
+                            )
                             display.success(f"JSON report generated: {json_path}")
-                            
+
                     except Exception as e:
                         display.error(f"Failed to generate report: {e}")
                         if verbose:
                             import traceback
+
                             traceback.print_exc()
             else:
                 display.info(f"Would generate {suite.total_tests} tests (dry-run)")
-                
+
             # Handle exit code
             if exit_code and not dry_run:
                 # Check for verification failures
@@ -279,7 +286,7 @@ def test_command(
         else:
             # Interactive mode
             run_interactive_generation(generator, components, auto_accept=auto)
-        
+
     except KeyboardInterrupt:
         display.warning("\nGeneration interrupted")
         sys.exit(130)
@@ -287,6 +294,7 @@ def test_command(
         display.error(f"Generation failed: {e}")
         if verbose:
             import traceback
+
             traceback.print_exc()
         sys.exit(1)
 
@@ -330,17 +338,24 @@ def show_run_metrics(metrics) -> None:
     table = Table(title="Generation Results")
     table.add_column("Metric")
     table.add_column("Value", justify="right")
+
     def pct(value) -> str:
         return "n/a" if value is None else f"{value:.0%}"
 
     table.add_row("Components", str(summary["components"]))
-    table.add_row("Components with passing tests", f"{summary['components_with_tests']} ({pct(summary['acceptance_rate'])})")
+    table.add_row(
+        "Components with passing tests",
+        f"{summary['components_with_tests']} ({pct(summary['acceptance_rate'])})",
+    )
     if summary["components_reused"]:
         table.add_row("  of which verified in an earlier run", str(summary["components_reused"]))
     if summary["skipped_low_confidence"]:
         table.add_row("Skipped (intent below --confidence)", str(summary["skipped_low_confidence"]))
     table.add_row("Tests generated", str(summary["tests_generated"]))
-    table.add_row("Passed on first run", f"{summary['first_run_passed']} ({pct(summary['first_run_pass_rate'])})")
+    table.add_row(
+        "Passed on first run",
+        f"{summary['first_run_passed']} ({pct(summary['first_run_pass_rate'])})",
+    )
     table.add_row("Tests kept", str(summary["tests_kept"]))
     table.add_row("  of which xfail (possible bugs)", str(summary["tests_xfail"]))
     table.add_row("Tests dropped", str(summary["tests_dropped"]))
@@ -349,10 +364,12 @@ def show_run_metrics(metrics) -> None:
         table.add_row("Components where generation failed", str(summary["llm_failures"]))
     console.print(table)
 
-    for name, value, target, met in target_rows({
-        "acceptance_rate": summary["acceptance_rate"],
-        "first_run_pass_rate": summary["first_run_pass_rate"],
-    }):
+    for name, value, target, met in target_rows(
+        {
+            "acceptance_rate": summary["acceptance_rate"],
+            "first_run_pass_rate": summary["first_run_pass_rate"],
+        }
+    ):
         if value is None:
             continue
         mark = "[green]✓[/green]" if met else "[yellow]✗[/yellow]"

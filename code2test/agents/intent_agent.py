@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class IntentInferenceResult(BaseModel):
     """Result from LLM intent inference."""
+
     intent_text: str
     confidence: float
     reasoning: str
@@ -75,20 +76,20 @@ Provide your analysis as a clear, concise intent statement."""
 class IntentAgent:
     """
     LLM agent for intent inference.
-    
+
     Used when static analysis cannot determine intent with high confidence.
     """
-    
+
     def __init__(self, model: str = "openai:gpt-4o-mini"):
         """
         Initialize intent agent.
-        
+
         Args:
             model: LLM model to use for inference
         """
         self.model = model
         self._agent = None
-    
+
     def _get_agent(self) -> Agent:
         """Get or create the pydantic-ai agent."""
         if self._agent is None:
@@ -100,25 +101,23 @@ class IntentAgent:
                 retries=3,
             )
         return self._agent
-    
+
     async def infer_intent(
-        self,
-        component: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None
+        self, component: Dict[str, Any], context: Optional[Dict[str, Any]] = None
     ) -> Intent:
         """
         Use LLM to infer intent when static signals are weak.
-        
+
         Args:
             component: Component data from AST analysis
             context: Additional context (dependencies, callers, etc.)
-            
+
         Returns:
             Inferred Intent with confidence score
         """
         if context is None:
             context = {}
-        
+
         # Format prompt
         prompt = INTENT_USER_PROMPT_TEMPLATE.format(
             name=component.get("name", "unknown"),
@@ -131,17 +130,17 @@ class IntentAgent:
             call_sites=", ".join((component.get("called_by") or [])[:5]) or "None",
             dependencies=", ".join(context.get("dependencies", [])[:5]) or "None",
         )
-        
+
         try:
             agent = self._get_agent()
-            
+
             # Simple retry loop for 429s
             max_retries = 3
             backoff = 2.0
             for attempt in range(max_retries):
                 try:
                     result = await agent.run(prompt)
-                    break 
+                    break
                 except Exception as e:
                     # Check for rate limit
                     is_rate_limit = "429" in str(e)
@@ -149,22 +148,24 @@ class IntentAgent:
                         is_rate_limit = True
 
                     if is_rate_limit and attempt < max_retries - 1:
-                        wait = backoff * (2 ** attempt)
+                        wait = backoff * (2**attempt)
                         logger.warning(f"Rate limited (429), retrying in {wait}s...")
                         await asyncio.sleep(wait)
                     else:
                         raise e
-            
+
             # Build evidence
             evidence = IntentEvidence(
                 docstring=component.get("docstring") or None,
                 signature=component.get("signature") or None,
-                type_hints=component.get("signature") if "->" in (component.get("signature") or "") else None,
+                type_hints=component.get("signature")
+                if "->" in (component.get("signature") or "")
+                else None,
                 naming_signals=[],
                 call_sites=(component.get("called_by") or [])[:5],
                 dependency_intents=[],
             )
-            
+
             return Intent(
                 component_id=component.get("id", component.get("name", "unknown")),
                 component_path=component.get("file_path", ""),
@@ -172,7 +173,7 @@ class IntentAgent:
                 confidence=result.output.confidence,
                 evidence=evidence,
             )
-            
+
         except Exception as e:
             raise_if_fatal(e)
             logger.error(f"Intent inference failed: {e}")
@@ -184,24 +185,20 @@ class IntentAgent:
                 confidence=0.3,
                 evidence=IntentEvidence(),
             )
-    
-    def get_clarification_prompt(
-        self,
-        component: Dict[str, Any],
-        partial_intent: Intent
-    ) -> str:
+
+    def get_clarification_prompt(self, component: Dict[str, Any], partial_intent: Intent) -> str:
         """
         Generate a user-facing prompt requesting clarification.
-        
+
         Args:
             component: Component data
             partial_intent: The low-confidence intent
-            
+
         Returns:
             Formatted clarification prompt
         """
         name = component.get("name", "unknown")
-        
+
         prompt_parts = [
             f"⚠ Low confidence intent ({partial_intent.confidence:.0%}) for {name}()",
             "",
@@ -209,23 +206,20 @@ class IntentAgent:
             "",
             "Please describe the intended behavior:",
         ]
-        
+
         return "\n".join(prompt_parts)
-    
+
     async def refine_intent(
-        self,
-        intent: Intent,
-        user_feedback: str,
-        component: Dict[str, Any]
+        self, intent: Intent, user_feedback: str, component: Dict[str, Any]
     ) -> Intent:
         """
         Refine intent based on user feedback.
-        
+
         Args:
             intent: Original low-confidence intent
             user_feedback: User's description of intended behavior
             component: Component data
-            
+
         Returns:
             Updated Intent with higher confidence
         """
@@ -238,5 +232,5 @@ class IntentAgent:
             evidence=intent.evidence,
             user_edited=True,
         )
-        
+
         return refined_intent

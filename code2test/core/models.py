@@ -12,14 +12,14 @@ from datetime import datetime
 
 class IntentEvidence(BaseModel):
     """Evidence supporting an inferred intent."""
-    
+
     docstring: Optional[str] = None
     signature: Optional[str] = None
     type_hints: Optional[str] = None
     naming_signals: List[str] = Field(default_factory=list)
     call_sites: List[str] = Field(default_factory=list)
     dependency_intents: List[str] = Field(default_factory=list)
-    
+
     def get_summary(self) -> str:
         """Get a summary of all evidence."""
         parts = []
@@ -34,7 +34,7 @@ class IntentEvidence(BaseModel):
 
 class Intent(BaseModel):
     """Inferred behavioral intent for a code component."""
-    
+
     component_id: str
     component_path: str
     intent_text: str
@@ -43,11 +43,11 @@ class Intent(BaseModel):
     user_edited: bool = False
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
-    
+
     def needs_clarification(self, threshold: float = 0.6) -> bool:
         """Check if intent confidence is below threshold."""
         return self.confidence < threshold
-    
+
     def update_intent(self, new_text: str, user_edited: bool = True) -> None:
         """Update intent text and mark as user-edited."""
         self.intent_text = new_text
@@ -59,22 +59,22 @@ class Intent(BaseModel):
 
 class DiagnosisCause(str, Enum):
     """Possible causes of test failure."""
-    
+
     TEST_WRONG = "TEST_WRONG"  # The test incorrectly interprets the intent
-    CODE_BUG = "CODE_BUG"      # The code doesn't match the stated intent
+    CODE_BUG = "CODE_BUG"  # The code doesn't match the stated intent
     INTENT_WRONG = "INTENT_WRONG"  # The inferred intent is incorrect
 
 
 class Diagnosis(BaseModel):
     """Diagnosis of a test failure."""
-    
+
     test_name: str
     cause: DiagnosisCause
     confidence: float = Field(ge=0.0, le=1.0)
     explanation: str
     suggested_fix: Optional[str] = None
     stack_trace: Optional[str] = None
-    
+
     def get_action_prompt(self) -> str:
         """Get the user action prompt based on diagnosis cause."""
         if self.cause == DiagnosisCause.TEST_WRONG:
@@ -89,7 +89,7 @@ class TestStatus(str, Enum):
     """Status of a test case."""
 
     __test__ = False  # not a pytest test class
-    
+
     PENDING = "pending"
     PASSED = "passed"
     FAILED = "failed"
@@ -101,24 +101,24 @@ class TestCase(BaseModel):
     """A single test case."""
 
     __test__ = False  # not a pytest test class
-    
+
     name: str
     intent_text: str
     test_code: str
     status: TestStatus = TestStatus.PENDING
     failure_message: Optional[str] = None
     diagnosis: Optional[Diagnosis] = None
-    
+
     def mark_passed(self) -> None:
         """Mark test as passed."""
         self.status = TestStatus.PASSED
         self.failure_message = None
-    
+
     def mark_failed(self, message: str) -> None:
         """Mark test as failed with message."""
         self.status = TestStatus.FAILED
         self.failure_message = message
-    
+
     def mark_xfail(self, reason: str) -> None:
         """Mark test as expected failure."""
         self.status = TestStatus.XFAIL
@@ -129,7 +129,7 @@ class TestFramework(str, Enum):
     """Supported test frameworks."""
 
     __test__ = False  # not a pytest test class
-    
+
     PYTEST = "pytest"
     UNITTEST = "unittest"
     JEST = "jest"
@@ -143,7 +143,7 @@ class TestFile(BaseModel):
     """A generated test file."""
 
     __test__ = False  # not a pytest test class
-    
+
     path: str
     component_id: str
     component_path: str
@@ -153,47 +153,47 @@ class TestFile(BaseModel):
     fixtures: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
     verified: bool = False
-    
+
     @property
     def total_tests(self) -> int:
         """Get total number of test cases."""
         return len(self.test_cases)
-    
+
     @property
     def passed_count(self) -> int:
         """Get count of passed tests."""
         return sum(1 for tc in self.test_cases if tc.status == TestStatus.PASSED)
-    
+
     @property
     def failed_count(self) -> int:
         """Get count of failed tests."""
         return sum(1 for tc in self.test_cases if tc.status == TestStatus.FAILED)
-    
+
     def get_full_content(self) -> str:
         """Generate full test file content."""
         lines = []
-        
+
         # Imports
         for imp in self.imports:
             lines.append(imp)
         lines.append("")
-        
+
         # Fixtures
         for fixture in self.fixtures:
             lines.append(fixture)
             lines.append("")
-        
+
         # Test cases
         for tc in self.test_cases:
             lines.append(tc.test_code)
             lines.append("")
-        
+
         return "\n".join(lines)
 
 
 class VerificationResult(BaseModel):
     """Result of running verification on a test file."""
-    
+
     test_file_path: str
     all_passed: bool
     passed: List[str] = Field(default_factory=list)
@@ -204,12 +204,12 @@ class VerificationResult(BaseModel):
     stdout: Optional[str] = None
     stderr: Optional[str] = None
     collection_error: Optional[str] = None  # the file could not be imported/collected at all
-    
+
     @property
     def total_tests(self) -> int:
         """Get total number of tests."""
         return len(self.passed) + len(self.failed) + len(self.skipped)
-    
+
     @property
     def pass_rate(self) -> float:
         """Get pass rate as percentage."""
@@ -222,22 +222,22 @@ class TestSuite(BaseModel):
     """A collection of generated test files for a module."""
 
     __test__ = False  # not a pytest test class
-    
+
     module_path: str
     test_files: List[TestFile] = Field(default_factory=list)
     intents: Dict[str, Intent] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.now)
-    
+
     @property
     def total_tests(self) -> int:
         """Get total number of tests across all files."""
         return sum(tf.total_tests for tf in self.test_files)
-    
+
     @property
     def total_passed(self) -> int:
         """Get total passed tests."""
         return sum(tf.passed_count for tf in self.test_files)
-    
+
     @property
     def coverage_summary(self) -> Dict[str, Any]:
         """Get coverage summary."""
@@ -252,7 +252,7 @@ class TestSuite(BaseModel):
 
 class GenerationConfig(BaseModel):
     """Configuration for test generation."""
-    
+
     confidence_threshold: float = 0.6
     auto_accept: bool = False
     dry_run: bool = False
@@ -267,10 +267,14 @@ class GenerationConfig(BaseModel):
 
 def is_xfail(test_case: TestCase) -> bool:
     """A test kept as an expected failure (suspected code bug)."""
-    return (bool(test_case.diagnosis and test_case.diagnosis.cause == DiagnosisCause.CODE_BUG)
-            or "pytest.mark.xfail" in test_case.test_code)
+    return (
+        bool(test_case.diagnosis and test_case.diagnosis.cause == DiagnosisCause.CODE_BUG)
+        or "pytest.mark.xfail" in test_case.test_code
+    )
 
 
 def passing_count(test_file: TestFile) -> int:
     """Tests that really pass: not skipped, not expected failures."""
-    return sum(1 for tc in test_file.test_cases if tc.status == TestStatus.PASSED and not is_xfail(tc))
+    return sum(
+        1 for tc in test_file.test_cases if tc.status == TestStatus.PASSED and not is_xfail(tc)
+    )

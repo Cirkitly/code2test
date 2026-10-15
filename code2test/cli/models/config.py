@@ -20,6 +20,7 @@ class Configuration:
         main_model: pydantic-ai model string used for test generation,
             e.g. "anthropic:claude-sonnet-5-5"; empty when not set
     """
+
     main_model: str = ""
 
     def validate(self):

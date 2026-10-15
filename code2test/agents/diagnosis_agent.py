@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 class DiagnosisResult(BaseModel):
     """Result from failure diagnosis."""
+
     cause: str  # TEST_WRONG, CODE_BUG, or INTENT_WRONG
     confidence: float
     explanation: str
@@ -87,20 +88,20 @@ Provide your diagnosis with:
 class DiagnosisAgent:
     """
     LLM agent for test failure diagnosis.
-    
+
     Analyzes why tests fail and categorizes the root cause.
     """
-    
+
     def __init__(self, model: str = "openai:gpt-4o-mini"):
         """
         Initialize diagnosis agent.
-        
+
         Args:
             model: LLM model to use
         """
         self.model = model
         self._agent = None
-    
+
     def _get_agent(self) -> Agent:
         """Get or create the pydantic-ai agent."""
         if self._agent is None:
@@ -112,29 +113,25 @@ class DiagnosisAgent:
                 retries=3,
             )
         return self._agent
-    
+
     async def diagnose_failure(
-        self,
-        test_case: TestCase,
-        failure_output: str,
-        component: Dict[str, Any],
-        intent: Intent
+        self, test_case: TestCase, failure_output: str, component: Dict[str, Any], intent: Intent
     ) -> Diagnosis:
         """
         Diagnose why a test failed.
-        
+
         Args:
             test_case: The failing test case
             failure_output: stdout/stderr from test execution
             component: The component under test
             intent: The inferred intent
-            
+
         Returns:
             Diagnosis with cause, confidence, and suggested fix
         """
         # Parse expected/actual from failure output
         expected, actual = self._parse_assertion_error(failure_output)
-        
+
         prompt = DIAGNOSIS_PROMPT_TEMPLATE.format(
             test_name=test_case.name,
             test_code=test_case.test_code,
@@ -144,11 +141,11 @@ class DiagnosisAgent:
             expected=expected or "Unknown",
             actual=actual or "Unknown",
         )
-        
+
         try:
             agent = self._get_agent()
             result = await agent.run(prompt)
-            
+
             # Map string cause to enum
             cause_map = {
                 "TEST_WRONG": DiagnosisCause.TEST_WRONG,
@@ -156,7 +153,7 @@ class DiagnosisAgent:
                 "INTENT_WRONG": DiagnosisCause.INTENT_WRONG,
             }
             cause = cause_map.get(result.output.cause, DiagnosisCause.TEST_WRONG)
-            
+
             return Diagnosis(
                 test_name=test_case.name,
                 cause=cause,
@@ -165,7 +162,7 @@ class DiagnosisAgent:
                 suggested_fix=result.output.suggested_fix,
                 stack_trace=failure_output[:500] if failure_output else None,
             )
-            
+
         except Exception as e:
             raise_if_fatal(e)
             logger.error(f"Diagnosis failed: {e}")
@@ -178,19 +175,19 @@ class DiagnosisAgent:
                 suggested_fix=None,
                 stack_trace=failure_output[:500] if failure_output else None,
             )
-    
+
     def _parse_assertion_error(self, output: str) -> tuple[Optional[str], Optional[str]]:
         """
         Parse expected and actual values from assertion error.
-        
+
         Args:
             output: Test failure output
-            
+
         Returns:
             Tuple of (expected, actual) or (None, None)
         """
         import re
-        
+
         # Common patterns
         patterns = [
             # pytest AssertionError
@@ -199,21 +196,21 @@ class DiagnosisAgent:
             r"Expected:\s*(.+?)[\n\r]+\s*Got:\s*(.+)",
             r"expected:\s*(.+?)[\n\r]+\s*actual:\s*(.+)",
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, output, re.IGNORECASE)
             if match:
                 return match.group(1).strip(), match.group(2).strip()
-        
+
         return None, None
-    
+
     def format_diagnosis_panel(self, diagnosis: Diagnosis) -> str:
         """
         Format diagnosis for CLI display.
-        
+
         Args:
             diagnosis: The diagnosis to format
-            
+
         Returns:
             Formatted string for display
         """
@@ -224,5 +221,5 @@ class DiagnosisAgent:
             f"│ Likely cause: {diagnosis.cause.value} ({diagnosis.confidence:.0%})",
             f"╰─{'─' * 62}╯",
         ]
-        
+
         return "\n".join(lines)

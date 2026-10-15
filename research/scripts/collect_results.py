@@ -75,11 +75,21 @@ def static_intents(project: Path, threshold: float = 0.6):
     with tempfile.TemporaryDirectory() as tmp:
         # Analyze the project as it was before generation: without tests/ and .code2test/
         work = Path(tmp) / project.name
-        shutil.copytree(project, work, ignore=shutil.ignore_patterns("tests", ".code2test", "__pycache__"))
-        config = Config(repo_path=str(work), output_dir="tests",
-                        dependency_graph_dir=str(work / ".graphs"), docs_dir=str(work / ".docs"),
-                        max_depth=2, llm_base_url="", llm_api_key="", main_model="", cluster_model="",
-                        agent_instructions={"include_patterns": None, "exclude_patterns": None})
+        shutil.copytree(
+            project, work, ignore=shutil.ignore_patterns("tests", ".code2test", "__pycache__")
+        )
+        config = Config(
+            repo_path=str(work),
+            output_dir="tests",
+            dependency_graph_dir=str(work / ".graphs"),
+            docs_dir=str(work / ".docs"),
+            max_depth=2,
+            llm_base_url="",
+            llm_api_key="",
+            main_model="",
+            cluster_model="",
+            agent_instructions={"include_patterns": None, "exclude_patterns": None},
+        )
         nodes, _ = DependencyGraphBuilder(config).build_dependency_graph()
     components = {}
     for node_id, node in nodes.items():
@@ -98,16 +108,26 @@ def export_intents(project: Path, out: Path):
     """Write intents.json; return (components below the threshold, intents the model re-inferred)."""
     static = static_intents(project)
     db = sqlite3.connect(project / ".code2test" / "code2test.db")
-    rows = db.execute("SELECT component_id, intent_text, confidence FROM intents ORDER BY component_id").fetchall()
+    rows = db.execute(
+        "SELECT component_id, intent_text, confidence FROM intents ORDER BY component_id"
+    ).fetchall()
     db.close()
     below = sum(1 for i in static.values() if i.needs_clarification(0.6))
     exported, from_model = [], 0
     for comp_id, text, confidence in rows:
         source = "static" if comp_id in static and static[comp_id].intent_text == text else "model"
         from_model += source == "model"
-        exported.append({"component": comp_id, "intent": text, "confidence": round(confidence, 3),
-                         "static_confidence": round(static[comp_id].confidence, 3) if comp_id in static else None,
-                         "source": source})
+        exported.append(
+            {
+                "component": comp_id,
+                "intent": text,
+                "confidence": round(confidence, 3),
+                "static_confidence": round(static[comp_id].confidence, 3)
+                if comp_id in static
+                else None,
+                "source": source,
+            }
+        )
     (out / "intents.json").write_text(json.dumps(exported, indent=2) + "\n")
     return below, from_model
 
@@ -149,8 +169,11 @@ def collect(runs_dir: Path, run_number: int):
         shutil.copy(state / "metrics.json", out / "metrics.json")
         shutil.copy(state / "benchmark.json", out / "benchmark.json")
         (out / "verify.log").write_text(verify_log)
-        shutil.copytree(run / "project" / "tests", out / "tests",
-                        ignore=shutil.ignore_patterns("__pycache__", "reports", ".pytest_cache"))
+        shutil.copytree(
+            run / "project" / "tests",
+            out / "tests",
+            ignore=shutil.ignore_patterns("__pycache__", "reports", ".pytest_cache"),
+        )
         intents_below, intents_from_model = export_intents(run / "project", out)
 
         # Where the mutants were, and which survived
@@ -161,22 +184,34 @@ def collect(runs_dir: Path, run_number: int):
         string_survivors = sum(1 for x in bench["survivors"] if is_string_mutation(x["mutation"]))
 
         s = metrics["summary"]
+
         # Recompute rates from counts: the summary stores them rounded, and rounding twice can be off by one point
         def ratio(num, den):
             return num / den if den else None
+
         passed, total, skipped = verify_counts(verify_log)
         diag = bench["diagnosis_by_expected_cause"]
         row = {
-            "run": run_number, "subject": subject, "model": model,
-            "components": s["components"], "components_with_tests": s["components_with_tests"],
+            "run": run_number,
+            "subject": subject,
+            "model": model,
+            "components": s["components"],
+            "components_with_tests": s["components_with_tests"],
             "acceptance_rate": ratio(s["components_with_tests"], s["components"]),
-            "tests_generated": s["tests_generated"], "first_run_passed": s["first_run_passed"],
+            "tests_generated": s["tests_generated"],
+            "first_run_passed": s["first_run_passed"],
             "first_run_pass_rate": ratio(s["first_run_passed"], s["tests_generated"]),
-            "tests_kept": s["tests_kept"], "tests_xfail": s["tests_xfail"], "tests_dropped": s["tests_dropped"],
-            "repair_rounds": s["repair_rounds"], "llm_failures": s["llm_failures"],
-            "suite_cases_passed": passed, "suite_cases_total": total, "suite_cases_skipped": skipped,
+            "tests_kept": s["tests_kept"],
+            "tests_xfail": s["tests_xfail"],
+            "tests_dropped": s["tests_dropped"],
+            "repair_rounds": s["repair_rounds"],
+            "llm_failures": s["llm_failures"],
+            "suite_cases_passed": passed,
+            "suite_cases_total": total,
+            "suite_cases_skipped": skipped,
             "seconds": seconds,
-            "mutants_total": bench["mutants_total"], "mutants_killed": bench["mutants_killed"],
+            "mutants_total": bench["mutants_total"],
+            "mutants_killed": bench["mutants_killed"],
             "mutation_score": bench["mutation_score"],
             "mutants_killed_by_own_tests": bench.get("mutants_killed_by_own_tests"),
             "own_tests_mutation_score": bench.get("own_tests_mutation_score"),
@@ -185,16 +220,21 @@ def collect(runs_dir: Path, run_number: int):
             "code_bug_cases": diag.get("CODE_BUG", {}).get("cases"),
             "test_wrong_correct": diag.get("TEST_WRONG", {}).get("correct"),
             "test_wrong_cases": diag.get("TEST_WRONG", {}).get("cases"),
-            "intents_below_threshold": intents_below, "intents_from_model": intents_from_model,
-            "survivors": len(bench["survivors"]), "string_literal_survivors": string_survivors,
-            "most_mutated_component": top, "most_mutated_sampled": top_mutants,
+            "intents_below_threshold": intents_below,
+            "intents_from_model": intents_from_model,
+            "survivors": len(bench["survivors"]),
+            "string_literal_survivors": string_survivors,
+            "most_mutated_component": top,
+            "most_mutated_sampled": top_mutants,
             "most_mutated_killed": top_killed,
         }
         rows.append(row)
 
         p = SUBJECTS[subject] + MODELS[model] + tag
+
         def m(name, value):
             macros.append(f"\\newcommand{{\\{p}{name}}}{{{value}}}")
+
         m("Components", row["components"])
         m("WithTests", row["components_with_tests"])
         m("Acceptance", pct(row["acceptance_rate"]))
@@ -232,9 +272,13 @@ def collect(runs_dir: Path, run_number: int):
         m("RestKilled", row["mutants_killed"] - top_killed)
 
     # Ranges across runs, for the abstract and summary sentences
-    for key, name in [("acceptance_rate", "Acceptance"), ("first_run_pass_rate", "FirstRate"),
-                      ("mutation_score", "MutationScore"), ("own_tests_mutation_score", "OwnScore"),
-                      ("diagnosis_accuracy", "DiagAccuracy")]:
+    for key, name in [
+        ("acceptance_rate", "Acceptance"),
+        ("first_run_pass_rate", "FirstRate"),
+        ("mutation_score", "MutationScore"),
+        ("own_tests_mutation_score", "OwnScore"),
+        ("diagnosis_accuracy", "DiagAccuracy"),
+    ]:
         values = [r[key] for r in rows if r[key] is not None]
         if values:
             macros.append(f"\\newcommand{{\\{tag}Min{name}}}{{{pct(min(values))}}}")
@@ -265,12 +309,18 @@ ABSTRACT = """Large language models (LLMs) can write unit tests for untested leg
 
 def write_abstract(rows) -> None:
     """Plain-text abstract for the arXiv metadata form (max 1,920 characters)."""
+
     def span(key):
         values = [r[key] for r in rows if r[key] is not None]
         lo, hi = percent(min(values)), percent(max(values))
         return f"{lo}%" if lo == hi else f"{lo}-{hi}%"
-    text = ABSTRACT.format(acceptance=span("acceptance_rate"), first=span("first_run_pass_rate"),
-                           mutation=span("mutation_score"), diagnosis=span("diagnosis_accuracy"))
+
+    text = ABSTRACT.format(
+        acceptance=span("acceptance_rate"),
+        first=span("first_run_pass_rate"),
+        mutation=span("mutation_score"),
+        diagnosis=span("diagnosis_accuracy"),
+    )
     assert len(text) <= 1920, f"arXiv abstracts are limited to 1,920 characters ({len(text)})"
     (RESEARCH / "paper" / "abstract.txt").write_text(text + "\n")
 

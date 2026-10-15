@@ -46,7 +46,9 @@ def load_benchmark(repo_root: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
-def quality_report(repo_root: Path, test_files: List[TestFile], intents: Dict[str, Any]) -> Dict[str, Any]:
+def quality_report(
+    repo_root: Path, test_files: List[TestFile], intents: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Summarize behavioral coverage and diagnostic accuracy.
 
@@ -74,35 +76,51 @@ def quality_report(repo_root: Path, test_files: List[TestFile], intents: Dict[st
             behaviors += [b for b in _behaviors(tf) if b not in behaviors]
         intent = intents.get(comp_id)
         mutants = by_component.get(comp_id)
-        components.append({
-            "component": comp_id,
-            "intent": getattr(intent, "intent_text", None),
-            "tests_passing": sum(1 for tf in files for tc in tf.test_cases
-                                 if tc.status == TestStatus.PASSED and not is_xfail(tc)),
-            "tests_xfail": sum(1 for tf in files for tc in tf.test_cases if is_xfail(tc)),
-            "behaviors_tested": behaviors,
-            "mutants": mutants["mutants"] if mutants else None,
-            "mutants_killed": mutants["killed"] if mutants else None,
-            "mutation_score": _ratio(mutants["killed"], mutants["mutants"]) if mutants else None,
-        })
+        components.append(
+            {
+                "component": comp_id,
+                "intent": getattr(intent, "intent_text", None),
+                "tests_passing": sum(
+                    1
+                    for tf in files
+                    for tc in tf.test_cases
+                    if tc.status == TestStatus.PASSED and not is_xfail(tc)
+                ),
+                "tests_xfail": sum(1 for tf in files for tc in tf.test_cases if is_xfail(tc)),
+                "behaviors_tested": behaviors,
+                "mutants": mutants["mutants"] if mutants else None,
+                "mutants_killed": mutants["killed"] if mutants else None,
+                "mutation_score": _ratio(mutants["killed"], mutants["mutants"])
+                if mutants
+                else None,
+            }
+        )
 
     # A benchmark older than the last generation run measured a different suite
     metrics_path = repo_root / ".code2test" / "metrics.json"
     bench_path = repo_root / ".code2test" / "benchmark.json"
-    stale = bool(bench) and metrics_path.exists() and metrics_path.stat().st_mtime > bench_path.stat().st_mtime
+    stale = (
+        bool(bench)
+        and metrics_path.exists()
+        and metrics_path.stat().st_mtime > bench_path.stat().st_mtime
+    )
 
     benchmark = {"available": bench is not None, "stale": stale}
     if bench:
-        benchmark.update({
-            # Results written before benchmark.json recorded a time: use the file's
-            "created_at": bench.get("created_at")
-            or datetime.fromtimestamp(bench_path.stat().st_mtime, timezone.utc).isoformat(timespec="seconds"),
-            "mutation_score": bench.get("mutation_score"),
-            "mutants_killed": bench.get("mutants_killed"),
-            "mutants_total": bench.get("mutants_total"),
-            "diagnosis_accuracy": bench.get("diagnosis_accuracy"),
-            "diagnosis_by_expected_cause": bench.get("diagnosis_by_expected_cause", {}),
-        })
+        benchmark.update(
+            {
+                # Results written before benchmark.json recorded a time: use the file's
+                "created_at": bench.get("created_at")
+                or datetime.fromtimestamp(bench_path.stat().st_mtime, timezone.utc).isoformat(
+                    timespec="seconds"
+                ),
+                "mutation_score": bench.get("mutation_score"),
+                "mutants_killed": bench.get("mutants_killed"),
+                "mutants_total": bench.get("mutants_total"),
+                "diagnosis_accuracy": bench.get("diagnosis_accuracy"),
+                "diagnosis_by_expected_cause": bench.get("diagnosis_by_expected_cause", {}),
+            }
+        )
 
     return {
         "summary": {

@@ -15,7 +15,6 @@ from code2test.cli.commands.init import init_command
 from code2test.cli.commands.benchmark import benchmark_command
 
 
-
 @click.group()
 @click.version_option(version=__version__, prog_name="Code2Test")
 @click.pass_context
@@ -26,7 +25,7 @@ def cli(ctx):
     Infers what each function and class is meant to do, generates pytest
     tests against that intent, runs and repairs them, and writes only tests
     that pass or are marked as expected failures (suspected bugs).
-    
+
     \b
     Quick Start:
       code2test test src/             # Generate tests interactively
@@ -44,15 +43,15 @@ def version():
     click.echo(f"Code2Test v{__version__}")
     click.echo("Intent-first test generation for legacy Python code")
     click.echo("Dependency analysis derived from FSoft AI4Code's CodeWiki")
-    
+
 
 # Register commands
-cli.add_command(config_group)      # code2test config
-cli.add_command(test_command)      # code2test test
-cli.add_command(verify_command)    # code2test verify
-cli.add_command(intent_command)    # code2test intent
-cli.add_command(report_command)    # code2test report
-cli.add_command(init_command)      # code2test init
+cli.add_command(config_group)  # code2test config
+cli.add_command(test_command)  # code2test test
+cli.add_command(verify_command)  # code2test verify
+cli.add_command(intent_command)  # code2test intent
+cli.add_command(report_command)  # code2test report
+cli.add_command(init_command)  # code2test init
 cli.add_command(benchmark_command)  # code2test benchmark
 
 

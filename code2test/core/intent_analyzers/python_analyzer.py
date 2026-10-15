@@ -7,9 +7,10 @@ import textwrap
 from typing import Any, Dict, Optional
 from code2test.core.intent_analyzers.base_analyzer import IntentAnalyzer
 
+
 class PythonAnalyzer(IntentAnalyzer):
     """Analyzer for Python code intents."""
-    
+
     NAMING_PATTERNS = {
         r"^validate_|^is_valid_|^check_": "validation",
         r"^is_|^has_|^can_|^should_": "boolean check",
@@ -65,7 +66,12 @@ class PythonAnalyzer(IntentAnalyzer):
         node = self._parse_definition(component)
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             args = node.args
-            all_args = args.posonlyargs + args.args + args.kwonlyargs + [a for a in (args.vararg, args.kwarg) if a]
+            all_args = (
+                args.posonlyargs
+                + args.args
+                + args.kwonlyargs
+                + [a for a in (args.vararg, args.kwarg) if a]
+            )
             annotated = node.returns is not None or any(a.annotation is not None for a in all_args)
             return self.extract_signature(component) if annotated else ""
         if isinstance(node, ast.ClassDef):

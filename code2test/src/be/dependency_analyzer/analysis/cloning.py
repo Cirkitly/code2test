@@ -31,7 +31,6 @@ def sanitize_github_url(github_url: str) -> str:
     if url.startswith("www."):
         url = url[4:]
 
-
     if url.startswith("github.com/"):
         url_parts = url.split("/")
         if len(url_parts) >= 3:

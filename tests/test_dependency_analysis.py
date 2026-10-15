@@ -49,8 +49,13 @@ def analyze(content=SHOP, path="/repo/shop/cart.py"):
 def test_top_level_functions_and_classes_become_components():
     nodes, _ = analyze()
     by_id = {n.id: n for n in nodes}
-    assert set(by_id) == {"shop.cart.total", "shop.cart.discount", "shop.cart.Item",
-                          "shop.cart.SpecialItem", "shop.cart._private_helper"}
+    assert set(by_id) == {
+        "shop.cart.total",
+        "shop.cart.discount",
+        "shop.cart.Item",
+        "shop.cart.SpecialItem",
+        "shop.cart._private_helper",
+    }
     total = by_id["shop.cart.total"]
     assert total.component_type == "function"
     assert total.relative_path == "shop/cart.py"
@@ -90,9 +95,15 @@ def test_graph_builder_links_dependencies_across_the_repo(tmp_path):
     (tmp_path / "shop" / "__init__.py").write_text("")
     (tmp_path / "shop" / "cart.py").write_text(SHOP)
     config = Config(
-        repo_path=str(tmp_path), output_dir=str(tmp_path / "out"),
-        dependency_graph_dir=str(tmp_path / "out"), docs_dir=str(tmp_path / "out"),
-        max_depth=2, llm_base_url="", llm_api_key="", main_model="", cluster_model="",
+        repo_path=str(tmp_path),
+        output_dir=str(tmp_path / "out"),
+        dependency_graph_dir=str(tmp_path / "out"),
+        docs_dir=str(tmp_path / "out"),
+        max_depth=2,
+        llm_base_url="",
+        llm_api_key="",
+        main_model="",
+        cluster_model="",
     )
     components, _ = DependencyGraphBuilder(config).build_dependency_graph()
     assert "shop.cart.discount" in components["shop.cart.total"].depends_on
@@ -133,4 +144,7 @@ def test_nested_functions_are_not_components():
     nodes, relationships = analyze(source)
     assert {n.id for n in nodes} == {"shop.cart.outer", "shop.cart.helper"}
     edges = {(r.caller, r.callee) for r in relationships if r.is_resolved}
-    assert ("shop.cart.outer", "shop.cart.helper") in edges  # call inside inner() belongs to outer()
+    assert (
+        "shop.cart.outer",
+        "shop.cart.helper",
+    ) in edges  # call inside inner() belongs to outer()

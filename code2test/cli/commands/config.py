@@ -24,12 +24,12 @@ def config_group():
 @click.option(
     "--api-key",
     type=str,
-    help="LLM API key (stored in the system keychain; exported as OPENAI_API_KEY when Code2Test runs)"
+    help="LLM API key (stored in the system keychain; exported as OPENAI_API_KEY when Code2Test runs)",
 )
 @click.option(
     "--main-model",
     type=str,
-    help="Model for test generation, as a pydantic-ai model string (e.g. anthropic:claude-sonnet-5-5)"
+    help="Model for test generation, as a pydantic-ai model string (e.g. anthropic:claude-sonnet-5-5)",
 )
 def config_set(api_key: Optional[str], main_model: Optional[str]):
     """

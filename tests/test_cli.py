@@ -49,7 +49,9 @@ def test_auto_generates_verified_tests_then_verify_passes(repo, monkeypatch):
     result = run("test", "--auto", "--confidence", "0", "--exit-code", ".")
     assert result.exit_code == 0, result.output
     assert (repo / GENERATED).exists()
-    assert not (repo / "tests" / "dependency_graphs").exists()  # analysis output stays in .code2test
+    assert not (
+        repo / "tests" / "dependency_graphs"
+    ).exists()  # analysis output stays in .code2test
 
     result = run("verify", "tests")
     assert result.exit_code == 0, result.output
@@ -146,10 +148,12 @@ def test_file_or_subdirectory_target_uses_project_root(repo, monkeypatch, target
 def test_intent_export_json_is_valid_json(repo, monkeypatch):
     import json
 
-    (repo / "calc/ops.py").write_text(SOURCE.replace(
-        '"""Return the sum of a and b."""',
-        '"""Return the sum of a and b, which is a deliberately long sentence that would wrap in a narrow terminal."""',
-    ))
+    (repo / "calc/ops.py").write_text(
+        SOURCE.replace(
+            '"""Return the sum of a and b."""',
+            '"""Return the sum of a and b, which is a deliberately long sentence that would wrap in a narrow terminal."""',
+        )
+    )
     use_model(monkeypatch, scripted([tests_reply(PASSING)]))
     assert run("test", "--auto", "--confidence", "0", ".").exit_code == 0
 
@@ -185,7 +189,6 @@ def test_benchmark_command_reports_mutation_score(repo, monkeypatch):
     data = json.loads((repo / ".code2test" / "benchmark.json").read_text())
     assert data["mutants_total"] == 2 and data["mutants_killed"] == 2
     assert data["generation"]["acceptance_rate"] == 1.0
-
 
 
 def test_report_coverage_in_text_json_and_html(repo, monkeypatch):
@@ -226,7 +229,12 @@ def no_saved_config(tmp_path, monkeypatch):
     config_module = importlib.import_module("code2test.cli.config_manager")
     monkeypatch.setattr(config_module, "CONFIG_FILE", tmp_path / "none" / "config.json")
     monkeypatch.setattr(config_module.ConfigManager, "get_api_key", lambda self: None)
-    for var in ("CODE2TEST_MODEL", "LLM_BACKEND", "AZURE_OPENAI_DEPLOYMENT", "AZURE_OPENAI_ENDPOINT"):
+    for var in (
+        "CODE2TEST_MODEL",
+        "LLM_BACKEND",
+        "AZURE_OPENAI_DEPLOYMENT",
+        "AZURE_OPENAI_ENDPOINT",
+    ):
         monkeypatch.delenv(var, raising=False)
 
 

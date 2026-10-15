@@ -26,7 +26,11 @@ def make_test_file(path="tests/pkg/test_mod_f.py", component_id="pkg.mod.f"):
         path=path,
         component_id=component_id,
         component_path="pkg/mod.py",
-        test_cases=[TestCase(name="test_f", intent_text="f works", test_code="def test_f():\n    assert True\n")],
+        test_cases=[
+            TestCase(
+                name="test_f", intent_text="f works", test_code="def test_f():\n    assert True\n"
+            )
+        ],
         imports=["import pytest", "from pkg.mod import f"],
         fixtures=[],
     )
@@ -58,8 +62,14 @@ class TestIntentDatabase:
         db.save_intent(make_intent("pkg.mod.b", 0.9))
         db.save_intent(make_intent("other.c", 0.5, path="other.py"))
 
-        assert {i.component_id for i in db.get_low_confidence_intents(0.6)} == {"pkg.mod.a", "other.c"}
-        assert {i.component_id for i in db.get_intents_by_path("pkg/")} == {"pkg.mod.a", "pkg.mod.b"}
+        assert {i.component_id for i in db.get_low_confidence_intents(0.6)} == {
+            "pkg.mod.a",
+            "other.c",
+        }
+        assert {i.component_id for i in db.get_intents_by_path("pkg/")} == {
+            "pkg.mod.a",
+            "pkg.mod.b",
+        }
         assert set(db.get_all_intents_dict()) == {"pkg.mod.a", "pkg.mod.b", "other.c"}
         stats = db.get_stats()
         assert stats["total_intents"] == 3
@@ -102,7 +112,9 @@ class TestTestRegistry:
         registry = TestRegistry(db_path)
         registry.register_test(make_test_file())
         updated = make_test_file()
-        updated.test_cases.append(TestCase(name="test_g", intent_text="g", test_code="def test_g(): pass"))
+        updated.test_cases.append(
+            TestCase(name="test_g", intent_text="g", test_code="def test_g(): pass")
+        )
         registry.register_test(updated)
         assert len(registry.get_all_tests()) == 1
         assert len(registry.get_test_file("tests/pkg/test_mod_f.py").test_cases) == 2
@@ -110,7 +122,9 @@ class TestTestRegistry:
     def test_lookup_by_component_and_delete(self, db_path):
         registry = TestRegistry(db_path)
         registry.register_test(make_test_file())
-        assert [t.path for t in registry.get_tests_for_component("pkg.mod.f")] == ["tests/pkg/test_mod_f.py"]
+        assert [t.path for t in registry.get_tests_for_component("pkg.mod.f")] == [
+            "tests/pkg/test_mod_f.py"
+        ]
         assert registry.delete_test("tests/pkg/test_mod_f.py") is True
         assert registry.get_test_file("tests/pkg/test_mod_f.py") is None
 

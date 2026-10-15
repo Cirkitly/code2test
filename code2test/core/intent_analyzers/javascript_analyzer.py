@@ -5,9 +5,10 @@ JavaScript/TypeScript intent analyzer.
 from typing import Dict, Any
 from code2test.core.intent_analyzers.base_analyzer import IntentAnalyzer
 
+
 class JavascriptAnalyzer(IntentAnalyzer):
     """Analyzer for JavaScript/TypeScript code intents."""
-    
+
     # Adapted patterns for camelCase
     NAMING_PATTERNS = {
         r"^validate|^isValid|^check": "validation",
@@ -35,20 +36,20 @@ class JavascriptAnalyzer(IntentAnalyzer):
         """Extract JSDoc or leading comments."""
         # Assuming the component model normalizes 'docstring' field from JSDoc
         return (component.get("docstring") or "").strip()
-        
+
     def extract_multiline_comment(self, component: Dict[str, Any]) -> str:
         return self.extract_docstring(component)
 
     def extract_signature(self, component: Dict[str, Any]) -> str:
-        return (component.get("signature") or "")
-        
+        return component.get("signature") or ""
+
     def extract_type_hints(self, component: Dict[str, Any]) -> str:
         """Extract TypeScript type annotations if present."""
-        signature = (component.get("signature") or "")
+        signature = component.get("signature") or ""
         # TS usually has ': Type' pattern
         if ":" in signature or "=>" in signature:
             return signature
         return ""
-        
+
     def get_naming_patterns(self) -> Dict[str, str]:
         return self.NAMING_PATTERNS
