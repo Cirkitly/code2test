@@ -9,6 +9,7 @@ import logging
 import sys
 import xml.etree.ElementTree as ET
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -22,6 +23,21 @@ from code2test.core.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def test_file_for_classname(repo_root: Path, classname: str) -> str:
+    """Map a JUnit classname (tests.pkg.test_mod or tests.pkg.test_mod.TestCls) to its file."""
+    parts = classname.split(".")
+    for i in range(len(parts), 0, -1):
+        candidate = "/".join(parts[:i]) + ".py"
+        if (Path(repo_root) / candidate).exists():
+            return candidate
+    return "/".join(parts) + ".py"
+
+
+def defined_test_names(code: str) -> set:
+    """Names of the test functions a piece of test code defines."""
+    return set(re.findall(r"^\s*(?:async\s+)?def\s+(test\w*)\s*\(", code or "", re.M))
 
 
 @dataclass
@@ -72,7 +88,7 @@ class TestVerifier:
         self.repo_path = Path(repo_path)
         self.timeout = timeout
 
-    def run_pytest(self, target: Path) -> PytestRun:
+    def run_pytest(self, target) -> PytestRun:
         """
         Run pytest on a file or directory from the repo root.
 
@@ -98,7 +114,7 @@ class TestVerifier:
             result = subprocess.run(
                 [
                     sys.executable, "-m", "pytest",
-                    str(target),
+                    *([str(t) for t in target] if isinstance(target, (list, tuple)) else [str(target)]),
                     f"--junitxml={report_path}",
                     "-v",
                     "--tb=short",
@@ -150,7 +166,8 @@ class TestVerifier:
         # to every test case so the repair loop sees the real error.
         known = set(passed) | set(failed) | set(skipped)
         file_error = None
-        if not run.ok and run.returncode != 5 and not any(tc.name in known for tc in test_file.test_cases):
+        defined = set().union(*(defined_test_names(tc.test_code) | {tc.name} for tc in test_file.test_cases)) if test_file.test_cases else set()
+        if not run.ok and run.returncode != 5 and not (known & defined):
             file_error = run.collection_error or "pytest failed without reporting results"
             failed = [tc.name for tc in test_file.test_cases]
 
@@ -159,11 +176,15 @@ class TestVerifier:
             failed = [f"pytest exited with code {run.returncode}"]
 
         for tc in test_file.test_cases:
-            if tc.name in failed:
-                tc.mark_failed(file_error or messages.get(tc.name) or "Unknown failure")
-            elif tc.name in passed:
+            # A test case's code may define several functions, or a name other than
+            # tc.name: match pytest's results against every function it defines.
+            names = defined_test_names(tc.test_code) | {tc.name}
+            failed_here = [n for n in failed if n in names]
+            if failed_here:
+                tc.mark_failed(file_error or messages.get(failed_here[0]) or "Unknown failure")
+            elif names & set(passed):
                 tc.mark_passed()
-            elif tc.name in skipped:
+            elif names & set(skipped):
                 tc.status = TestStatus.SKIPPED
 
         return VerificationResult(
@@ -174,6 +195,7 @@ class TestVerifier:
             skipped=skipped,
             stdout=run.stdout,
             stderr=run.stderr or run.collection_error,
+            collection_error=file_error,
         )
 
     def _parse_junit_report(self, report_path: str, run: PytestRun) -> None:

@@ -88,6 +88,17 @@ code2test intent edit add          # correct an intent; it is reused on the next
 ### Choosing a model
 Set `CODE2TEST_MODEL` to any [pydantic-ai model string](https://ai.pydantic.dev/models/) to override the configured model, e.g. `CODE2TEST_MODEL=openai:gpt-4o-mini` or `CODE2TEST_MODEL=anthropic:claude-sonnet-5-5`. `CODE2TEST_MODEL=test` runs the whole pipeline offline with a fake model (useful for checking your setup without an API key).
 
+Any OpenAI-compatible provider works too: set `OPENAI_BASE_URL` and use the `openai-chat:` prefix. For example, MiniMax:
+
+```bash
+export OPENAI_API_KEY=...            # your MiniMax key
+export OPENAI_BASE_URL=https://api.minimax.io/v1
+export CODE2TEST_MODEL=openai-chat:MiniMax-M3.1-Flash-Preview
+code2test test --auto .
+```
+
+See [docs/real_model_run.md](docs/real_model_run.md) for a full run against a real library.
+
 ### 3. Reporting
 Generate detailed reports after a test run.
 

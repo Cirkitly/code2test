@@ -117,6 +117,11 @@ FIX_TESTS_PROMPT = """These generated pytest tests for `{name}` fail. Fix them.
 {imports}
 ```
 
+**Current fixtures (shared by all tests in the file):**
+```python
+{fixtures}
+```
+
 **Failing tests and their failure output:**
 {failures}
 
@@ -126,7 +131,37 @@ the source code has a genuine bug (it contradicts the intent), keep the assertio
 intended behavior unchanged.
 
 `imports` REPLACES the file's current imports: return the complete list every test in the
-file needs, and leave out any import that is failing (e.g. ModuleNotFoundError)."""
+file needs, and leave out any import that is failing (e.g. ModuleNotFoundError).
+`fixtures` likewise REPLACES the current fixtures: return them all, corrected if they are
+the cause of the failure (e.g. a syntax error outside the test functions)."""
+
+
+def test_function_name(code: str, fallback: str) -> str:
+    """The name of the first test function the code defines (what pytest reports)."""
+    match = re.search(r"^\s*(?:async\s+)?def\s+(test\w*)\s*\(", clean_code(code), re.M)
+    return match.group(1) if match else fallback
+
+
+def clean_code(code: str) -> str:
+    """
+    Undo double-escaping some models apply to code in JSON output.
+
+    Code returned as one line with literal ``\\n`` sequences doesn't compile;
+    when unescaping newlines/quotes makes it compile, use the unescaped version.
+    """
+    if "\n" in code.strip() or "\\n" not in code:
+        return code
+    try:
+        compile(code, "<test>", "exec")
+        return code
+    except SyntaxError:
+        pass
+    unescaped = code.replace("\\n", "\n").replace("\\t", "    ").replace('\\"', '"').replace("\\'", "'")
+    try:
+        compile(unescaped, "<test>", "exec")
+        return unescaped
+    except SyntaxError:
+        return code
 
 
 class TestAgent:
@@ -223,9 +258,9 @@ class TestAgent:
             test_cases = []
             for gen_test in result.output.tests:
                 test_cases.append(TestCase(
-                    name=gen_test.name,
+                    name=test_function_name(gen_test.test_code, gen_test.name),
                     intent_text=gen_test.tests_behavior,
-                    test_code=gen_test.test_code,
+                    test_code=clean_code(gen_test.test_code),
                     status=TestStatus.PENDING,
                 ))
             
@@ -240,7 +275,7 @@ class TestAgent:
                 test_cases=test_cases,
                 framework=framework,
                 imports=self._ensure_import(result.output.imports, component),
-                fixtures=result.output.fixtures,
+                fixtures=[clean_code(f) for f in result.output.fixtures],
                 created_at=datetime.now(),
             )
             
@@ -319,9 +354,9 @@ Use pytest syntax with appropriate fixtures."""
             
             test_cases = [
                 TestCase(
-                    name=gen_test.name,
+                    name=test_function_name(gen_test.test_code, gen_test.name),
                     intent_text=gen_test.tests_behavior,
-                    test_code=gen_test.test_code,
+                    test_code=clean_code(gen_test.test_code),
                     status=TestStatus.PENDING,
                 )
                 for gen_test in result.output.tests
@@ -409,7 +444,7 @@ Use pytest syntax with appropriate fixtures."""
 
     def _ensure_import(self, imports: List[str], component: Dict[str, Any]) -> List[str]:
         """Make sure the component under test is imported."""
-        imports = [i.strip() for i in imports if i and i.strip()]
+        imports = [clean_code(i).strip() for i in imports if i and i.strip()]
         line = self.import_line_for(component)
         module = self.module_path_for(component)
         if line and not any(module and module in i for i in imports):
@@ -441,6 +476,7 @@ Use pytest syntax with appropriate fixtures."""
             import_line=self.import_line_for(component) or "(unknown)",
             source_code=(component.get("source_code") or "")[:6000],
             imports="\n".join(test_file.imports),
+            fixtures="\n\n".join(test_file.fixtures) or "# none",
             failures=failures,
         )
         try:
@@ -450,14 +486,14 @@ Use pytest syntax with appropriate fixtures."""
             logger.error(f"Test repair failed: {e}")
             return test_file
 
-        fixed = {t.name: t for t in result.output.tests}
+        fixed = {test_function_name(t.test_code, t.name): t for t in result.output.tests}
         new_cases = []
         for tc in test_file.test_cases:
             if tc.name in fixed:
                 new_cases.append(TestCase(
                     name=tc.name,
                     intent_text=tc.intent_text,
-                    test_code=fixed[tc.name].test_code,
+                    test_code=clean_code(fixed[tc.name].test_code),
                     status=TestStatus.PENDING,
                 ))
             else:
@@ -468,6 +504,7 @@ Use pytest syntax with appropriate fixtures."""
             "imports": self._ensure_import(
                 list(dict.fromkeys(result.output.imports or test_file.imports)), component
             ),
+            "fixtures": [clean_code(f) for f in (result.output.fixtures or test_file.fixtures)],
         })
 
     def _generate_test_path(self, source_path: str, component: Optional[Dict[str, Any]] = None) -> str:
@@ -494,6 +531,8 @@ Use pytest syntax with appropriate fixtures."""
 
         dirname = os.path.dirname(source_path)
         name = os.path.splitext(os.path.basename(source_path))[0]
+        if name == "__init__":  # pkg/__init__.py -> tests/pkg/test_<component>.py
+            name = ""
 
         # Handle common patterns
         if dirname == "src" or dirname.startswith("src" + os.sep):
@@ -507,7 +546,12 @@ Use pytest syntax with appropriate fixtures."""
             comp_name = str(component.get("name") or component.get("id") or "").split(".")[-1]
             comp_name = re.sub(r"\W+", "_", comp_name).strip("_").lower()
 
-        basename = f"test_{name}_{comp_name}.py" if comp_name and comp_name != name.lower() else f"test_{name}.py"
+        if not name:
+            basename = f"test_{comp_name or 'init'}.py"
+        elif comp_name and comp_name != name.lower():
+            basename = f"test_{name}_{comp_name}.py"
+        else:
+            basename = f"test_{name}.py"
 
         return os.path.join(self.output_dir, dirname, basename)
 

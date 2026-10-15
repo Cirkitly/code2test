@@ -242,3 +242,69 @@ def test_module_imports_are_resolved_to_absolute(tmp_path):
         "from shop import utils",
         "from typing import List",
     ]
+
+
+def test_unimportable_test_is_never_kept_as_xfail(tmp_path):
+    repo = _make_repo(tmp_path)
+    # the model keeps importing a name that doesn't exist; diagnosis wrongly blames the code
+    bad = tests_reply(PASSING, imports=["from calc.ops import add_numbers as add"])
+    suite = _run(repo, scripted([bad], diagnosis="CODE_BUG"))
+
+    assert suite.test_files == []
+    assert not (repo / "tests/calc/test_ops_add.py").exists()
+
+
+def test_escaped_test_code_is_unescaped():
+    from code2test.agents.test_agent import clean_code
+
+    escaped = "def test_x():\\n    assert \\\"a\\\" == 'a'\\n"
+    assert clean_code(escaped) == "def test_x():\n    assert \"a\" == 'a'\n"
+    normal = "def test_x():\n    assert '\\n' == chr(10)\n"
+    assert clean_code(normal) == normal
+
+
+def test_package_init_tests_get_readable_names():
+    agent = test_agent_mod.TestAgent(model="test", repo_path="/repo")
+    assert agent._generate_test_path("/repo/inflection/__init__.py", {"name": "humanize"}) == "tests/inflection/test_humanize.py"
+
+
+def test_failures_are_matched_by_defined_function_not_reported_name(tmp_path):
+    repo = _make_repo(tmp_path)
+    reply = tests_reply(FAILING)
+    reply["tests"][0]["name"] = "test_something_else"  # model reports a different name
+    suite = _run(repo, scripted([reply], diagnosis="TEST_WRONG"))
+
+    # the failing test is recognised, repaired (same failing code), then dropped
+    assert suite.test_files == []
+    assert not (repo / "tests/calc/test_ops_add.py").exists()
+
+
+def test_tests_that_break_each_other_are_dropped_by_the_suite_check(tmp_path):
+    from code2test.core.models import TestCase as Case, TestFile as File
+
+    repo = _make_repo(tmp_path)
+    (repo / "calc" / "state.py").write_text("ITEMS = []\n")
+    polluter = File(
+        path="tests/calc/test_a_polluter.py", component_id="a", component_path="calc/state.py",
+        imports=["from calc import state"], verified=True,
+        test_cases=[Case(name="test_appends", intent_text="", test_code=
+                         "def test_appends():\n    state.ITEMS.append(1)\n    assert state.ITEMS\n")],
+    )
+    victim = File(
+        path="tests/calc/test_b_victim.py", component_id="b", component_path="calc/state.py",
+        imports=["from calc import state"], verified=True,
+        test_cases=[
+            Case(name="test_starts_empty", intent_text="", test_code="def test_starts_empty():\n    assert state.ITEMS == []\n"),
+            Case(name="test_is_list", intent_text="", test_code="def test_is_list():\n    assert isinstance(state.ITEMS, list)\n"),
+        ],
+    )
+    gen = generator_mod.TestGenerator(repo_path=str(repo), config=GenerationConfig(model="test"))
+    for tf in (polluter, victim):
+        gen.verifier.write_test_file(tf)
+        assert gen.verifier.run_tests(tf).all_passed  # each passes on its own
+
+    kept = asyncio.run(gen._suite_check_phase([polluter, victim]))
+
+    assert [tc.name for tc in victim.test_cases] == ["test_is_list"]
+    assert {tf.path for tf in kept} == {polluter.path, victim.path}
+    assert gen.verifier.run_pytest([repo / polluter.path, repo / victim.path]).ok

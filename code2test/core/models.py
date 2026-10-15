@@ -203,6 +203,7 @@ class VerificationResult(BaseModel):
     execution_time: float = 0.0
     stdout: Optional[str] = None
     stderr: Optional[str] = None
+    collection_error: Optional[str] = None  # the file could not be imported/collected at all
     
     @property
     def total_tests(self) -> int:

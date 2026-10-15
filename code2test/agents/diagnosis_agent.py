@@ -37,6 +37,10 @@ There are THREE possible causes:
 2. CODE_BUG - The code doesn't match the intended behavior. This is a potential bug in the source code.
 3. INTENT_WRONG - The inferred intent doesn't match what the code actually does. The intent needs revision.
 
+Errors raised by the test code itself are always TEST_WRONG: an ImportError or
+ModuleNotFoundError for the test's own imports, a SyntaxError or NameError in the test,
+a missing fixture, or calling something the component does not provide.
+
 Analyze the failure carefully:
 - Compare the test assertions with the stated intent
 - Compare the actual behavior with the expected behavior

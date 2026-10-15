@@ -119,3 +119,18 @@ def test_cycles_are_detected_and_broken():
     assert set(acyclic) == set(graph)
     order = topological_sort(graph)  # must terminate and include every node once
     assert sorted(order) == ["a", "b", "c", "d"]
+
+
+def test_nested_functions_are_not_components():
+    source = (
+        "def outer(x):\n"
+        "    def inner(y):\n"
+        "        return helper(y)\n"
+        "    return inner(x)\n\n"
+        "def helper(z):\n"
+        "    return z\n"
+    )
+    nodes, relationships = analyze(source)
+    assert {n.id for n in nodes} == {"shop.cart.outer", "shop.cart.helper"}
+    edges = {(r.caller, r.callee) for r in relationships if r.is_resolved}
+    assert ("shop.cart.outer", "shop.cart.helper") in edges  # call inside inner() belongs to outer()

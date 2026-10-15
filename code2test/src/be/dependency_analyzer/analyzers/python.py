@@ -125,7 +125,8 @@ class PythonASTAnalyzer(ast.NodeVisitor):
     def _process_function_node(self, node: ast.FunctionDef | ast.AsyncFunctionDef):
         """Process function definition - only add to nodes if it's top-level."""
 
-        if not self.current_class_name:
+        # Functions nested in other functions can't be imported, so they're not components
+        if not self.current_class_name and not self.current_function_name:
             component_id = f"{self._get_module_path()}.{node.name}"
             relative_path = self._get_relative_path()
             
@@ -151,9 +152,11 @@ class PythonASTAnalyzer(ast.NodeVisitor):
                 self.nodes.append(func_node)
                 self.top_level_nodes[node.name] = func_node
 
-        self.current_function_name = node.name
+        # Calls inside a nested function are attributed to the enclosing top-level function
+        outer = self.current_function_name
+        self.current_function_name = outer or node.name
         self.generic_visit(node)
-        self.current_function_name = None
+        self.current_function_name = outer
 
     def _should_include_function(self, func: Node) -> bool:
         if func.name.startswith("_test_"):

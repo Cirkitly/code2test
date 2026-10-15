@@ -1,88 +1,159 @@
 # Real-model run against `inflection` 0.5.1
 
-Goal: run code2test end to end on a real open-source library with a real LLM
-(`CODE2TEST_MODEL=openai:gpt-4o-mini`) and record what it produces.
+code2test was run end to end on a real open-source library with a real LLM, with
+no fake or scripted model anywhere in the loop.
 
-**Status: blocked. The OpenAI API rejected the configured `OPENAI_API_KEY`, so no
-tests were generated.** The attempt did expose a code2test bug, which is fixed
-below. The evidence sections are still to be filled in once a working key is
-available.
+- **Model:** MiniMax `MiniMax-M3.1-Flash-Preview`, through MiniMax's
+  OpenAI-compatible API (`OPENAI_BASE_URL=https://api.minimax.io/v1`,
+  `CODE2TEST_MODEL=openai-chat:MiniMax-M3.1-Flash-Preview`).
+- **Target:** the `inflection==0.5.1` sdist from PyPI: `inflection/__init__.py`,
+  426 lines. Its own `test_inflection.py` was moved out first, so the generated
+  suite started from nothing.
+- **Command**, run in the target directory:
 
-## Setup
-
-- code2test: `python -m venv .venv && .venv/bin/pip install -e ".[dev]"`. The
-  existing suite passed (79 tests).
-- Target: `inflection==0.5.1` sdist (`pip download --no-deps --no-binary :all:`),
-  unpacked to a scratch directory outside the repo. The upstream
-  `test_inflection.py` was moved out so the generated suite starts from nothing.
-  `inflection/__init__.py` is 426 lines.
-- Command, run in the target directory:
-
-  ```
-  CODE2TEST_MODEL=openai:gpt-4o-mini code2test test --auto --report all -v .
+  ```bash
+  OPENAI_BASE_URL=https://api.minimax.io/v1 \
+  CODE2TEST_MODEL=openai-chat:MiniMax-M3.1-Flash-Preview \
+  code2test test --auto --report all .
+  code2test verify tests/
   ```
 
-## What happened
+## Result (final run)
 
-Static analysis worked. It found **14 components** in `inflection/__init__.py` and
-extracted 14 intents from docstrings and signatures (average confidence 96%; no
-LLM needed for this step).
+| | |
+|---|---|
+| Components analyzed | 13 functions (12 public, plus `_irregular`) |
+| Test files written | 13 (one per function, all 13 covered) |
+| Test functions written | 277 (2,245 lines) |
+| Test cases, including parametrized | 620 |
+| `code2test verify tests/` | **620 / 620 passed, exit 0** |
+| Tests dropped by the repair loop | 1 (`pluralize('leaf') == 'leaves'`: `inflection` returns `'leafs'`) |
+| Wall time | about 5 minutes |
 
-Every test-generation request to `POST https://api.openai.com/v1/responses` then
-returned **HTTP 401 `invalid_api_key`**. A direct `GET /v1/models` with the same
-key also returns 401 `invalid_api_key`, so the key is the cause, not code2test or
-the network proxy. The key is set (125 characters), but its prefix doesn't look
-like a standard OpenAI key, so it may belong to another provider.
+### Do the tests catch bugs?
 
-## Bug found: an auth failure looked like a successful run
+Bugs were injected into `inflection` one at a time, and the generated suite was
+run against each:
 
-Before the fix, each of the 14 per-component LLM calls logged an error and
-returned an empty result. The CLI then printed a normal summary and **exited 0**:
+| Injected bug | Generated tests failing |
+|---|---|
+| `humanize` no longer strips a trailing `_id` | 11 |
+| `dasherize` uses `+` instead of `-` | 14 |
+| `ordinal(13)` returns `"rd"` instead of `"th"` | 6 |
+| `ordinal` drops `abs()`, so negative numbers break | 6 |
 
+Every injected bug was caught. With the original code restored, all 620 pass again.
+
+## What the real model exposed (all fixed, with regression tests)
+
+The first real runs failed in ways the scripted tests never covered:
+
+1. **A rejected API key looked like a successful run.** Every call returned 401,
+   but the CLI exited 0 with "Generated 0 tests". Auth and unknown-model errors
+   (401/403/404) now stop the run with a clear message.
+2. **Nested functions were treated as components.** `caseinsensitive` is defined
+   inside `_irregular()`, so it can never be imported. The analyzer now skips
+   functions nested in functions.
+3. **Unimportable files were kept as `xfail`.** An import error at module level
+   isn't covered by `xfail` and broke the whole suite. Files that can't be
+   collected are now never kept, and the diagnosis prompt treats errors raised by
+   the test itself (ImportError, SyntaxError, NameError) as a wrong test, not a
+   code bug.
+4. **Test names didn't match.** The model's `name` field often differs from the
+   function it actually defines, so failures were never matched to a test and
+   failing files were kept as "unverified". Results are now matched against the
+   functions each test defines, and any file still failing is removed.
+5. **Escaped code.** The model sometimes returned code with literal `\n`
+   sequences, so a whole file failed with a SyntaxError. Escaped test code and
+   fixtures are now unescaped when that makes them compile. Fixtures are also
+   shown to, and repaired by, the fix step.
+6. **Tests broke each other across files.** Tests for `_irregular()` register new
+   words in `inflection`'s global state, which broke `pluralize` tests in the
+   combined run. After per-file verification, the whole generated suite is now
+   run together, and tests that only fail there are dropped.
+7. **Unreadable file names.** Tests for `pkg/__init__.py` were named
+   `test___init___humanize.py`. They are now `tests/pkg/test_humanize.py`.
+
+| Run | Files | Test cases | `verify` |
+|---|---|---|---|
+| 1 (before fixes 2–7) | 12 written, 3 failing | — | collection error, exit 1 |
+| 2 (fixes 2, 3, 7) | 11 | 676 / 680 | 4 failures, exit 1 |
+| 3 (all fixes) | 13 | 620 / 620 | **exit 0** |
+
+## Sample of the generated tests
+
+`tests/inflection/test_ordinal.py` (start of file):
+
+```python
+import pytest
+from inflection import ordinal
+
+def test_ordinal_returns_correct_suffix_for_documented_examples():
+    """The documented examples must all produce the documented suffixes."""
+    assert ordinal(1) == "st"
+    assert ordinal(2) == "nd"
+    assert ordinal(1002) == "nd"
+    assert ordinal(1003) == "rd"
+    assert ordinal(-11) == "th"
+    assert ordinal(-1021) == "st"
+
+
+def test_ordinal_returns_string_type():
+    """The happy path must yield a string, so it can be concatenated to a number."""
+    result = ordinal(1)
+    assert isinstance(result, str)
+    assert result
+
+@pytest.mark.parametrize(
+    "number",
+    [1, 21, 31, 41, 51, 61, 71, 81, 91, 101, 201, 301, 1001, 123451],
+)
+def test_ordinal_returns_first_suffix_for_numbers_ending_in_one(number):
+    """Numbers whose last digit is 1 (and last two digits are not 11) get 'st'."""
+    assert ordinal(number) == "st"
 ```
-│ Total Components │ 14    │
-│ Tests Generated  │ 0     │
-│ Test Files       │ 0     │
-│ Verified         │ 0     │
-│ Avg Confidence   │ 96%   │
-✓ Generated 0 tests in 0 files
-✓ HTML report generated: tests/reports/report.html
-✓ JSON report generated: tests/reports/report.json
+
+`tests/inflection/test_humanize.py` (start of file):
+
+```python
+import pytest
+from inflection import humanize
+
+@pytest.fixture
+def sample_words():
+    """Representative (input, expected output) pairs for the happy path."""
+    return [
+        ("employee_salary", "Employee salary"),
+        ("author_id", "Author"),
+        ("the_employee_salary", "The employee salary"),
+        ("employee", "Employee"),
+        ("Employee", "Employee"),
+        ("EMPLOYEE_SALARY", "Employee salary"),
+        ("employee_2_salary", "Employee 2 salary"),
+        ("employee-salary", "Employee-salary"),
+    ]
+
+def test_humanize_replaces_underscores_with_spaces():
+    """The core intent: underscores in a word become spaces."""
+    assert humanize("employee_salary") == "Employee salary"
+
+def test_humanize_matches_documented_example_employee_salary():
+    """The docstring example ``humanize('employee_salary')`` is honoured."""
+    assert humanize("employee_salary") == "Employee salary"
+
+def test_humanize_matches_documented_example_author_id():
+    """The docstring example ``humanize('author_id')`` is honoured."""
+    assert humanize("author_id") == "Author"
+
+def test_humanize_strips_trailing_id_suffix_from_multi_word_string():
+    """A trailing ``"_id"`` is removed even when other underscores exist."""
+    assert humanize("the_employee_id") == "The employee"
+
+def test_humanize_strips_only_one_trailing_id_suffix():
+    """Only a single trailing ``"_id"`` is removed, not repeated occurrences."""
+    # "record_id_id" -> "record_id" -> "Record id"
+    assert humanize("record_id_id") == "Record id"
+
+def test_humanize_keeps_id_when_it_is_not_an_underscore_suffix():
+    """``"id"`` without a leading underscore is a normal word, not a suffix."""
 ```
-
-The agents swallow per-component LLM errors so that one bad component doesn't
-sink the whole run. A rejected key or an unknown model fails every call the same
-way, though, so swallowing it hides a broken setup. In CI this would pass while
-generating nothing.
-
-**Fix** (`code2test/agents/errors.py`): `raise_if_fatal()` re-raises HTTP 401,
-403 and 404 from the model provider as `ModelAccessError`. It runs first in every
-place that falls back after an LLM error: test generation, integration-test
-generation, test repair, intent inference and diagnosis (in the agents and in
-`core/generator.py`). Other errors, such as 429s after retries, 5xx responses and
-malformed output, still fall back per component as before.
-
-After the fix, the same run fails fast with exit code 1 and doesn't write any
-tests or reports:
-
-```
-✓ Found 14 components
-✗ Generation failed: The model provider rejected the request (HTTP 401). Check
-the API key and CODE2TEST_MODEL. Details: status_code: 401, model_name:
-gpt-4o-mini, body: {'message': 'Incorrect API key provided: sk-… You can find
-your API key at https://platform.openai.com/account/api-keys.', 'type':
-'invalid_request_error', 'code': 'invalid_api_key', 'param': None}
-```
-
-Regression test: `tests/test_cli.py::test_rejected_api_key_fails_the_run`. It
-fails on the old code (exit code 0) and passes with the fix. The full suite
-passes (80 tests).
-
-## Still to do
-
-Rerun the command above with a valid OpenAI key, then `code2test verify tests/`,
-and record:
-
-- the number of test files and test cases generated
-- how many were verified, repaired, kept as xfail (possible bugs) or dropped
-- the `code2test verify` result and sample generated files

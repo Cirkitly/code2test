@@ -21,7 +21,7 @@ from code2test.core.models import (
     DiagnosisCause,
 )
 from code2test.core.intent import IntentExtractor
-from code2test.core.verifier import TestVerifier
+from code2test.core.verifier import TestVerifier, defined_test_names, test_file_for_classname
 from code2test.storage.intent_db import IntentDatabase
 from code2test.storage.test_registry import TestRegistry
 from code2test.agents.intent_agent import IntentAgent
@@ -129,6 +129,7 @@ class TestGenerator:
         # Phase 3: Verify and refine (if not dry-run)
         if not self.config.dry_run:
             test_files = await self._verify_and_refine_phase(test_files, components, intents)
+            test_files = await self._suite_check_phase(test_files)
         
         # Build test suite
         suite = TestSuite(
@@ -309,6 +310,53 @@ class TestGenerator:
         results = await asyncio.gather(*(verify(tf) for tf in test_files))
         return [tf for tf in results if tf is not None]
 
+    async def _suite_check_phase(self, test_files: List[TestFile], max_rounds: int = 3) -> List[TestFile]:
+        """
+        Run all generated files together and drop tests that only fail there.
+
+        Each file was verified on its own, but tests can interfere across files
+        (e.g. one mutates module-level state another relies on). Generated tests
+        that fail in the combined run are dropped until the combined run passes.
+        """
+        by_path = {tf.path: tf for tf in test_files}
+        for _ in range(max_rounds):
+            if not by_path:
+                break
+            run = await asyncio.to_thread(
+                self.verifier.run_pytest, [self.repo_path / p for p in sorted(by_path)]
+            )
+            if run.ok:
+                break
+            failed = [c for c in run.cases if c.outcome == "failed"]
+            if not failed:
+                logger.warning(f"Combined run of generated tests failed: {_first_line(run.collection_error)}")
+                break
+
+            changed = set()
+            for case in failed:
+                tf = by_path.get(test_file_for_classname(self.repo_path, case.classname))
+                if tf is None:
+                    continue
+                keep = [tc for tc in tf.test_cases
+                        if case.name not in defined_test_names(tc.test_code) | {tc.name}]
+                if len(keep) != len(tf.test_cases):
+                    logger.info(f"Dropping {tf.path}::{case.name}: fails alongside other tests ({_first_line(case.message)})")
+                    tf.test_cases = keep
+                    changed.add(tf.path)
+            if not changed:
+                break
+            for path in changed:
+                tf = by_path[path]
+                if not tf.test_cases:
+                    self._discard(tf, "no tests pass alongside the rest of the suite")
+                    del by_path[path]
+                else:
+                    self.verifier.write_test_file(tf)
+                    self.test_registry.register_test(tf)
+                    if tf.verified:
+                        self.test_registry.mark_verified(tf.path)
+        return [tf for tf in test_files if tf.path in by_path]
+
     async def _run_verifier(self, test_file: TestFile) -> VerificationResult:
         """Run the verifier (blocking subprocess) without stalling the event loop."""
         # Syntax errors in individual tests: report them per test instead of running pytest
@@ -359,6 +407,15 @@ class TestGenerator:
         if self.on_verification_complete:
             self.on_verification_complete(result)
 
+        if not result.all_passed and not any(tc.status == TestStatus.FAILED for tc in test_file.test_cases) \
+                and not result.collection_error:
+            return self._discard(test_file, "fails, but the failures can't be attributed to a test")
+
+        # A file that can't even be imported (bad import, syntax error) can't be saved by
+        # xfail: drop it rather than leave a file that breaks the user's whole test run.
+        if result.collection_error:
+            return self._discard(test_file, f"still not importable: {_first_line(result.collection_error)}")
+
         failing = [tc for tc in test_file.test_cases if tc.status == TestStatus.FAILED]
         if failing:
             kept = []
@@ -383,25 +440,47 @@ class TestGenerator:
                     kept.append(tc)
                     logger.warning(f"{test_file.path}::{tc.name} kept as xfail: {diagnosis.explanation}")
                 else:
-                    logger.info(f"Dropping failing test {test_file.path}::{tc.name}")
+                    logger.info(
+                        f"Dropping failing test {test_file.path}::{tc.name}: {_first_line(tc.failure_message)}"
+                    )
 
             test_file = test_file.model_copy(update={"test_cases": kept})
             if not kept:
-                path = self.repo_path / test_file.path
-                if path.exists():
-                    path.unlink()
-                self.test_registry.delete_test(test_file.path)
-                logger.warning(f"No passing tests for {test_file.component_id}; removed {test_file.path}")
-                return None
+                return self._discard(test_file, "no passing tests")
             if not any(i.startswith("import pytest") for i in test_file.imports):
                 test_file.imports.insert(0, "import pytest")
             result = await self._run_verifier(test_file)
+
+            # Last resort: anything still failing (an xfail that errors, a test broken by
+            # its neighbours) is dropped, so the written file always passes.
+            if not result.all_passed:
+                if result.collection_error:
+                    return self._discard(test_file, f"not importable: {_first_line(result.collection_error)}")
+                still = {tc.name for tc in test_file.test_cases if tc.status == TestStatus.FAILED}
+                kept = [tc for tc in test_file.test_cases if tc.name not in still]
+                for name in still:
+                    logger.info(f"Dropping failing test {test_file.path}::{name}")
+                test_file = test_file.model_copy(update={"test_cases": kept})
+                if not kept:
+                    return self._discard(test_file, "no passing tests")
+                result = await self._run_verifier(test_file)
+                if not result.all_passed:
+                    return self._discard(test_file, "tests still fail after cleanup")
 
         test_file.verified = result.all_passed
         self.test_registry.register_test(test_file)
         if test_file.verified:
             self.test_registry.mark_verified(test_file.path)
         return test_file
+
+    def _discard(self, test_file: TestFile, reason: str) -> None:
+        """Remove a generated test file that could not be made to pass."""
+        path = self.repo_path / test_file.path
+        if path.exists():
+            path.unlink()
+        self.test_registry.delete_test(test_file.path)
+        logger.warning(f"Removed {test_file.path} for {test_file.component_id}: {reason}")
+        return None
 
     def get_stats(self) -> Dict[str, Any]:
         """Get generation statistics."""
@@ -412,3 +491,11 @@ class TestGenerator:
             **intent_stats,
             **test_stats,
         }
+
+
+def _first_line(text: Optional[str]) -> str:
+    """First non-empty line of a failure message, for logs."""
+    for line in (text or "").splitlines():
+        if line.strip():
+            return line.strip()[:200]
+    return "unknown failure"

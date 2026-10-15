@@ -116,6 +116,7 @@ async def _diagnose_or_fix(repo_root: Path, failed_cases, fix: bool, display: Di
     from code2test.cli.utils.model import resolve_model
     from code2test.core import GenerationConfig, TestGenerator
     from code2test.core.models import TestStatus
+    from code2test.core.verifier import test_file_for_classname
 
     db_path = repo_root / ".code2test" / "code2test.db"
     if not db_path.exists():
@@ -129,7 +130,7 @@ async def _diagnose_or_fix(repo_root: Path, failed_cases, fix: bool, display: Di
     # Group failures by the generated test file they belong to
     by_file: Dict[str, list] = {}
     for case in failed_cases:
-        by_file.setdefault(_test_file_for(repo_root, case.classname), []).append(case)
+        by_file.setdefault(test_file_for_classname(repo_root, case.classname), []).append(case)
 
     remaining = 0
     for rel_path, cases in by_file.items():
@@ -178,16 +179,6 @@ async def _diagnose_or_fix(repo_root: Path, failed_cases, fix: bool, display: Di
             remaining += len(cases)
 
     return remaining
-
-
-def _test_file_for(repo_root: Path, classname: str) -> str:
-    """Map a JUnit classname (tests.pkg.test_mod or tests.pkg.test_mod.TestCls) to its file."""
-    parts = classname.split(".")
-    for i in range(len(parts), 0, -1):
-        candidate = "/".join(parts[:i]) + ".py"
-        if (repo_root / candidate).exists():
-            return candidate
-    return "/".join(parts) + ".py"
 
 
 def load_component(repo_root: Path, component_id: str, component_path: str) -> Optional[Dict[str, Any]]:
