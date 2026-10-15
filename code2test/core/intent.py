@@ -82,12 +82,12 @@ class IntentExtractor:
     def _get_analyzer(self, component: Dict[str, Any]) -> IntentAnalyzer:
         """Determine correct analyzer for component."""
         # Try explicit language field
-        lang = component.get("language", "").lower()
+        lang = (component.get("language") or "").lower()
         if lang in self._analyzers:
             return self._analyzers[lang]
             
         # Try file extension
-        file_path = component.get("file_path", "")
+        file_path = component.get("file_path") or ""
         _, ext = os.path.splitext(file_path)
         ext = ext.lower()
         
@@ -144,7 +144,7 @@ class IntentExtractor:
         
         return Intent(
             component_id=component.get("id", component.get("name", "unknown")),
-            component_path=component.get("file_path", ""),
+            component_path=component.get("file_path") or "",
             intent_text=intent_text,
             confidence=confidence,
             evidence=evidence,
@@ -187,14 +187,14 @@ class IntentExtractor:
                 signals.naming_weight = self.NAMING_WEIGHT
         
         # Call site analysis (if available) - Language agnostic mostly
-        call_sites = component.get("called_by", [])
+        call_sites = component.get("called_by") or []
         if call_sites:
             signals.call_sites = call_sites[:5]  # Limit to 5
             signals.call_site_weight = min(self.CALL_SITE_WEIGHT,
                                            self.CALL_SITE_WEIGHT * len(call_sites) / 3)
         
         # Complexity penalty
-        complexity = component.get("cyclomatic_complexity", 1)
+        complexity = component.get("cyclomatic_complexity") or 1
         if complexity > 10:
             signals.complexity_penalty = self.COMPLEXITY_PENALTY
         elif complexity > 5:
@@ -227,7 +227,7 @@ class IntentExtractor:
         parts = []
         
         name = component.get("name", "unknown")
-        component_type = component.get("type", "function")
+        component_type = component.get("component_type") or component.get("type") or "function"
         
         # Start with docstring if available
         if signals.docstring:

@@ -2,85 +2,215 @@
 Verify command for Code2Test CLI.
 """
 
+import ast
+import asyncio
+import logging
+import sys
 from pathlib import Path
+from typing import Any, Dict, Optional
+
 import click
 from rich.console import Console
+from rich.table import Table
 
 from code2test.cli.display import DisplayManager
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 @click.command("verify")
 @click.argument("path", type=click.Path(exists=True), default="tests")
 @click.option("--diagnose", is_flag=True, help="Diagnose and explain failures")
-@click.option("--fix", is_flag=True, help="Attempt to auto-fix failed tests")
+@click.option("--fix", is_flag=True, help="Repair failing generated tests (implies --diagnose)")
+@click.option("--timeout", type=int, default=300, show_default=True, help="pytest timeout in seconds")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 def verify_command(
     path: str,
     diagnose: bool,
     fix: bool,
+    timeout: int,
     verbose: bool
 ) -> None:
     """
     Run and verify generated tests.
-    
-    Executes tests and provides diagnosis for any failures.
-    
+
+    Runs pytest from the repository root (the current directory), reports
+    each failure, and exits with code 1 if any test fails.
+
     \b
     Examples:
         code2test verify tests/           # Verify all tests
-        code2test verify --diagnose       # Diagnose failures
+        code2test verify --diagnose       # Explain why tests fail
+        code2test verify --fix            # Repair failing generated tests
     """
+    from code2test.core.verifier import TestVerifier
+
     display = DisplayManager(quiet=not verbose)
-    
-    test_path = Path(path).resolve()
-    display.info(f"Verifying tests in: {test_path}")
-    
-    # Import verifier components
-    from code2test.adapters.python.pytest_adapter import PytestAdapter
-    from code2test.agents.diagnosis_agent import DiagnosisAgent
-    from code2test.core.models import TestStatus
-    from code2test.core.intent import IntentExtractor
-    
-    # Run tests
-    # TODO: Detect framework or take as arg
-    adapter = PytestAdapter(str(test_path.parent))
-    results = adapter.run_tests(str(test_path))
-    
-    summary = results.get("summary", {})
-    
-    if results.get("success"):
-        display.success(f"All {summary.get('total', 0)} tests passed!")
+    logging.basicConfig(level=logging.DEBUG if verbose else logging.WARNING)
+
+    repo_root = Path.cwd()
+    target = Path(path).resolve()
+    display.info(f"Verifying tests in: {target}")
+
+    run = TestVerifier(str(repo_root), timeout=timeout).run_pytest(target)
+    _show_results(run)
+
+    if run.collection_error:
+        console.print("\n[red]pytest could not collect the tests:[/red]")
+        console.print(run.collection_error[-2000:], markup=False)
+
+    failed_cases = [c for c in run.cases if c.outcome == "failed"]
+    if run.ok or run.returncode == 5:
+        if run.returncode == 5:
+            display.warning("No tests were collected")
         return
 
-    display.warning(
-        f"{summary.get('passed', 0)}/{summary.get('total', 0)} tests passed"
-    )
-    
-    # Diagnostics and Fix Logic
-    if diagnose or fix:
-        import asyncio
-        from code2test.storage import IntentDatabase
-        
-        # We need more than just the results dict here; we need analysis of failures
-        # Ideally, we would reload the test file context.
-        # For this implementation, we will mock the diagnosis flow as if we had the context objects
-        # In a real implementation, we would need to hydrate TestFile objects from the disk
-        
-        display.info("Analyzing failures...")
-        
-        # Note: This is a simplified "offline" fix flow. 
-        # Truly robust fixing requires the full Generator context (components, intents).
-        # Here we warn the user if we can't fully hydrate the context.
-        
-        console.print("\n[dim]Note: 'verify --fix' in offline mode has limited context.[/dim]")
-        console.print("[dim]For full self-healing, run 'code2test test --auto'[/dim]\n")
+    if failed_cases and (diagnose or fix):
+        remaining = asyncio.run(_diagnose_or_fix(repo_root, failed_cases, fix, display))
+        if fix and remaining == 0 and not run.collection_error:
+            display.success("All failing generated tests were repaired")
+            return
+
+    if verbose and run.stdout:
+        console.print("\n[dim]pytest output:[/dim]")
+        console.print(run.stdout[-3000:], markup=False)
+
+    sys.exit(1)
+
+
+def _show_results(run) -> None:
+    """Print a per-file summary and the failing tests."""
+    per_file: Dict[str, Dict[str, int]] = {}
+    for case in run.cases:
+        counts = per_file.setdefault(case.classname, {"passed": 0, "failed": 0, "skipped": 0})
+        counts[case.outcome] += 1
+
+    if per_file:
+        table = Table(title="Test Results")
+        table.add_column("Test module")
+        table.add_column("Passed", justify="right", style="green")
+        table.add_column("Failed", justify="right", style="red")
+        table.add_column("Skipped/xfail", justify="right", style="yellow")
+        for module, counts in sorted(per_file.items()):
+            table.add_row(module, str(counts["passed"]), str(counts["failed"]), str(counts["skipped"]))
+        console.print(table)
+
+    total = len(run.cases)
+    passed = len(run.names("passed"))
+    failed = [c for c in run.cases if c.outcome == "failed"]
+    style = "green" if not failed and run.ok else "red"
+    console.print(f"[{style}]{passed}/{total} tests passed[/{style}]")
+    for case in failed:
+        first_line = (case.message or "").strip().splitlines()[:1]
+        console.print(f"  [red]✗[/red] {case.classname}::{case.name}  {first_line[0] if first_line else ''}", markup=True)
+
+
+async def _diagnose_or_fix(repo_root: Path, failed_cases, fix: bool, display: DisplayManager) -> int:
+    """
+    Diagnose (and with ``fix`` repair) failing tests that code2test generated.
+
+    Returns the number of failing tests that remain unresolved.
+    """
+    from code2test.agents.diagnosis_agent import DiagnosisAgent
+    from code2test.cli.utils.model import resolve_model
+    from code2test.core import GenerationConfig, TestGenerator
+    from code2test.core.models import TestStatus
+    from code2test.core.verifier import test_file_for_classname
+
+    db_path = repo_root / ".code2test" / "code2test.db"
+    if not db_path.exists():
+        display.warning("No code2test database found here; only tests generated by 'code2test test' can be diagnosed.")
+        return len(failed_cases)
+
+    model = resolve_model(display)
+    generator = TestGenerator(str(repo_root), config=GenerationConfig(model=model, auto_accept=True))
+    diagnosis_agent = DiagnosisAgent(model=model)
+
+    # Group failures by the generated test file they belong to
+    by_file: Dict[str, list] = {}
+    for case in failed_cases:
+        by_file.setdefault(test_file_for_classname(repo_root, case.classname), []).append(case)
+
+    remaining = 0
+    for rel_path, cases in by_file.items():
+        test_file = generator.test_registry.get_test_file(rel_path)
+        if test_file is None:
+            display.warning(f"{rel_path} was not generated by code2test; skipping")
+            remaining += len(cases)
+            continue
+
+        on_disk = repo_root / rel_path
+        if fix and on_disk.exists() and on_disk.read_text() != test_file.get_full_content():
+            display.warning(f"{rel_path} was edited since it was generated; not overwriting it")
+            remaining += len(cases)
+            continue
+
+        intent = generator.intent_db.get_intent(test_file.component_id)
+        component = load_component(repo_root, test_file.component_id, test_file.component_path)
+        if intent is None or component is None:
+            display.warning(f"Missing intent or source for {test_file.component_id}; skipping")
+            remaining += len(cases)
+            continue
+
+        messages = {c.name: c.message for c in cases}
+        for tc in test_file.test_cases:
+            if tc.name in messages:
+                tc.mark_failed(messages[tc.name])
 
         if fix:
-            display.warning("Auto-fixing is best handled during generation via 'code2test test'.")
-            display.info("Use 'code2test test --auto --exit-code' for CI/CD self-healing.")
-            
-    if results.get("stdout") and verbose:
-        console.print("\n[dim]Output:[/dim]")
-        console.print(results["stdout"][-1000:])
+            console.print(f"\n[bold]Repairing {rel_path}[/bold]")
+            fixed = await generator.verify_and_fix(test_file, component, intent)
+            if fixed is None:
+                display.warning(f"No passing tests could be produced; removed {rel_path}")
+            elif fixed.verified:
+                xfails = [tc.name for tc in fixed.test_cases if tc.diagnosis]
+                display.success(f"{rel_path}: {fixed.total_tests} tests passing" + (f" ({len(xfails)} marked xfail as possible bugs)" if xfails else ""))
+            else:
+                display.error(f"{rel_path} still has failures")
+                remaining += sum(1 for tc in fixed.test_cases if tc.status == TestStatus.FAILED)
+        else:
+            for tc in test_file.test_cases:
+                if tc.name not in messages:
+                    continue
+                diagnosis = await diagnosis_agent.diagnose_failure(tc, messages[tc.name], component, intent)
+                console.print(f"\n[red]✗[/red] {rel_path}::{tc.name}")
+                display.show_diagnosis_panel(diagnosis)
+            remaining += len(cases)
+
+    return remaining
+
+
+def load_component(repo_root: Path, component_id: str, component_path: str) -> Optional[Dict[str, Any]]:
+    """Rebuild the component dict (name, paths, source) for a stored component id."""
+    path = Path(component_path)
+    if not path.is_absolute():
+        path = repo_root / path
+    if not path.exists():
+        return None
+
+    source = path.read_text()
+    name = component_id.split(".")[-1]
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+
+    segment = None
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == name:
+            segment = ast.get_source_segment(source, node)
+            break
+
+    try:
+        relative = str(path.relative_to(repo_root))
+    except ValueError:
+        relative = str(path)
+
+    return {
+        "id": component_id,
+        "name": name,
+        "file_path": str(path),
+        "relative_path": relative,
+        "source_code": segment or source,
+    }

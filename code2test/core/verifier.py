@@ -6,232 +6,230 @@ Executes and verifies generated tests, collecting results and triggering diagnos
 
 import subprocess
 import logging
-import json
+import sys
+import xml.etree.ElementTree as ET
 import os
+import re
 import tempfile
-from typing import Dict, List, Any, Optional
+from dataclasses import dataclass, field
+from typing import List, Optional
 from pathlib import Path
 
 from code2test.core.models import (
     TestFile,
-    TestCase,
     TestStatus,
     VerificationResult,
-    Diagnosis,
     TestFramework,
 )
 
 logger = logging.getLogger(__name__)
 
 
+def test_file_for_classname(repo_root: Path, classname: str) -> str:
+    """Map a JUnit classname (tests.pkg.test_mod or tests.pkg.test_mod.TestCls) to its file."""
+    parts = classname.split(".")
+    for i in range(len(parts), 0, -1):
+        candidate = "/".join(parts[:i]) + ".py"
+        if (Path(repo_root) / candidate).exists():
+            return candidate
+    return "/".join(parts) + ".py"
+
+
+def defined_test_names(code: str) -> set:
+    """Names of the test functions a piece of test code defines."""
+    return set(re.findall(r"^\s*(?:async\s+)?def\s+(test\w*)\s*\(", code or "", re.M))
+
+
+@dataclass
+class CaseResult:
+    """Outcome of a single test as reported by pytest."""
+
+    name: str              # test function name, without parametrization ids
+    classname: str         # dotted module (and class) path, e.g. tests.calc.test_ops_add
+    outcome: str           # passed | failed | skipped
+    message: str = ""      # failure / error text
+
+
+@dataclass
+class PytestRun:
+    """Result of one pytest invocation."""
+
+    returncode: int
+    cases: List[CaseResult] = field(default_factory=list)
+    collection_error: str = ""   # error not tied to a test function (bad import, syntax)
+    stdout: str = ""
+    stderr: str = ""
+
+    def names(self, outcome: str) -> List[str]:
+        return [c.name for c in self.cases if c.outcome == outcome]
+
+    @property
+    def ok(self) -> bool:
+        # pytest exit codes: 0 = all passed, 1 = failures, 2+ = errors, 5 = no tests collected
+        return self.returncode == 0
+
+
 class TestVerifier:
     """
     Executes and verifies generated tests.
-    
-    Supports pytest execution with JSON result parsing.
+
+    Runs pytest in a subprocess and reads its built-in JUnit XML report,
+    so no extra pytest plugins are needed.
     """
-    
+
+    __test__ = False  # not a pytest test class
+
     def __init__(self, repo_path: str, timeout: int = 60):
         """
-        Initialize verifier.
-        
         Args:
-            repo_path: Path to the repository root
+            repo_path: Path to repository root
             timeout: Timeout in seconds for test execution
         """
         self.repo_path = Path(repo_path)
         self.timeout = timeout
-    
-    def run_tests(self, test_file: TestFile) -> VerificationResult:
+
+    def run_pytest(self, target) -> PytestRun:
         """
-        Execute tests and collect results.
-        
-        Args:
-            test_file: TestFile to execute
-            
-        Returns:
-            VerificationResult with pass/fail status
+        Run pytest on a file or directory from the repo root.
+
+        The repo root (and ``src/`` if present) is put on PYTHONPATH so the code
+        under test is importable, and the target repo's ``addopts`` are ignored so
+        options like ``--cov`` can't fail the run when their plugin isn't installed.
         """
-        if test_file.framework == TestFramework.PYTEST:
-            return self._run_pytest(test_file)
-        else:
-            logger.warning(f"Framework {test_file.framework} not fully supported")
-            return self._run_pytest(test_file)
-    
-    def _run_pytest(self, test_file: TestFile) -> VerificationResult:
-        """
-        Run tests using pytest with JSON output.
-        
-        Args:
-            test_file: TestFile to execute
-            
-        Returns:
-            VerificationResult
-        """
-        test_path = self.repo_path / test_file.path
-        
-        # Check if file exists
-        if not test_path.exists():
-            # Write test file first
-            test_path.parent.mkdir(parents=True, exist_ok=True)
-            test_path.write_text(test_file.get_full_content())
-        
-        # Create temp file for JSON results
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json_path = f.name
-        
+        env = os.environ.copy()
+        extra_paths = [str(self.repo_path)]
+        if (self.repo_path / "src").is_dir():
+            extra_paths.append(str(self.repo_path / "src"))
+        if env.get("PYTHONPATH"):
+            extra_paths.append(env["PYTHONPATH"])
+        env["PYTHONPATH"] = os.pathsep.join(extra_paths)
+        # Test files are rewritten within seconds during repair; .pyc caches are keyed on
+        # mtime (1s resolution) + size, so a cached file could run a stale version.
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
+            report_path = f.name
+
         try:
-            # Run pytest with JSON report
             result = subprocess.run(
                 [
-                    "python", "-m", "pytest",
-                    str(test_path),
-                    f"--json-report",
-                    f"--json-report-file={json_path}",
+                    sys.executable, "-m", "pytest",
+                    *([str(t) for t in target] if isinstance(target, (list, tuple)) else [str(target)]),
+                    f"--junitxml={report_path}",
                     "-v",
                     "--tb=short",
+                    "-p", "no:cacheprovider",
+                    "-o", "addopts=",
                 ],
                 cwd=str(self.repo_path),
+                env=env,
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
             )
-            
-            stdout = result.stdout
-            stderr = result.stderr
-            
-            # Parse JSON report if available
-            passed = []
-            failed = []
-            skipped = []
-            
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path) as f:
-                        report = json.load(f)
-                    
-                    for test in report.get("tests", []):
-                        name = test.get("nodeid", "").split("::")[-1]
-                        outcome = test.get("outcome", "")
-                        
-                        if outcome == "passed":
-                            passed.append(name)
-                        elif outcome == "failed":
-                            failed.append(name)
-                        elif outcome == "skipped":
-                            skipped.append(name)
-                            
-                except Exception as e:
-                    logger.warning(f"Failed to parse JSON report: {e}")
-                    # Fall back to parsing stdout
-                    passed, failed, skipped = self._parse_pytest_output(stdout)
-            else:
-                # Parse stdout for results
-                passed, failed, skipped = self._parse_pytest_output(stdout)
-            
-            # Update test case statuses
-            for tc in test_file.test_cases:
-                if tc.name in passed:
-                    tc.mark_passed()
-                elif tc.name in failed:
-                    tc.mark_failed(self._extract_failure_message(stdout, tc.name))
-                elif tc.name in skipped:
-                    tc.status = TestStatus.SKIPPED
-            
-            return VerificationResult(
-                test_file_path=test_file.path,
-                all_passed=len(failed) == 0,
-                passed=passed,
-                failed=failed,
-                skipped=skipped,
-                execution_time=0.0,  # Could parse from output
-                stdout=stdout,
-                stderr=stderr,
-            )
-            
+            run = PytestRun(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr)
+            self._parse_junit_report(report_path, run)
+            if not run.cases and not run.collection_error and result.returncode not in (0, 5):
+                run.collection_error = (result.stdout + "\n" + result.stderr).strip()[-3000:]
+            return run
         except subprocess.TimeoutExpired:
             logger.error(f"Test execution timed out after {self.timeout}s")
-            return VerificationResult(
-                test_file_path=test_file.path,
-                all_passed=False,
-                failed=["TIMEOUT"],
-                stderr=f"Test execution timed out after {self.timeout} seconds",
+            return PytestRun(
+                returncode=-1,
+                collection_error=f"Test execution timed out after {self.timeout} seconds",
             )
-            
-        except Exception as e:
-            logger.error(f"Test execution failed: {e}")
-            return VerificationResult(
-                test_file_path=test_file.path,
-                all_passed=False,
-                failed=["ERROR"],
-                stderr=str(e),
-            )
-            
         finally:
-            # Cleanup temp file
-            if os.path.exists(json_path):
-                os.unlink(json_path)
-    
-    def _parse_pytest_output(self, output: str) -> tuple[List[str], List[str], List[str]]:
+            if os.path.exists(report_path):
+                os.unlink(report_path)
+
+    def run_tests(self, test_file: TestFile) -> VerificationResult:
         """
-        Parse pytest output to extract test results.
-        
+        Write a generated test file, execute it and update its test case statuses.
+
         Args:
-            output: pytest stdout
-            
+            test_file: TestFile to execute
+
         Returns:
-            Tuple of (passed, failed, skipped) test names
+            VerificationResult with pass/fail status
         """
-        import re
-        
-        passed = []
-        failed = []
-        skipped = []
-        
-        # Match patterns like "test_name PASSED", "test_name FAILED"
-        for line in output.split("\n"):
-            # Look for test result lines
-            match = re.search(r"(test_\w+)\s+(PASSED|FAILED|SKIPPED)", line)
-            if match:
-                name, status = match.groups()
-                if status == "PASSED":
-                    passed.append(name)
-                elif status == "FAILED":
-                    failed.append(name)
-                elif status == "SKIPPED":
-                    skipped.append(name)
-        
-        return passed, failed, skipped
-    
-    def _extract_failure_message(self, output: str, test_name: str) -> str:
-        """
-        Extract failure message for a specific test.
-        
-        Args:
-            output: pytest stdout
-            test_name: Name of the failing test
-            
-        Returns:
-            Failure message or empty string
-        """
-        import re
-        
-        # Look for the failure section
-        pattern = rf"{test_name}.*?(?:FAILED|ERROR).*?\n(.*?)(?=\n\w|$)"
-        match = re.search(pattern, output, re.DOTALL)
-        
-        if match:
-            return match.group(1).strip()[:500]
-        
-        return "Unknown failure"
-    
+        if test_file.framework != TestFramework.PYTEST:
+            logger.warning(f"Framework {test_file.framework} not fully supported, running with pytest")
+
+        # Always write the current content so re-runs never verify a stale file
+        test_path = self.write_test_file(test_file)
+        run = self.run_pytest(test_path)
+
+        passed, failed, skipped = run.names("passed"), run.names("failed"), run.names("skipped")
+        messages = {c.name: c.message for c in run.cases if c.outcome == "failed"}
+
+        # A collection error (bad import, syntax) fails the whole file: attribute it
+        # to every test case so the repair loop sees the real error.
+        known = set(passed) | set(failed) | set(skipped)
+        file_error = None
+        defined = set().union(*(defined_test_names(tc.test_code) | {tc.name} for tc in test_file.test_cases)) if test_file.test_cases else set()
+        if not run.ok and run.returncode != 5 and not (known & defined):
+            file_error = run.collection_error or "pytest failed without reporting results"
+            failed = [tc.name for tc in test_file.test_cases]
+
+        # Anything but exit code 0 means the file is not verified
+        if not run.ok and not failed:
+            failed = [f"pytest exited with code {run.returncode}"]
+
+        for tc in test_file.test_cases:
+            # A test case's code may define several functions, or a name other than
+            # tc.name: match pytest's results against every function it defines.
+            names = defined_test_names(tc.test_code) | {tc.name}
+            failed_here = [n for n in failed if n in names]
+            if failed_here:
+                tc.mark_failed(file_error or messages.get(failed_here[0]) or "Unknown failure")
+            elif names & set(passed):
+                tc.mark_passed()
+            elif names & set(skipped):
+                tc.status = TestStatus.SKIPPED
+
+        return VerificationResult(
+            test_file_path=test_file.path,
+            all_passed=not failed,
+            passed=passed,
+            failed=failed,
+            skipped=skipped,
+            stdout=run.stdout,
+            stderr=run.stderr or run.collection_error,
+            collection_error=file_error,
+        )
+
+    def _parse_junit_report(self, report_path: str, run: PytestRun) -> None:
+        """Fill ``run`` from a pytest JUnit XML report."""
+        if not os.path.exists(report_path) or os.path.getsize(report_path) == 0:
+            return
+        try:
+            root = ET.parse(report_path).getroot()
+        except ET.ParseError as e:
+            logger.warning(f"Failed to parse JUnit report: {e}")
+            return
+
+        for case in root.iter("testcase"):
+            name = case.get("name", "").split("[")[0]
+            classname = case.get("classname", "")
+            problem = case.find("failure")
+            if problem is None:
+                problem = case.find("error")
+            if problem is not None:
+                text = "\n".join(filter(None, [problem.get("message"), problem.text]))[-3000:]
+                # Collection errors are reported as a pseudo test named after the module
+                if not classname or "." in name:
+                    run.collection_error = text
+                else:
+                    run.cases.append(CaseResult(name, classname, "failed", text))
+            elif case.find("skipped") is not None:
+                run.cases.append(CaseResult(name, classname, "skipped"))
+            else:
+                run.cases.append(CaseResult(name, classname, "passed"))
+
     def write_test_file(self, test_file: TestFile) -> Path:
         """
         Write test file to disk.
-        
-        Args:
-            test_file: TestFile to write
-            
+
         Returns:
             Path to written file
         """
@@ -239,14 +237,11 @@ class TestVerifier:
         test_path.parent.mkdir(parents=True, exist_ok=True)
         test_path.write_text(test_file.get_full_content())
         return test_path
-    
+
     def validate_syntax(self, test_file: TestFile) -> tuple[bool, Optional[str]]:
         """
         Validate test file syntax without running.
-        
-        Args:
-            test_file: TestFile to validate
-            
+
         Returns:
             Tuple of (valid, error_message)
         """

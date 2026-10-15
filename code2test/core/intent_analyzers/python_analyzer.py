@@ -2,7 +2,9 @@
 Python-specific intent analyzer.
 """
 
-from typing import Dict, Any
+import ast
+import textwrap
+from typing import Any, Dict, Optional
 from code2test.core.intent_analyzers.base_analyzer import IntentAnalyzer
 
 class PythonAnalyzer(IntentAnalyzer):
@@ -33,24 +35,58 @@ class PythonAnalyzer(IntentAnalyzer):
 
     def extract_docstring(self, component: Dict[str, Any]) -> str:
         """Extract Python docstring."""
-        return component.get("docstring", "").strip()
-        
+        return (component.get("docstring") or "").strip()
+
     def extract_multiline_comment(self, component: Dict[str, Any]) -> str:
         """Extract multiline comments (usually same as docstring in Python models)."""
         return self.extract_docstring(component)
 
     def extract_signature(self, component: Dict[str, Any]) -> str:
-        """Extract Python signature."""
-        return component.get("signature", "")
-        
+        """
+        Extract the Python signature, e.g. ``def add(a: int, b: int) -> int``.
+
+        Uses the ``signature`` field when present, otherwise parses the header
+        of the component's source code (the dependency analyzer only stores source).
+        """
+        if component.get("signature"):
+            return component["signature"]
+        node = self._parse_definition(component)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+            returns = f" -> {ast.unparse(node.returns)}" if node.returns else ""
+            return f"{prefix} {node.name}({ast.unparse(node.args)}){returns}"
+        if isinstance(node, ast.ClassDef):
+            bases = ", ".join(ast.unparse(b) for b in node.bases)
+            return f"class {node.name}({bases})" if bases else f"class {node.name}"
+        return ""
+
     def extract_type_hints(self, component: Dict[str, Any]) -> str:
-        """Extract Python type hints from signature."""
-        signature = component.get("signature", "")
-        # Simple extraction logic from original intent.py
-        # In a real AST walk we would have structured type info, but here we parse the string
+        """Return the signature if it carries type annotations, else an empty string."""
+        node = self._parse_definition(component)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args
+            all_args = args.posonlyargs + args.args + args.kwonlyargs + [a for a in (args.vararg, args.kwarg) if a]
+            annotated = node.returns is not None or any(a.annotation is not None for a in all_args)
+            return self.extract_signature(component) if annotated else ""
+        if isinstance(node, ast.ClassDef):
+            return ""
+        signature = component.get("signature") or ""
         if "->" in signature or ": " in signature:
             return signature
         return ""
-        
+
+    @staticmethod
+    def _parse_definition(component: Dict[str, Any]) -> Optional[ast.AST]:
+        """The first top-level def/class in the component's source, if it parses."""
+        source = component.get("source_code") or ""
+        try:
+            tree = ast.parse(textwrap.dedent(source))
+        except (SyntaxError, ValueError):
+            return None
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                return node
+        return None
+
     def get_naming_patterns(self) -> Dict[str, str]:
         return self.NAMING_PATTERNS

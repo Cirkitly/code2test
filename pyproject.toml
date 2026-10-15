@@ -51,6 +51,7 @@ dependencies = [
     "psutil>=7.0.0",
     "PyYAML>=6.0.2",
     "prompt-toolkit>=3.0.0",
+    "pytest>=7.4.0",
 ]
 
 [project.optional-dependencies]

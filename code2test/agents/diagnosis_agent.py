@@ -16,6 +16,7 @@ from code2test.core.models import (
     Diagnosis,
     DiagnosisCause,
 )
+from code2test.agents.errors import raise_if_fatal
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,10 @@ There are THREE possible causes:
 1. TEST_WRONG - The test incorrectly implements the stated intent. The test needs to be fixed.
 2. CODE_BUG - The code doesn't match the intended behavior. This is a potential bug in the source code.
 3. INTENT_WRONG - The inferred intent doesn't match what the code actually does. The intent needs revision.
+
+Errors raised by the test code itself are always TEST_WRONG: an ImportError or
+ModuleNotFoundError for the test's own imports, a SyntaxError or NameError in the test,
+a missing fixture, or calling something the component does not provide.
 
 Analyze the failure carefully:
 - Compare the test assertions with the stated intent
@@ -102,7 +107,7 @@ class DiagnosisAgent:
             self._agent = Agent(
                 self.model,
                 system_prompt=DIAGNOSIS_SYSTEM_PROMPT,
-                result_type=DiagnosisResult,
+                output_type=DiagnosisResult,
             )
         return self._agent
     
@@ -132,7 +137,7 @@ class DiagnosisAgent:
             test_name=test_case.name,
             test_code=test_case.test_code,
             intent=intent.intent_text,
-            source_code=component.get("source_code", "")[:2000],
+            source_code=(component.get("source_code") or "")[:2000],
             failure_output=failure_output[:1000],  # Limit size
             expected=expected or "Unknown",
             actual=actual or "Unknown",
@@ -148,18 +153,19 @@ class DiagnosisAgent:
                 "CODE_BUG": DiagnosisCause.CODE_BUG,
                 "INTENT_WRONG": DiagnosisCause.INTENT_WRONG,
             }
-            cause = cause_map.get(result.data.cause, DiagnosisCause.TEST_WRONG)
+            cause = cause_map.get(result.output.cause, DiagnosisCause.TEST_WRONG)
             
             return Diagnosis(
                 test_name=test_case.name,
                 cause=cause,
-                confidence=result.data.confidence,
-                explanation=result.data.explanation,
-                suggested_fix=result.data.suggested_fix,
+                confidence=result.output.confidence,
+                explanation=result.output.explanation,
+                suggested_fix=result.output.suggested_fix,
                 stack_trace=failure_output[:500] if failure_output else None,
             )
             
         except Exception as e:
+            raise_if_fatal(e)
             logger.error(f"Diagnosis failed: {e}")
             # Return fallback diagnosis
             return Diagnosis(

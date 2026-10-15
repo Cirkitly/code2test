@@ -31,18 +31,18 @@ class JavaAnalyzer(IntentAnalyzer):
 
     def extract_docstring(self, component: Dict[str, Any]) -> str:
         """Extract Javadoc."""
-        return component.get("docstring", "").strip()
+        return (component.get("docstring") or "").strip()
         
     def extract_multiline_comment(self, component: Dict[str, Any]) -> str:
         return self.extract_docstring(component)
 
     def extract_signature(self, component: Dict[str, Any]) -> str:
-        return component.get("signature", "")
+        return (component.get("signature") or "")
         
     def extract_type_hints(self, component: Dict[str, Any]) -> str:
         """Extract Java type hints (inherent in signature)."""
         # Java signatures are strongly typed, so the signature itself is the type hint
-        return component.get("signature", "")
+        return (component.get("signature") or "")
         
     def get_naming_patterns(self) -> Dict[str, str]:
         return self.NAMING_PATTERNS

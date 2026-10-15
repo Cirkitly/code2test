@@ -38,7 +38,6 @@ MANIFEST
 htmlcov/
 .tox/
 .hypothesis/
-tests/
 
 # Jupyter
 *.ipynb
@@ -46,6 +45,7 @@ tests/
 
 # Project specific
 output/
+.code2test/
 data/
 src/output/
 repo_data/

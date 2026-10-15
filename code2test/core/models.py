@@ -87,6 +87,8 @@ class Diagnosis(BaseModel):
 
 class TestStatus(str, Enum):
     """Status of a test case."""
+
+    __test__ = False  # not a pytest test class
     
     PENDING = "pending"
     PASSED = "passed"
@@ -97,6 +99,8 @@ class TestStatus(str, Enum):
 
 class TestCase(BaseModel):
     """A single test case."""
+
+    __test__ = False  # not a pytest test class
     
     name: str
     intent_text: str
@@ -123,6 +127,8 @@ class TestCase(BaseModel):
 
 class TestFramework(str, Enum):
     """Supported test frameworks."""
+
+    __test__ = False  # not a pytest test class
     
     PYTEST = "pytest"
     UNITTEST = "unittest"
@@ -135,6 +141,8 @@ class TestFramework(str, Enum):
 
 class TestFile(BaseModel):
     """A generated test file."""
+
+    __test__ = False  # not a pytest test class
     
     path: str
     component_id: str
@@ -195,6 +203,7 @@ class VerificationResult(BaseModel):
     execution_time: float = 0.0
     stdout: Optional[str] = None
     stderr: Optional[str] = None
+    collection_error: Optional[str] = None  # the file could not be imported/collected at all
     
     @property
     def total_tests(self) -> int:
@@ -211,6 +220,8 @@ class VerificationResult(BaseModel):
 
 class TestSuite(BaseModel):
     """A collection of generated test files for a module."""
+
+    __test__ = False  # not a pytest test class
     
     module_path: str
     test_files: List[TestFile] = Field(default_factory=list)
@@ -250,4 +261,5 @@ class GenerationConfig(BaseModel):
     include_fixtures: bool = True
     output_dir: Optional[str] = None
     framework: TestFramework = TestFramework.PYTEST
-    model: str = "openai:gpt-4o-mini"
+    model: Any = "openai:gpt-4o-mini"  # pydantic-ai model name or Model instance
+    max_fix_attempts: int = 2

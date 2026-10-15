@@ -6,6 +6,7 @@ Main orchestrator for the test generation pipeline.
 
 import logging
 import asyncio
+import os
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Callable
 
@@ -17,14 +18,16 @@ from code2test.core.models import (
     TestFramework,
     VerificationResult,
     GenerationConfig,
+    DiagnosisCause,
 )
 from code2test.core.intent import IntentExtractor
-from code2test.core.verifier import TestVerifier
+from code2test.core.verifier import TestVerifier, defined_test_names, test_file_for_classname
 from code2test.storage.intent_db import IntentDatabase
 from code2test.storage.test_registry import TestRegistry
 from code2test.agents.intent_agent import IntentAgent
 from code2test.agents.test_agent import TestAgent
 from code2test.agents.diagnosis_agent import DiagnosisAgent
+from code2test.agents.errors import raise_if_fatal
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,8 @@ class TestGenerator:
     2. Test generation
     3. Verification and refinement
     """
+
+    __test__ = False  # not a pytest test class
     
     def __init__(
         self,
@@ -85,13 +90,17 @@ class TestGenerator:
     @property
     def test_agent(self) -> TestAgent:
         if self._test_agent is None:
-            self._test_agent = TestAgent(model=self.config.model)
+            self._test_agent = TestAgent(
+                model=self.config.model,
+                repo_path=str(self.repo_path),
+                output_dir=self.config.output_dir or "tests",
+            )
         return self._test_agent
     
     @property
     def diagnosis_agent(self) -> DiagnosisAgent:
         if self._diagnosis_agent is None:
-            self._diagnosis_agent = DiagnosisAgent()
+            self._diagnosis_agent = DiagnosisAgent(model=self.config.model)
         return self._diagnosis_agent
     
     async def generate_tests_for_module(
@@ -120,6 +129,7 @@ class TestGenerator:
         # Phase 3: Verify and refine (if not dry-run)
         if not self.config.dry_run:
             test_files = await self._verify_and_refine_phase(test_files, components, intents)
+            test_files = await self._suite_check_phase(test_files)
         
         # Build test suite
         suite = TestSuite(
@@ -148,41 +158,48 @@ class TestGenerator:
         logger.info("Phase 1: Extracting intents...")
         intents: Dict[str, Intent] = {}
         
-        # Process in dependency order (leaves first)
+        # Static analysis first, in dependency order (leaves first)
         for comp_id, component in components.items():
-            # Check if intent already exists
+            # Keep intents the user has edited
             existing = self.intent_db.get_intent(comp_id)
             if existing and existing.user_edited:
                 intents[comp_id] = existing
                 continue
-            
-            # Get dependency intents for context
+
             dep_intents = {
                 dep: intents.get(dep)
                 for dep in component.get("dependencies", [])
                 if dep in intents
             }
-            
-            # Extract using static analysis first
-            intent = self.intent_extractor.extract_intent(component, dep_intents)
-            
-            # If low confidence and not auto-accept, use LLM
-            if intent.needs_clarification(self.config.confidence_threshold):
-                if not self.config.auto_accept:
-                    # Use LLM for better inference
-                    try:
-                        intent = await self.intent_agent.infer_intent(component, {
-                            "dependencies": list(dep_intents.keys())
-                        })
-                    except Exception as e:
-                        logger.warning(f"LLM intent inference failed: {e}")
-            
-            intents[comp_id] = intent
+            intents[comp_id] = self.intent_extractor.extract_intent(component, dep_intents)
+
+        # Ask the LLM about components static analysis isn't sure about
+        semaphore = asyncio.Semaphore(5)
+
+        async def refine(comp_id: str) -> None:
+            intent = intents[comp_id]
+            if intent.user_edited or not intent.needs_clarification(self.config.confidence_threshold):
+                return
+            component = components[comp_id]
+            async with semaphore:
+                try:
+                    inferred = await self.intent_agent.infer_intent(component, {
+                        "dependencies": component.get("dependencies", []),
+                    })
+                except Exception as e:
+                    raise_if_fatal(e)
+                    logger.warning(f"LLM intent inference failed for {comp_id}: {e}")
+                    return
+            if inferred.confidence > intent.confidence:
+                intents[comp_id] = inferred
+
+        await asyncio.gather(*(refine(cid) for cid in intents))
+
+        for intent in intents.values():
             self.intent_db.save_intent(intent)
-            
             if self.on_intent_extracted:
                 self.on_intent_extracted(intent)
-        
+
         logger.info(f"Extracted {len(intents)} intents")
         return intents
     
@@ -202,10 +219,6 @@ class TestGenerator:
             List of generated test files
         """
         logger.info("Phase 2: Generating tests...")
-        test_files: List[TestFile] = []
-        
-        logger.info("Phase 2: Generating tests...")
-        test_files: List[TestFile] = []
         
         # Concurrency limit
         semaphore = asyncio.Semaphore(5)
@@ -247,6 +260,7 @@ class TestGenerator:
                         return test_file
                             
                 except Exception as e:
+                    raise_if_fatal(e)
                     logger.error(f"Test generation failed for {comp_id}: {e}")
                     return None
                     
@@ -281,46 +295,193 @@ class TestGenerator:
             Refined test files
         """
         logger.info("Phase 3: Verifying tests...")
-        
-        for test_file in test_files:
-            # Validate syntax first
-            valid, error = self.verifier.validate_syntax(test_file)
-            if not valid:
-                logger.warning(f"Syntax error in {test_file.path}: {error}")
-                continue
-            
-            # Run tests
-            result = self.verifier.run_tests(test_file)
-            
-            if self.on_verification_complete:
-                self.on_verification_complete(result)
-            
-            # Diagnose failures
-            if not result.all_passed:
+
+        # Each verification is a pytest subprocess: run one per CPU
+        semaphore = asyncio.Semaphore(max(2, os.cpu_count() or 2))
+
+        async def verify(test_file: TestFile) -> Optional[TestFile]:
+            async with semaphore:
+                return await self.verify_and_fix(
+                    test_file,
+                    components.get(test_file.component_id, {}),
+                    intents.get(test_file.component_id),
+                )
+
+        results = await asyncio.gather(*(verify(tf) for tf in test_files))
+        return [tf for tf in results if tf is not None]
+
+    async def _suite_check_phase(self, test_files: List[TestFile], max_rounds: int = 3) -> List[TestFile]:
+        """
+        Run all generated files together and drop tests that only fail there.
+
+        Each file was verified on its own, but tests can interfere across files
+        (e.g. one mutates module-level state another relies on). Generated tests
+        that fail in the combined run are dropped until the combined run passes.
+        """
+        by_path = {tf.path: tf for tf in test_files}
+        for _ in range(max_rounds):
+            if not by_path:
+                break
+            run = await asyncio.to_thread(
+                self.verifier.run_pytest, [self.repo_path / p for p in sorted(by_path)]
+            )
+            if run.ok:
+                break
+            failed = [c for c in run.cases if c.outcome == "failed"]
+            if not failed:
+                logger.warning(f"Combined run of generated tests failed: {_first_line(run.collection_error)}")
+                break
+
+            changed = set()
+            for case in failed:
+                tf = by_path.get(test_file_for_classname(self.repo_path, case.classname))
+                if tf is None:
+                    continue
+                keep = [tc for tc in tf.test_cases
+                        if case.name not in defined_test_names(tc.test_code) | {tc.name}]
+                if len(keep) != len(tf.test_cases):
+                    logger.info(f"Dropping {tf.path}::{case.name}: fails alongside other tests ({_first_line(case.message)})")
+                    tf.test_cases = keep
+                    changed.add(tf.path)
+            if not changed:
+                break
+            for path in changed:
+                tf = by_path[path]
+                if not tf.test_cases:
+                    self._discard(tf, "no tests pass alongside the rest of the suite")
+                    del by_path[path]
+                else:
+                    self.verifier.write_test_file(tf)
+                    self.test_registry.register_test(tf)
+                    if tf.verified:
+                        self.test_registry.mark_verified(tf.path)
+        return [tf for tf in test_files if tf.path in by_path]
+
+    async def _run_verifier(self, test_file: TestFile) -> VerificationResult:
+        """Run the verifier (blocking subprocess) without stalling the event loop."""
+        # Syntax errors in individual tests: report them per test instead of running pytest
+        valid, error = self.verifier.validate_syntax(test_file)
+        if not valid:
+            bad = []
+            for tc in test_file.test_cases:
+                try:
+                    compile(tc.test_code, tc.name, "exec")
+                except SyntaxError as e:
+                    tc.mark_failed(f"SyntaxError at line {e.lineno}: {e.msg}")
+                    bad.append(tc.name)
+            if not bad:  # the imports/fixtures are broken: every test is affected
                 for tc in test_file.test_cases:
-                    if tc.status == TestStatus.FAILED:
-                        component = components.get(test_file.component_id, {})
-                        intent = intents.get(test_file.component_id)
-                        
-                        if intent:
-                            try:
-                                diagnosis = await self.diagnosis_agent.diagnose_failure(
-                                    tc,
-                                    tc.failure_message or "",
-                                    component,
-                                    intent,
-                                )
-                                tc.diagnosis = diagnosis
-                            except Exception as e:
-                                logger.error(f"Diagnosis failed: {e}")
-            
-            # Mark verified
-            if result.all_passed:
-                test_file.verified = True
-                self.test_registry.mark_verified(test_file.path)
-        
-        return test_files
-    
+                    tc.mark_failed(error or "SyntaxError")
+                bad = [tc.name for tc in test_file.test_cases]
+            return VerificationResult(test_file_path=test_file.path, all_passed=False, failed=bad)
+        return await asyncio.to_thread(self.verifier.run_tests, test_file)
+
+    async def verify_and_fix(
+        self,
+        test_file: TestFile,
+        component: Dict[str, Any],
+        intent: Optional[Intent],
+    ) -> Optional[TestFile]:
+        """
+        Run a generated test file and repair it until it passes.
+
+        1. Run the tests.
+        2. Send failing tests back to the model with their failure output (up to
+           ``config.max_fix_attempts`` rounds).
+        3. Tests that still fail are diagnosed: likely bugs in the code under test are
+           kept as ``xfail`` with the reason, everything else is dropped. This keeps
+           the written suite green while still surfacing suspected bugs.
+
+        Returns the final test file, or None if no tests survived (file removed).
+        """
+        result = await self._run_verifier(test_file)
+
+        for attempt in range(self.config.max_fix_attempts):
+            failing = [tc for tc in test_file.test_cases if tc.status == TestStatus.FAILED]
+            if result.all_passed or not failing or intent is None:
+                break
+            logger.info(f"Repairing {len(failing)} failing test(s) in {test_file.path} (attempt {attempt + 1})")
+            test_file = await self.test_agent.fix_tests(test_file, failing, component, intent)
+            result = await self._run_verifier(test_file)
+
+        if self.on_verification_complete:
+            self.on_verification_complete(result)
+
+        if not result.all_passed and not any(tc.status == TestStatus.FAILED for tc in test_file.test_cases) \
+                and not result.collection_error:
+            return self._discard(test_file, "fails, but the failures can't be attributed to a test")
+
+        # A file that can't even be imported (bad import, syntax error) can't be saved by
+        # xfail: drop it rather than leave a file that breaks the user's whole test run.
+        if result.collection_error:
+            return self._discard(test_file, f"still not importable: {_first_line(result.collection_error)}")
+
+        failing = [tc for tc in test_file.test_cases if tc.status == TestStatus.FAILED]
+        if failing:
+            kept = []
+            failing_names = {tc.name for tc in failing}
+            for tc in test_file.test_cases:
+                if tc.name not in failing_names:
+                    kept.append(tc)
+                    continue
+                diagnosis = None
+                if intent is not None:
+                    try:
+                        diagnosis = await self.diagnosis_agent.diagnose_failure(
+                            tc, tc.failure_message or "", component, intent
+                        )
+                    except Exception as e:
+                        raise_if_fatal(e)
+                        logger.error(f"Diagnosis failed: {e}")
+                tc.diagnosis = diagnosis
+                if diagnosis and diagnosis.cause == DiagnosisCause.CODE_BUG:
+                    reason = f"code2test: possible bug - {diagnosis.explanation}"[:300]
+                    tc.test_code = f"@pytest.mark.xfail(reason={reason!r}, strict=False)\n{tc.test_code}"
+                    kept.append(tc)
+                    logger.warning(f"{test_file.path}::{tc.name} kept as xfail: {diagnosis.explanation}")
+                else:
+                    logger.info(
+                        f"Dropping failing test {test_file.path}::{tc.name}: {_first_line(tc.failure_message)}"
+                    )
+
+            test_file = test_file.model_copy(update={"test_cases": kept})
+            if not kept:
+                return self._discard(test_file, "no passing tests")
+            if not any(i.startswith("import pytest") for i in test_file.imports):
+                test_file.imports.insert(0, "import pytest")
+            result = await self._run_verifier(test_file)
+
+            # Last resort: anything still failing (an xfail that errors, a test broken by
+            # its neighbours) is dropped, so the written file always passes.
+            if not result.all_passed:
+                if result.collection_error:
+                    return self._discard(test_file, f"not importable: {_first_line(result.collection_error)}")
+                still = {tc.name for tc in test_file.test_cases if tc.status == TestStatus.FAILED}
+                kept = [tc for tc in test_file.test_cases if tc.name not in still]
+                for name in still:
+                    logger.info(f"Dropping failing test {test_file.path}::{name}")
+                test_file = test_file.model_copy(update={"test_cases": kept})
+                if not kept:
+                    return self._discard(test_file, "no passing tests")
+                result = await self._run_verifier(test_file)
+                if not result.all_passed:
+                    return self._discard(test_file, "tests still fail after cleanup")
+
+        test_file.verified = result.all_passed
+        self.test_registry.register_test(test_file)
+        if test_file.verified:
+            self.test_registry.mark_verified(test_file.path)
+        return test_file
+
+    def _discard(self, test_file: TestFile, reason: str) -> None:
+        """Remove a generated test file that could not be made to pass."""
+        path = self.repo_path / test_file.path
+        if path.exists():
+            path.unlink()
+        self.test_registry.delete_test(test_file.path)
+        logger.warning(f"Removed {test_file.path} for {test_file.component_id}: {reason}")
+        return None
+
     def get_stats(self) -> Dict[str, Any]:
         """Get generation statistics."""
         intent_stats = self.intent_db.get_stats()
@@ -330,3 +491,11 @@ class TestGenerator:
             **intent_stats,
             **test_stats,
         }
+
+
+def _first_line(text: Optional[str]) -> str:
+    """First non-empty line of a failure message, for logs."""
+    for line in (text or "").splitlines():
+        if line.strip():
+            return line.strip()[:200]
+    return "unknown failure"

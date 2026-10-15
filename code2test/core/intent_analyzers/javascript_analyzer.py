@@ -34,17 +34,17 @@ class JavascriptAnalyzer(IntentAnalyzer):
     def extract_docstring(self, component: Dict[str, Any]) -> str:
         """Extract JSDoc or leading comments."""
         # Assuming the component model normalizes 'docstring' field from JSDoc
-        return component.get("docstring", "").strip()
+        return (component.get("docstring") or "").strip()
         
     def extract_multiline_comment(self, component: Dict[str, Any]) -> str:
         return self.extract_docstring(component)
 
     def extract_signature(self, component: Dict[str, Any]) -> str:
-        return component.get("signature", "")
+        return (component.get("signature") or "")
         
     def extract_type_hints(self, component: Dict[str, Any]) -> str:
         """Extract TypeScript type annotations if present."""
-        signature = component.get("signature", "")
+        signature = (component.get("signature") or "")
         # TS usually has ': Type' pattern
         if ":" in signature or "=>" in signature:
             return signature

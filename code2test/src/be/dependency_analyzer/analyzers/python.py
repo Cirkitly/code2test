@@ -125,7 +125,8 @@ class PythonASTAnalyzer(ast.NodeVisitor):
     def _process_function_node(self, node: ast.FunctionDef | ast.AsyncFunctionDef):
         """Process function definition - only add to nodes if it's top-level."""
 
-        if not self.current_class_name:
+        # Functions nested in other functions can't be imported, so they're not components
+        if not self.current_class_name and not self.current_function_name:
             component_id = f"{self._get_module_path()}.{node.name}"
             relative_path = self._get_relative_path()
             
@@ -151,9 +152,11 @@ class PythonASTAnalyzer(ast.NodeVisitor):
                 self.nodes.append(func_node)
                 self.top_level_nodes[node.name] = func_node
 
-        self.current_function_name = node.name
+        # Calls inside a nested function are attributed to the enclosing top-level function
+        outer = self.current_function_name
+        self.current_function_name = outer or node.name
         self.generic_visit(node)
-        self.current_function_name = None
+        self.current_function_name = outer
 
     def _should_include_function(self, func: Node) -> bool:
         if func.name.startswith("_test_"):
@@ -234,6 +237,14 @@ class PythonASTAnalyzer(ast.NodeVisitor):
                 warnings.filterwarnings("ignore", category=SyntaxWarning)
                 tree = ast.parse(self.content)
             self.visit(tree)
+
+            # Calls are visited in source order, so a call to a function or class
+            # defined further down the file is not resolved yet: resolve it now.
+            module_path = self._get_module_path()
+            for rel in self.call_relationships:
+                if not rel.is_resolved and rel.callee in self.top_level_nodes:
+                    rel.callee = f"{module_path}.{rel.callee}"
+                    rel.is_resolved = True
 
             logger.debug(
                 f"Python analysis complete for {self.file_path}: {len(self.nodes)} nodes, "

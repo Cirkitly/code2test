@@ -6,6 +6,7 @@ SQLite-based persistence for inferred intents with JSON storage.
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Dict
 from datetime import datetime
@@ -27,9 +28,19 @@ class IntentDatabase:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
     
+    @contextmanager
+    def _connect(self):
+        """Open a connection that commits on success and is always closed."""
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def _init_database(self) -> None:
         """Initialize database schema."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS intents (
                     component_id TEXT PRIMARY KEY,
@@ -59,7 +70,7 @@ class IntentDatabase:
         Args:
             intent: Intent to save
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO intents 
                 (component_id, component_path, intent_text, confidence, 
@@ -87,7 +98,7 @@ class IntentDatabase:
         Returns:
             Intent if found, None otherwise
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 "SELECT * FROM intents WHERE component_id = ?",
@@ -110,7 +121,7 @@ class IntentDatabase:
         Returns:
             List of matching intents
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 "SELECT * FROM intents WHERE component_path LIKE ?",
@@ -128,7 +139,7 @@ class IntentDatabase:
         Returns:
             List of low-confidence intents
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 "SELECT * FROM intents WHERE confidence < ? AND user_edited = 0",
@@ -143,7 +154,7 @@ class IntentDatabase:
         Returns:
             List of all intents
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("SELECT * FROM intents ORDER BY component_path")
             return [self._row_to_intent(row) for row in cursor.fetchall()]
@@ -168,7 +179,7 @@ class IntentDatabase:
         Returns:
             True if deleted, False if not found
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 "DELETE FROM intents WHERE component_id = ?",
                 (component_id,)
@@ -178,7 +189,7 @@ class IntentDatabase:
     
     def clear_all(self) -> None:
         """Delete all intents."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("DELETE FROM intents")
             conn.commit()
     
@@ -198,7 +209,7 @@ class IntentDatabase:
     
     def get_stats(self) -> dict:
         """Get database statistics."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             total = conn.execute("SELECT COUNT(*) FROM intents").fetchone()[0]
             user_edited = conn.execute(
                 "SELECT COUNT(*) FROM intents WHERE user_edited = 1"

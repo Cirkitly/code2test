@@ -47,10 +47,10 @@ def intent_command(
     
     if action == "show":
         if component:
-            intent = db.get_intent(component)
-            if intent:
+            matches = _find_intents(db, component)
+            for intent in matches:
                 display.show_intent(intent)
-            else:
+            if not matches:
                 display.warning(f"No intent found for: {component}")
         else:
             intents = db.get_all_intents()
@@ -66,20 +66,27 @@ def intent_command(
         if format == "json":
             import json
             data = [i.model_dump() for i in intents]
-            console.print(json.dumps(data, indent=2, default=str))
+            # plain output: rich would wrap long lines and break the JSON
+            click.echo(json.dumps(data, indent=2, default=str))
         else:
             for intent in intents:
-                console.print(f"{intent.component_id}: {intent.intent_text}")
+                click.echo(f"{intent.component_id}: {intent.intent_text}")
     
     elif action == "edit":
         if not component:
             display.error("Component name required for edit")
             return
         
-        intent = db.get_intent(component)
-        if not intent:
+        matches = _find_intents(db, component)
+        if not matches:
             display.error(f"No intent found for: {component}")
             return
+        if len(matches) > 1:
+            display.error(f"'{component}' matches several components; use one of:")
+            for m in matches:
+                console.print(f"  {m.component_id}")
+            return
+        intent = matches[0]
         
         session = InteractiveSession(display)
         new_text = session.edit_intent(intent)
@@ -88,3 +95,23 @@ def intent_command(
             intent.update_intent(new_text)
             db.save_intent(intent)
             display.success("Intent updated")
+
+
+def _find_intents(db, query: str) -> list:
+    """
+    Resolve a user-supplied name to intents.
+
+    Tries, in order: the exact component id ("pkg.mod.func"), a short name
+    ("func"), then a module or package prefix ("pkg.mod", "pkg").
+    """
+    exact = db.get_intent(query)
+    if exact:
+        return [exact]
+    intents = db.get_all_intents()
+    by_name = [i for i in intents if i.component_id.split(".")[-1] == query]
+    if by_name:
+        return by_name
+    return [
+        i for i in intents
+        if i.component_id.startswith(query + ".") or f".{query}." in f".{i.component_id}"
+    ]

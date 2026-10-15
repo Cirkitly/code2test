@@ -129,7 +129,7 @@ class HTMLReportGenerator:
         Returns:
             The generated HTML content
         """
-        env = Environment(loader=BaseLoader())
+        env = Environment(loader=BaseLoader(), autoescape=True)
         template = env.from_string(self.TEMPLATE)
         
         verified_count = sum(1 for f in test_suite.test_files if f.verified)
