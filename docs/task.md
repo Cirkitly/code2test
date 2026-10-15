@@ -1,6 +1,6 @@
 # Implementation Status
 
-Code2Test grew out of CodeWiki, a repository documentation generator. The package was renamed and its dependency analyzer kept; test generation was built on top. This page lists what v1 does, what exists in the code but is not used by the v1 pipeline, and what is planned. The original plan and its success criteria are in [proposal.md](proposal.md).
+Code2Test grew out of CodeWiki, a repository documentation generator. Its dependency analyzer was kept and test generation was built on top; CodeWiki's documentation generator and web app have been removed. This page lists what v1 does, what exists in the code but is not used by the v1 pipeline, and what is planned. The original plan and its success criteria are in [proposal.md](proposal.md).
 
 ## Scope of v1
 
@@ -28,7 +28,7 @@ Python only. Test generation, verification and repair target pytest. Files in ot
 - [x] `benchmark`: mutation score and diagnosis accuracy on failures of known cause
 - [x] `report summary`: intents by confidence
 - [x] `init`: writes a starter `.code2test/config.json`
-- [x] `config set|show|validate`: API key and model
+- [x] `config set|show|validate`: API key and model; `validate` sends the model one test request
 
 **Measurement and evaluation**
 - [x] Run metrics in `.code2test/metrics.json`: acceptance rate, first-run pass rate, repairs, xfails, drops, reused and skipped components
@@ -44,7 +44,6 @@ Python only. Test generation, verification and repair target pytest. Files in ot
 - `code2test/core/intent_analyzers/` for JavaScript and Java: never reached, because `code2test test` passes only Python components to the pipeline.
 - `TestAgent.generate_integration_tests`: not called by any command.
 - `--framework unittest`: accepted, but tests are generated in pytest style.
-- `code2test generate`, `code2test config agent` and `code2test/src/fe/`: CodeWiki's documentation generator and web app, inherited with the analyzer.
 
 ## Not done
 

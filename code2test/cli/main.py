@@ -41,7 +41,6 @@ def version():
 
 # Import commands
 from code2test.cli.commands.config import config_group
-from code2test.cli.commands.generate import generate_command
 from code2test.cli.commands.test import test_command
 from code2test.cli.commands.verify import verify_command
 from code2test.cli.commands.intent import intent_command
@@ -49,11 +48,8 @@ from code2test.cli.commands.report import report_command
 from code2test.cli.commands.init import init_command
 from code2test.cli.commands.benchmark import benchmark_command
 
-# Register command groups
-cli.add_command(config_group)
-cli.add_command(generate_command, name="generate")  # Legacy CodeWiki documentation command
-
-# Register new test generation commands
+# Register commands
+cli.add_command(config_group)      # code2test config
 cli.add_command(test_command)      # code2test test
 cli.add_command(verify_command)    # code2test verify
 cli.add_command(intent_command)    # code2test intent
