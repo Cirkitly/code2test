@@ -249,3 +249,25 @@ def test_benchmark_skips_components_outside_the_repo(tmp_path):
     tf.component_path = "/somewhere/else/calc/ops.py"
     result = asyncio.run(Benchmark(repo, [tf], intents, components).run(max_mutants=10))
     assert result.mutants_total == 0
+
+
+def test_mutants_run_against_the_whole_generated_suite(tmp_path):
+    repo = _make_repo(tmp_path)
+    (repo / "calc/ops.py").write_text("def helper(x):\n    return x + 1\n\n\ndef add_one(x):\n    return helper(x)\n")
+    weak = File(path="tests/calc/test_ops_helper.py", component_id="calc.ops.helper", component_path="calc/ops.py",
+                imports=["from calc.ops import helper"],
+                test_cases=[Case(name="test_helper", intent_text="", test_code="def test_helper():\n    assert callable(helper)\n")])
+    strong = File(path="tests/calc/test_ops_add_one.py", component_id="calc.ops.add_one", component_path="calc/ops.py",
+                  imports=["from calc.ops import add_one"],
+                  test_cases=[Case(name="test_add_one", intent_text="", test_code="def test_add_one():\n    assert add_one(1) == 2\n")])
+    for tf in (weak, strong):
+        (repo / tf.path).parent.mkdir(parents=True, exist_ok=True)
+        (repo / tf.path).write_text(tf.get_full_content())
+    bench = Benchmark(repo, [weak, strong], {}, {})
+    helper_mutants = [m for m in bench.mutants(100) if m.component_id == "calc.ops.helper"]
+    assert helper_mutants
+
+    result = asyncio.run(bench.run(max_mutants=100))
+    # helper's own (weak) test misses its bugs, but add_one's test catches them
+    assert result.mutants_killed == result.mutants_total
+    assert result.mutants_killed_by_own_tests < result.mutants_killed

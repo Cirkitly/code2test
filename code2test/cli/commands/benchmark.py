@@ -115,7 +115,9 @@ def benchmark_command(path: str, mutants: int, diagnoses: int, timeout: int, ver
         table.add_row("Tests passing on first run (last run)",
                       f"{generation['first_run_passed']}/{generation['tests_generated']} ({pct(generation['first_run_pass_rate'])})")
     if result.mutation_score is not None:
-        table.add_row("Mutants killed", f"{result.mutants_killed}/{result.mutants_total} ({result.mutation_score:.0%})")
+        table.add_row("Mutants killed (whole suite)", f"{result.mutants_killed}/{result.mutants_total} ({result.mutation_score:.0%})")
+        table.add_row("  by the mutated component's own tests",
+                      f"{result.mutants_killed_by_own_tests}/{result.mutants_total} ({result.own_tests_mutation_score:.0%})")
     scored = [c for c in result.diagnosis_cases if c.actual is not None]
     if scored:
         table.add_row("Diagnoses correct", f"{sum(c.correct for c in scored)}/{len(scored)} ({result.diagnosis_accuracy:.0%})")

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from code2test.core.models import DiagnosisCause, TestCase, TestFile, TestStatus
-from code2test.core.verifier import TestVerifier
+from code2test.core.verifier import TestVerifier, test_file_for_classname
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +222,8 @@ class DiagnosisCase:
 @dataclass
 class BenchmarkResult:
     mutants_total: int = 0
-    mutants_killed: int = 0
+    mutants_killed: int = 0              # by any generated test (standard mutation score)
+    mutants_killed_by_own_tests: int = 0  # by the tests generated for the mutated component
     survivors: List[Dict[str, object]] = field(default_factory=list)
     diagnosis_cases: List[DiagnosisCase] = field(default_factory=list)
     diagnosis_error: Optional[str] = None     # set when the model could not be reached
@@ -231,6 +232,10 @@ class BenchmarkResult:
     @property
     def mutation_score(self) -> Optional[float]:
         return self.mutants_killed / self.mutants_total if self.mutants_total else None
+
+    @property
+    def own_tests_mutation_score(self) -> Optional[float]:
+        return self.mutants_killed_by_own_tests / self.mutants_total if self.mutants_total else None
 
     @property
     def diagnosis_accuracy(self) -> Optional[float]:
@@ -250,6 +255,8 @@ class BenchmarkResult:
             "mutation_score": self.mutation_score,
             "mutants_total": self.mutants_total,
             "mutants_killed": self.mutants_killed,
+            "own_tests_mutation_score": self.own_tests_mutation_score,
+            "mutants_killed_by_own_tests": self.mutants_killed_by_own_tests,
             "diagnosis_accuracy": self.diagnosis_accuracy,
             "diagnosis_by_expected_cause": by_label,
             "diagnosis_error": self.diagnosis_error,
@@ -329,9 +336,12 @@ class Benchmark:
 
     async def run(self, max_mutants: int = 50, max_diagnoses: int = 10) -> BenchmarkResult:
         result = BenchmarkResult(restored_files=self.restore_leftovers())
-        test_paths: Dict[str, List[Path]] = {}
+        # Every mutant runs against the whole generated suite, as in standard mutation
+        # testing: a bug in one function is often caught by tests of the functions using it.
+        all_paths = sorted({self.repo_root / tf.path for tf in self.test_files})
+        own_files: Dict[str, set] = {}
         for tf in self.test_files:
-            test_paths.setdefault(tf.component_id, []).append(self.repo_root / tf.path)
+            own_files.setdefault(tf.component_id, set()).add(tf.path)
         code_bug_cases: List[Tuple[TestCase, str, Dict]] = []
 
         for mutant in self.mutants(max_mutants):
@@ -342,7 +352,7 @@ class Benchmark:
             backup.write_bytes(original)        # survives a killed process; restored on the next run
             try:
                 source_path.write_bytes(mutant.source.encode("utf-8"))
-                run = self.verifier.run_pytest(test_paths.get(mutant.component_id, []))
+                run = self.verifier.run_pytest(all_paths)
             finally:
                 source_path.write_bytes(original)
                 backup.unlink(missing_ok=True)
@@ -354,8 +364,13 @@ class Benchmark:
                 continue
             result.mutants_killed += 1
 
-            failed = [c for c in run.cases if c.outcome == "failed"]
+            # Failures in the mutated component's own tests: the per-component score,
+            # and the only failures shown to the diagnosis agent (its intent matches)
+            mine = own_files.get(mutant.component_id, set())
+            failed = [c for c in run.cases if c.outcome == "failed"
+                      and test_file_for_classname(self.repo_root, c.classname) in mine]
             if failed:
+                result.mutants_killed_by_own_tests += 1
                 case = failed[0]
                 test_case = self._find_test_case(mutant.component_id, case.name)
                 source, offset = _component_source(mutant.source, mutant.component_id, mutant.line)
