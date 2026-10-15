@@ -35,7 +35,7 @@ def verify_command(
     """
     Run and verify generated tests.
 
-    Runs pytest from the repository root (the current directory), reports
+    Runs pytest with the current directory as the repository root, reports
     each failure, and exits with code 1 if any test fails.
 
     \b

@@ -185,3 +185,35 @@ def test_benchmark_command_reports_mutation_score(repo, monkeypatch):
     data = json.loads((repo / ".code2test" / "benchmark.json").read_text())
     assert data["mutants_total"] == 2 and data["mutants_killed"] == 2
     assert data["generation"]["acceptance_rate"] == 1.0
+
+
+class _Display:
+    def __init__(self):
+        self.messages = []
+
+    def info(self, message):
+        self.messages.append(message)
+
+    warning = success = error = info
+
+
+@pytest.fixture
+def no_saved_config(tmp_path, monkeypatch):
+    config_module = importlib.import_module("code2test.cli.config_manager")
+    monkeypatch.setattr(config_module, "CONFIG_FILE", tmp_path / "none" / "config.json")
+    monkeypatch.setattr(config_module.ConfigManager, "get_api_key", lambda self: None)
+    for var in ("CODE2TEST_MODEL", "LLM_BACKEND", "AZURE_OPENAI_DEPLOYMENT", "AZURE_OPENAI_ENDPOINT"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_resolve_model_uses_code2test_model_without_warnings(no_saved_config, monkeypatch):
+    monkeypatch.setenv("CODE2TEST_MODEL", "anthropic:claude-sonnet-5-5")
+    display = _Display()
+    assert model_module.resolve_model(display) == "anthropic:claude-sonnet-5-5"
+    assert display.messages == []
+
+
+def test_resolve_model_says_when_it_falls_back_to_the_default(no_saved_config):
+    display = _Display()
+    assert model_module.resolve_model(display) == "openai:gpt-4o-mini"
+    assert len(display.messages) == 1 and "No model configured" in display.messages[0]

@@ -1,10 +1,10 @@
 """
-Code2Test: Intelligent Test Generation for Legacy Codebases.
+Code2Test: intent-first test generation for legacy Python code.
 
 This package provides a CLI tool for generating comprehensive test suites
-for codebases lacking tests using intent-first AI analysis.
+for Python code that lacks tests, using intent-first LLM analysis.
 
-Built on FSoft AI4Code's CodeWiki framework.
+Dependency analysis derived from FSoft AI4Code's CodeWiki.
 """
 
 __version__ = "0.1.0"

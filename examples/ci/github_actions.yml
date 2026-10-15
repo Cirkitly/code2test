@@ -1,34 +1,43 @@
+# Generate and verify tests for a Python project with Code2Test.
+# Copy to .github/workflows/code2test.yml in your project.
+# Needs a repository secret with your model provider's API key (here OPENAI_API_KEY);
+# see "Choosing a model" in the Code2Test README for other providers.
 name: Code2Test
-on: [push, pull_request]
+
+on:
+  pull_request:
+  push:
+    branches: [main]
 
 jobs:
-  test-generation:
+  generate-tests:
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CODE2TEST_MODEL: openai:gpt-4o-mini
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          
-      - name: Install Dependencies
+          python-version: "3.12"
+
+      - name: Install the project and Code2Test
         run: |
           python -m pip install --upgrade pip
-          pip install .
-          pip install pytest pytest-cov
-          
-      - name: Generate Tests
-        # Run in auto mode, fail if verification fails
-        run: |
-          code2test test \
-            --auto \
-            --confidence 0.6 \
-            --exit-code \
-            --output-dir generated_tests \
-            code2test/core/
-            
-      - name: Run Generated Tests
-        if: success() || failure() # Run even if generation had issues but produced files
-        run: |
-          pytest generated_tests
+          pip install -e .
+          pip install git+https://github.com/Cirkitly/code2test.git
+
+      - name: Generate tests
+        # --exit-code fails the job if any written test file failed verification
+        run: code2test test --auto --exit-code --output-dir generated_tests src/
+
+      - name: Run the generated suite
+        run: code2test verify generated_tests
+
+      - name: Keep the generated tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-tests
+          path: generated_tests/

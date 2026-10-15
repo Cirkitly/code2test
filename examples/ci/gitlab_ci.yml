@@ -1,45 +1,44 @@
+# Generate and verify tests for a Python project with Code2Test.
+# Copy into your project's .gitlab-ci.yml.
+# Needs a masked CI/CD variable with your model provider's API key (here OPENAI_API_KEY);
+# see "Choosing a model" in the Code2Test README for other providers.
 stages:
-  - test-generation
-  - test-execution
+  - generate
+  - verify
 
 variables:
-  PYTHON_VERSION: "3.12"
+  CODE2TEST_MODEL: "openai:gpt-4o-mini"
   OUTPUT_DIR: "generated_tests"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip"
 
 default:
-  image: python:$PYTHON_VERSION
-
-cache:
-  paths:
-    - .venv/
-    - .pip/
-
-before_script:
-  - python -m venv .venv
-  - source .venv/bin/activate
-  - pip install --upgrade pip
-  - pip install .
-  - pip install pytest pytest-cov
+  image: python:3.12
+  cache:
+    paths:
+      - .pip/
+  before_script:
+    - pip install --upgrade pip
+    - pip install -e .
+    - pip install git+https://github.com/Cirkitly/code2test.git
 
 generate_tests:
-  stage: test-generation
+  stage: generate
   script:
-    - echo "Generating tests with Code2Test..."
-    - code2test test --auto --confidence 0.7 --exit-code --output-dir $OUTPUT_DIR code2test/core/
+    # --exit-code fails the job if any written test file failed verification
+    - code2test test --auto --exit-code --output-dir $OUTPUT_DIR src/
   artifacts:
     paths:
       - $OUTPUT_DIR/
     expire_in: 1 week
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-run_tests:
-  stage: test-execution
+verify_tests:
+  stage: verify
   needs: ["generate_tests"]
   script:
-    - echo "Running generated tests..."
-    - pytest $OUTPUT_DIR
+    - code2test verify $OUTPUT_DIR
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -71,4 +71,4 @@ def init_command(path: str) -> None:
         json.dump(config, f, indent=2)
         
     display.success(f"Initialized Code2Test configuration in {config_file}")
-    display.info("Run 'code2test generate' to start generating tests!")
+    display.info("Run 'code2test test .' to start generating tests.")
