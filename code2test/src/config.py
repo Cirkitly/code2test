@@ -1,8 +1,7 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 import argparse
 import os
-import sys
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -181,7 +180,6 @@ class Config:
         Returns:
             Config instance
         """
-        repo_name = os.path.basename(os.path.normpath(repo_path))
         base_output_dir = os.path.join(output_dir, "temp")
         
         return cls(

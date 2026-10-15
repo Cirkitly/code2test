@@ -2,7 +2,6 @@
 Test generation command for Code2Test CLI.
 """
 
-import os
 import sys
 import logging
 import asyncio
@@ -13,7 +12,7 @@ import click
 from rich.console import Console
 
 from code2test.cli.display import DisplayManager
-from code2test.cli.interactive import InteractiveSession, run_interactive_generation
+from code2test.cli.interactive import run_interactive_generation
 from code2test.cli.utils.model import resolve_model
 from code2test.core import TestGenerator, GenerationConfig, TestFramework
 from code2test.src.be.dependency_analyzer import DependencyGraphBuilder

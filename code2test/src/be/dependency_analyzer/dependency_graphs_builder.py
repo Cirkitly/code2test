@@ -32,10 +32,6 @@ class DependencyGraphBuilder:
             self.config.dependency_graph_dir, 
             f"{sanitized_repo_name}_dependency_graph.json"
         )
-        filtered_folders_path = os.path.join(
-            self.config.dependency_graph_dir, 
-            f"{sanitized_repo_name}_filtered_folders.json"
-        )
 
         # Get custom include/exclude patterns from config
         include_patterns = self.config.include_patterns if self.config.include_patterns else None

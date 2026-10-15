@@ -5,10 +5,9 @@ Claude Code-style interactive prompts for test generation.
 """
 
 import asyncio
-from typing import Dict, List, Any, Optional, Callable
+from typing import Dict, List, Any, Optional
 from enum import Enum
 
-import click
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 

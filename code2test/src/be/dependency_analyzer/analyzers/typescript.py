@@ -1,11 +1,8 @@
 import logging
 import os
 import traceback
-from typing import List, Set, Optional, Tuple
+from typing import List, Optional, Tuple
 from pathlib import Path
-import sys
-import os
-from traceback import print_exc
 
 from tree_sitter import Parser, Language
 import tree_sitter_typescript
@@ -116,7 +113,6 @@ class TreeSitterTSAnalyzer:
         if not node or not node.parent:
             return True
         
-        entity_type = entity_data.get('type')
         if self._is_inside_function_body(node):
             return False
         

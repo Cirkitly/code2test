@@ -162,7 +162,8 @@ def collect(runs_dir: Path, run_number: int):
 
         s = metrics["summary"]
         # Recompute rates from counts: the summary stores them rounded, and rounding twice can be off by one point
-        ratio = lambda num, den: num / den if den else None
+        def ratio(num, den):
+            return num / den if den else None
         passed, total, skipped = verify_counts(verify_log)
         diag = bench["diagnosis_by_expected_cause"]
         row = {

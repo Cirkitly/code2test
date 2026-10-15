@@ -4,9 +4,16 @@ Main CLI application for Code2Test using Click framework.
 
 import sys
 import click
-from pathlib import Path
 
 from code2test import __version__
+from code2test.cli.commands.config import config_group
+from code2test.cli.commands.test import test_command
+from code2test.cli.commands.verify import verify_command
+from code2test.cli.commands.intent import intent_command
+from code2test.cli.commands.report import report_command
+from code2test.cli.commands.init import init_command
+from code2test.cli.commands.benchmark import benchmark_command
+
 
 
 @click.group()
@@ -38,15 +45,6 @@ def version():
     click.echo("Intent-first test generation for legacy Python code")
     click.echo("Dependency analysis derived from FSoft AI4Code's CodeWiki")
     
-
-# Import commands
-from code2test.cli.commands.config import config_group
-from code2test.cli.commands.test import test_command
-from code2test.cli.commands.verify import verify_command
-from code2test.cli.commands.intent import intent_command
-from code2test.cli.commands.report import report_command
-from code2test.cli.commands.init import init_command
-from code2test.cli.commands.benchmark import benchmark_command
 
 # Register commands
 cli.add_command(config_group)      # code2test config

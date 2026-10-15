@@ -521,12 +521,10 @@ class CallGraphAnalyzer:
 
         selected_func_ids = sorted_func_ids[:target_count]
 
-        original_func_count = len(self.functions)
         self.functions = {
             fid: func for fid, func in self.functions.items() if fid in selected_func_ids
         }
 
-        original_rel_count = len(self.call_relationships)
         self.call_relationships = [
             rel
             for rel in self.call_relationships

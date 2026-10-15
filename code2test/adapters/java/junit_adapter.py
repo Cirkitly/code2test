@@ -4,15 +4,12 @@ Code2Test JUnit Adapter
 Adapter for JUnit 5 test file generation and execution.
 """
 
-import os
 import subprocess
-import re
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 from pathlib import Path
-import tempfile
 import xml.etree.ElementTree as ET
 
-from code2test.core.models import TestFile, TestCase, TestStatus
+from code2test.core.models import TestFile
 
 
 class JUnitAdapter:

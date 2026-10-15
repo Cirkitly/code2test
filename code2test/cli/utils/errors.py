@@ -12,7 +12,6 @@ Exit Codes:
 
 import sys
 import click
-from typing import Optional
 
 
 # Exit codes

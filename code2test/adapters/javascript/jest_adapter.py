@@ -8,10 +8,10 @@ import os
 import subprocess
 import json
 import tempfile
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 from pathlib import Path
 
-from code2test.core.models import TestFile, TestCase, TestStatus
+from code2test.core.models import TestFile
 
 
 # Default Jest imports

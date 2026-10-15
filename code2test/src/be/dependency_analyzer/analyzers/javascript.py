@@ -1,14 +1,11 @@
 import logging
 import os
 import traceback
-from typing import List, Set, Optional, Tuple
+from typing import List, Optional, Tuple
 from pathlib import Path
-import sys
-import os
 
 from tree_sitter import Parser, Language
 import tree_sitter_javascript
-import tree_sitter_typescript
 
 from code2test.src.be.dependency_analyzer.models.core import Node, CallRelationship
 

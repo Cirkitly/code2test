@@ -3,9 +3,8 @@ Base interface for language-specific intent analyzers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 
-from code2test.core.models import IntentEvidence
 
 class IntentAnalyzer(ABC):
     """Abstract base class for language-specific intent analysis."""

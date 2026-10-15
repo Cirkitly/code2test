@@ -5,11 +5,9 @@ This module provides functionality to analyze repository structures and generate
 detailed file tree representations with filtering capabilities.
 """
 
-import os
 import fnmatch
-import json
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 from code2test.src.be.dependency_analyzer.utils.patterns import DEFAULT_IGNORE_PATTERNS, DEFAULT_INCLUDE_PATTERNS
 
 

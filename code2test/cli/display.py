@@ -4,7 +4,7 @@ Code2Test CLI Display Module
 Rich terminal rendering for test generation output.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -12,7 +12,6 @@ from rich.tree import Tree
 from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 from rich.syntax import Syntax
-from rich.live import Live
 
 from code2test.core.models import (
     Intent,
@@ -53,13 +52,10 @@ class DisplayManager:
         # Color code confidence
         if intent.confidence >= 0.8:
             color = "green"
-            indicator = "●"
         elif intent.confidence >= 0.6:
             color = "yellow"
-            indicator = "◐"
         else:
             color = "red"
-            indicator = "○"
         
         name = component_name or intent.component_id
         
@@ -72,9 +68,9 @@ class DisplayManager:
         
         # Show evidence summary
         if intent.evidence.docstring:
-            self.console.print(f"  [dim]├─ Docstring: ✓[/dim]")
+            self.console.print("  [dim]├─ Docstring: ✓[/dim]")
         if intent.evidence.type_hints:
-            self.console.print(f"  [dim]├─ Type hints: ✓[/dim]")
+            self.console.print("  [dim]├─ Type hints: ✓[/dim]")
         if intent.evidence.naming_signals:
             self.console.print(f"  [dim]└─ Naming: {', '.join(intent.evidence.naming_signals)}[/dim]")
     
@@ -155,23 +151,16 @@ class DisplayManager:
             DiagnosisCause.INTENT_WRONG: "magenta",
         }
         
-        cause_labels = {
-            DiagnosisCause.TEST_WRONG: "Test incorrectly implements intent",
-            DiagnosisCause.CODE_BUG: "Potential bug in source code",
-            DiagnosisCause.INTENT_WRONG: "Intent doesn't match actual behavior",
-        }
-        
         color = cause_colors.get(diagnosis.cause, "white")
-        label = cause_labels.get(diagnosis.cause, str(diagnosis.cause))
         
         content = Text()
         content.append(f"{diagnosis.explanation}\n\n")
-        content.append(f"Likely cause: ", style="bold")
+        content.append("Likely cause: ", style="bold")
         content.append(f"{diagnosis.cause.value} ", style=f"bold {color}")
         content.append(f"({diagnosis.confidence:.0%})")
         
         if diagnosis.suggested_fix:
-            content.append(f"\n\nSuggested fix: ", style="bold")
+            content.append("\n\nSuggested fix: ", style="bold")
             content.append(diagnosis.suggested_fix)
         
         panel = Panel(

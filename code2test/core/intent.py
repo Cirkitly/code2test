@@ -7,7 +7,7 @@ Delegates to language-specific analyzers.
 
 import re
 import os
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 
 from code2test.core.models import Intent, IntentEvidence
@@ -262,7 +262,6 @@ class IntentExtractor:
         signals = []
         # Name matching might depend on language case conventions, but regex usually handles this
         # or we normalize.
-        name_lower = name if "_" in name else name # Python/snake_case check
         # For camelCase, splitting is harder without extra libs, but regex patterns like "^get" work
         
         patterns = analyzer.get_naming_patterns()

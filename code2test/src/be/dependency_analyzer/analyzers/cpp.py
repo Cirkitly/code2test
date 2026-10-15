@@ -1,7 +1,6 @@
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 from pathlib import Path
-import sys
 import os
 
 from tree_sitter import Parser, Language

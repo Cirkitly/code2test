@@ -16,7 +16,6 @@ from code2test.core.models import (
     TestFile,
     TestSuite,
     TestStatus,
-    TestFramework,
     VerificationResult,
     GenerationConfig,
     DiagnosisCause,

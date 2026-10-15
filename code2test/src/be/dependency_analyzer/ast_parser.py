@@ -1,11 +1,7 @@
 import os
 import json
 import logging
-import argparse
-from dataclasses import dataclass, field
-from typing import Dict, List, Set, Tuple, Optional, Any, Union
-from pathlib import Path
-import re
+from typing import Dict, List, Set
 
 from code2test.src.be.dependency_analyzer.analysis.analysis_service import AnalysisService
 from code2test.src.be.dependency_analyzer.models.core import Node
@@ -106,7 +102,6 @@ class DependencyParser:
         for rel_dict in relationships:
             caller_id = rel_dict.get("caller", "")
             callee_id = rel_dict.get("callee", "")
-            is_resolved = rel_dict.get("is_resolved", False)
             
             caller_component_id = component_id_mapping.get(caller_id)
             

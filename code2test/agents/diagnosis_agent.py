@@ -217,16 +217,10 @@ class DiagnosisAgent:
         Returns:
             Formatted string for display
         """
-        cause_labels = {
-            DiagnosisCause.TEST_WRONG: "Test incorrectly implements intent",
-            DiagnosisCause.CODE_BUG: "Potential bug in source code",
-            DiagnosisCause.INTENT_WRONG: "Intent doesn't match code behavior",
-        }
-        
         lines = [
             f"╭─ Diagnosis ─{'─' * 50}╮",
             f"│ {diagnosis.explanation[:60]}",
-            f"│",
+            "│",
             f"│ Likely cause: {diagnosis.cause.value} ({diagnosis.confidence:.0%})",
             f"╰─{'─' * 62}╯",
         ]

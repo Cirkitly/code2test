@@ -468,7 +468,7 @@ class Benchmark:
 
 def _is_assertion_failure(message: str) -> bool:
     """True when pytest's failure message is a failed assertion, not some other error."""
-    lines = [l.strip() for l in (message or "").splitlines() if l.strip()]
+    lines = [text.strip() for text in (message or "").splitlines() if text.strip()]
     return bool(lines) and (lines[0].startswith("assert ") or lines[0].startswith("AssertionError"))
 
 
@@ -483,5 +483,5 @@ def _component_source(module_source: str, component_id: str, line: int = 0) -> T
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == name:
             segment = ast.get_source_segment(module_source, node) or module_source
             before = segment.splitlines()[: max(0, line - node.lineno)]
-            return segment, sum(len(l) + 1 for l in before)
+            return segment, sum(len(text) + 1 for text in before)
     return module_source, 0

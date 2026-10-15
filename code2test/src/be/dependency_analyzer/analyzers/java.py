@@ -1,7 +1,6 @@
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 from pathlib import Path
-import sys
 import os
 
 from tree_sitter import Parser, Language
@@ -133,7 +132,6 @@ class TreeSitterJavaAnalyzer:
 		# 1. Inheritance: Class extends another class
 		if node.type == "class_declaration":
 			class_name = self._get_identifier_name(node)
-			children_types = [c.type for c in node.children]
 			
 			extends_node = next((c for c in node.children if c.type == "superclass"), None)
 			if extends_node:

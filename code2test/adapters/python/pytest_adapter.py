@@ -8,7 +8,7 @@ import os
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
-from code2test.core.models import TestFile, TestCase, TestStatus
+from code2test.core.models import TestFile
 
 
 # Default pytest imports
