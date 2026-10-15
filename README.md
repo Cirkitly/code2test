@@ -99,7 +99,7 @@ The suite Code2Test writes therefore always passes: every test either passes or 
 | `code2test verify [PATH]` | Run tests; optionally diagnose or repair failures |
 | `code2test benchmark [PATH]` | Measure mutation score and diagnosis accuracy of the generated tests |
 | `code2test intent show\|edit\|export [NAME]` | Review or correct inferred intents |
-| `code2test report` | Summarize stored intents by confidence |
+| `code2test report summary\|coverage` | Summarize stored intents, or report behavioral coverage and diagnostic accuracy |
 | `code2test init` | Write a starter `.code2test/config.json` (the other commands take their settings from options, not from this file) |
 | `code2test config set\|show\|validate` | Store the API key and model (`--api-key`, `--main-model`); `validate` sends the model one test request |
 | `code2test version` | Show the installed version |
@@ -149,6 +149,16 @@ The benchmark also scores the diagnosis agent on failures whose cause is known. 
 | `--diagnoses N` | 10 | Diagnosis cases per expected cause; 0 skips the LLM step |
 | `--timeout SECONDS` | 120 | pytest timeout per run |
 
+### `code2test report coverage`
+
+Reports test quality per component:
+
+- **Behaviors tested.** The distinct behaviors that the component's passing tests check, as stated for each generated test, next to its inferred intent.
+- **Mutants killed.** The share of injected bugs in the component that the generated suite catches.
+- **Diagnostic accuracy.** How often the diagnosis agent named the right cause of a failure with a known cause.
+
+The last two come from the most recent `code2test benchmark` run; the report says when that run predates the current tests. `--format html` or `json` writes the report to `tests/reports/`; `code2test test --report` includes the same section.
+
 ### Continuous integration
 
 `code2test test --auto --exit-code` and `code2test verify` both exit non-zero on failure. Examples for GitHub Actions and GitLab CI are in [`examples/ci`](examples/ci).
@@ -164,10 +174,11 @@ The benchmark also scores the diagnosis agent on failures whose cause is known. 
 | `.code2test/dependency_graphs/` | The analyzed dependency graph |
 | `.code2test/config.json` | Starter settings written by `code2test init` (not read by other commands) |
 | `tests/reports/report.html`, `report.json` | Run reports, when `--report` is used |
+| `tests/reports/coverage.html`, `coverage.json` | Coverage reports from `code2test report coverage --format html\|json` |
 
 ## Results
 
-Measured on two open-source libraries after removing each library's own tests, with two MiniMax models: `MiniMax-M3.1-Flash-Preview` (Flash) and `MiniMax-M3` (M3). Each configuration was run once.
+Measured on two open-source libraries after removing each library's own tests, with two MiniMax models: `MiniMax-M3.1-Flash-Preview` (Flash) and `MiniMax-M3` (M3). The table shows the first run of each configuration.
 
 | Measure | inflection, Flash | inflection, M3 | TinyDB, Flash | TinyDB, M3 | Target |
 | --- | --- | --- | --- | --- | --- |
@@ -185,6 +196,8 @@ The mutation scores show where the generated suites are weak:
 - In inflection, half of the sampled mutants fall in `_irregular`, which builds the rules for irregular words such as *person*/*people*. The Flash run wrote a single test for it that checks only how many rules are added, and caught 9 of its 40 mutants. Outside `_irregular`, the suites caught 38 of 40 (Flash) and 40 of 40 (M3).
 - In TinyDB, most surviving mutants change string literals, such as error messages and the names `Query` uses as hash keys, which tests rarely observe.
 
+A second run of each configuration gave similar results, and one of them kept a test as an expected failure that exposes a real defect in inflection: `singularize("campuses")` returns `"campuse"`.
+
 On these well-documented libraries, nearly every inferred intent came from the docstring. The paper ([`research/paper/main.pdf`](research/paper/main.pdf)) describes the setup, analyzes these results and compares Code2Test with related tools. The generated suites, intents and raw results are in [`research/data/`](research/data/).
 
 ## Limitations
@@ -192,7 +205,7 @@ On these well-documented libraries, nearly every inferred intent came from the d
 - **Python only.** Files in other languages are part of the dependency graph but get no tests; the tool says so when it skips them.
 - **Behavior is inferred, not specified.** Expected values come from the inferred intent and the source. Review generated tests before relying on them, as you would review a colleague's.
 - **Each run calls the model.** A run sends source code to the configured provider and costs API usage: one or more calls per component, plus repairs.
-- **Results come from two libraries and two models of one provider, one run each.** Larger codebases, code with external services, other models and run-to-run variance are not yet measured.
+- **Results come from two libraries and two models of one provider, two runs each.** Larger codebases, code with external services, other models and a proper estimate of run-to-run variance are not yet measured.
 
 ## Development
 
@@ -201,9 +214,11 @@ git clone https://github.com/Cirkitly/code2test.git
 cd code2test
 pip install -e ".[dev]"
 pytest
+ruff check code2test tests research/scripts      # lint
+ruff format code2test tests research/scripts     # format
 ```
 
-The tests in `tests/` drive the whole pipeline offline with scripted models, so no API key is needed. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on every push and pull request.
+The tests in `tests/` drive the whole pipeline offline with scripted models, so no API key is needed. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on Python 3.12 and 3.13, and checks lint and formatting, on every push and pull request.
 
 When changing the pipeline:
 

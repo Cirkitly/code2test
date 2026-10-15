@@ -20,10 +20,11 @@ the design have precedents in prior work.
 | `paper/references.bib` | Bibliography |
 | `paper/figures/pipeline.tex` | Figure 1 (TikZ) |
 | `paper/Makefile` | Builds the PDF and the arXiv bundle |
-| `scripts/run_experiments.sh` | Re-runs all four experiments |
+| `scripts/run_experiments.sh` | Re-runs all experiments: four configurations, two runs each |
 | `scripts/collect_results.py` | Turns run directories into `data/` and `paper/results.tex` |
-| `data/results.csv` | One row per run with every reported measure |
-| `data/runs/<subject>-<model>/` | Per run: generated test suite, inferred intents, run metrics, benchmark output, verification log |
+| `data/results.csv` | One row per run with every reported measure (column `run`: 1 or 2) |
+| `data/runs/<subject>-<model>/` | First runs (main results). Per run: generated test suite, inferred intents, run metrics, benchmark output, verification log |
+| `data/second-runs/<subject>-<model>/` | A second run of each configuration, in the same form |
 | `data/development/` | Earlier runs cited only as evidence of run-to-run variance |
 
 ## Building the paper
@@ -47,13 +48,15 @@ make -C research/paper
 ```
 
 The script downloads both libraries from PyPI, removes their own tests, and runs
-`code2test test --auto`, `code2test verify` and `code2test benchmark` for each library and model.
-It then runs `collect_results.py`, which rewrites `data/` and `paper/results.tex`. Model output is
+`code2test test --auto`, `code2test verify` and `code2test benchmark` for each library and model,
+twice: once for the main results and once more to show run-to-run variation. It then runs
+`collect_results.py`, which rewrites `data/` and `paper/results.tex`. Model output is
 not deterministic, so a new run gives different numbers; the paper's text describes the specific
-runs in `data/runs/`.
+runs in `data/runs/` and `data/second-runs/`.
 
-A full run makes a few hundred model calls. The four runs execute in parallel; in ours, the
-slowest (TinyDB with M3) spent 815 seconds generating tests before its benchmark started.
+A full reproduction makes several hundred model calls. Each set of four runs executes in
+parallel; in our first runs, the slowest (TinyDB with M3) spent 815 seconds generating tests
+before its benchmark started.
 
 ## Submitting to arXiv
 

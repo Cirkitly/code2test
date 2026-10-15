@@ -1,0 +1,445 @@
+{
+  "generation": {
+    "components": 13,
+    "components_with_tests": 13,
+    "acceptance_rate": 1.0,
+    "tests_generated": 230,
+    "first_run_passed": 194,
+    "first_run_pass_rate": 0.843,
+    "tests_kept": 230,
+    "tests_xfail": 0,
+    "tests_dropped": 0,
+    "components_reused": 0,
+    "skipped_low_confidence": 0,
+    "files_removed": 0,
+    "repair_rounds": 14,
+    "diagnoses": {},
+    "llm_failures": 0
+  },
+  "mutation_score": 0.6,
+  "mutants_total": 80,
+  "mutants_killed": 48,
+  "own_tests_mutation_score": 0.525,
+  "mutants_killed_by_own_tests": 42,
+  "diagnosis_accuracy": 1.0,
+  "diagnosis_by_expected_cause": {
+    "CODE_BUG": {
+      "cases": 15,
+      "correct": 15,
+      "unscored": 0
+    },
+    "TEST_WRONG": {
+      "cases": 15,
+      "correct": 15,
+      "unscored": 0
+    }
+  },
+  "diagnosis_error": null,
+  "restored_files": [],
+  "survivors": [
+    {
+      "file": "inflection/__init__.py",
+      "line": 100,
+      "component": "inflection.__init__._irregular",
+      "mutation": "return value -> None"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 100,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'[' -> '[['"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 102,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 102,
+      "component": "inflection.__init__._irregular",
+      "mutation": "Eq -> NotEq"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 108,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 108,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'(?i)({}){}$' -> '(?i)({}){}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 109,
+      "component": "inflection.__init__._irregular",
+      "mutation": "1 -> 2"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 109,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'\\\\1' -> '\\\\'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 112,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'(?i)({}){}$' -> '(?i)({}){}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 117,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'{}{}$' -> '{}{}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 118,
+      "component": "inflection.__init__._irregular",
+      "mutation": "1 -> 2"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 119,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 122,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 126,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 127,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 127,
+      "component": "inflection.__init__._irregular",
+      "mutation": "1 -> 2"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 127,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'{}{}$' -> '{}{}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 128,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 130,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 131,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 131,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'{}{}$' -> '{}{}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 132,
+      "component": "inflection.__init__._irregular",
+      "mutation": "1 -> 2"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 132,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 134,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 135,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 135,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'{}{}$' -> '{}{}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 136,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 138,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 139,
+      "component": "inflection.__init__._irregular",
+      "mutation": "'{}{}$' -> '{}{}'"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 139,
+      "component": "inflection.__init__._irregular",
+      "mutation": "1 -> 2"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 139,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "inflection/__init__.py",
+      "line": 140,
+      "component": "inflection.__init__._irregular",
+      "mutation": "0 -> 1"
+    }
+  ],
+  "diagnosis_cases": [
+    {
+      "test": "test_underscore_converts_camel_case_to_snake_case",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test faithfully implements the stated intent and the function's own docstring example (underscore(\"DeviceType\") == \"device_type\"), so it is not the source of the failure. The bug is in the component: the replacement template in `word = re.sub('([A-Z]+)([A-Z][a-z])', '\\\\1_\\\\', word)` is `\\1_\\`, e",
+      "correct": true
+    },
+    {
+      "test": "test_transliterate_replaces_accented_letters_with_ascii_approximation",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test faithfully implements the stated intent: accented Latin characters should be reduced to ASCII approximations ('\u00e4l\u00e4m\u00f6l\u00f6' -> 'alamolo'), and it exercises the public `transliterate` API. The failure comes from the component itself: `unicodedata.normalize('NFK', string)` passes the normalizatio",
+      "correct": true
+    },
+    {
+      "test": "test_transliterate_replaces_accented_letters_with_ascii_approximation",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test's assertion is exactly consistent with the stated intent and with the function's own docstring examples (`transliterate('\u00e4l\u00e4m\u00f6l\u00f6')` -> `'alamolo'`). The docstring also explains the mechanism: NFKD normalization decomposes accented characters into base ASCII letters plus combining marks, whi",
+      "correct": true
+    },
+    {
+      "test": "test_ordinal_returns_suffix_for_basic_single_digits",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly encodes the stated intent (1->'st', 2->'nd', 3->'rd', 4->'th'). The implementation's lookup table is broken in two ways: (1) the key `2` is missing entirely, so `ordinal(2)` falls through to the default `'th'` \u2014 exactly the observed failure; and (2) the table contains a duplicate ",
+      "correct": true
+    },
+    {
+      "test": "test_pluralize_docstring_examples_are_honored",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test faithfully encodes the component's own documented contract (the docstring explicitly shows `pluralize(\"sheep\") -> 'sheep'`), and the stated intent (\"Return the plural form of a word\") agrees with that: the plural of the uncountable \"sheep\" is \"sheep\". The implementation, however, returns `N",
+      "correct": true
+    },
+    {
+      "test": "test_camelize_with_uppercase_first_letter_false_produces_lower_camel_case",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly encodes the documented intent: the docstring explicitly shows `camelize(\"device_type\", False)` -> 'deviceType', and the implementation's `else` branch is supposed to produce lowerCamelCase by simply lowercasing the first character of the UpperCamelCase result.\n\nThe code does `stri",
+      "correct": true
+    },
+    {
+      "test": "test_parameterize_collapses_repeated_separators",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test's three assertions (`\"a - b\"`, `\"a--b\"`, `\"a - - b\"` all \u2192 `'a-b'`) precisely match the stated intent (produce pretty URL slugs) and the component's own documented 'remove redundant separators' step: the first re.sub turns each run of disallowed characters into a single '-', existing dashes",
+      "correct": true
+    },
+    {
+      "test": "test_ordinal_cycles_st_nd_rd_th_over_each_ten",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test faithfully encodes the stated intent: for numbers whose last digit is 1/2/3 (and that are not 11/12/13), the suffix must be st/nd/rd. It also correctly picks bases (0, 20, 30, 100, 1000, 100000) so base+0..base+9 never hits the 11/12/13 exception, so the assertions are valid English ordinal",
+      "correct": true
+    },
+    {
+      "test": "test_ordinal_returns_suffix_for_basic_single_digits",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test faithfully implements the stated intent: return the ordinal suffix (\"st\", \"nd\", \"rd\", \"th\") for a number. The intent description also matches the component's own docstring and doctest examples (e.g. `ordinal(1) == 'st'`, `ordinal(1002) == 'nd'`, `ordinal(-1021) == 'st'`). The defect lies in",
+      "correct": true
+    },
+    {
+      "test": "test_underscore_converts_camel_case_to_snake_case",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The implementation computes the correct camelCase-to-snake_case transformation in three regex/str steps, but then returns None instead of the transformed word. The function is annotated `-> str` and its docstring documents `underscore(\"DeviceType\") == 'device_type'`, so returning None contradicts bo",
+      "correct": true
+    },
+    {
+      "test": "test_humanize_replaces_underscores_with_spaces_and_capitalizes_first_word",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test faithfully implements the stated intent and the documented doctest example (`humanize(\"employee_salary\") == 'Employee salary'`). The failure originates inside the component: line 95 uses `re.sub('^\\\\w', lambda m: m.group(1).upper(), word)`, but the pattern `^\\w` contains no capturing group,",
+      "correct": true
+    },
+    {
+      "test": "test_dasherize_replaces_single_underscore_with_dash",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test asserts dasherize(\"puni_puni\") == \"puni-puni\", which is exactly the documented behavior: both the docstring example (`>>> dasherize(\"puni_puni\")` -> `'puni-puni'`) and the stated intent (\"Replace underscores with dashes in the string\") require single underscores to be converted to dashes. T",
+      "correct": true
+    },
+    {
+      "test": "test_pluralize_regular_word_appends_s",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly encodes the stated intent (\"Return the plural form of a word\", matching the component's docstring examples such as pluralize(\"octopus\") == 'octopi'). The bug is in the component's guard clause: `if not word or word.lower() not in UNCOUNTABLES: return word` returns the word unchang",
+      "correct": true
+    },
+    {
+      "test": "test_transliterate_replaces_accented_letters_with_ascii_approximation",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly asserts the documented behavior: NFKD normalization followed by dropping non-ASCII combining marks yields 'alamolo' from '\u00e4l\u00e4m\u00f6l\u00f6'. The component's docstring even states \"the non-ASCII character is ignored\" and shows `transliterate('\u00e4l\u00e4m\u00f6l\u00f6')` -> `'alamolo'` as a doctest, so the i",
+      "correct": true
+    },
+    {
+      "test": "test_irregular_same_initial_letter_pluralize",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test's intent matches the docstring of the component: registering an irregular pair ('person', 'people') should make pluralize('person') return 'people'. The call itself succeeds (the failure is an AssertionError, not AttributeError), so the method exists and the rules were inserted \u2014 but plural",
+      "correct": true
+    },
+    {
+      "test": "test_titleize_lowercases_an_embedded_acronym",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The expected value in the assertion is a typo: 'The Html Parse' is missing the trailing 'r' of 'Parser'. The component performs: underscore(word) -> humanize(...) -> .title() -> capitalize each word-initial character. None of these steps truncate characters, so the function cannot produce 'The Html ",
+      "correct": true
+    },
+    {
+      "test": "test_titleize_handles_possessive_contractions",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test contradicts itself: its docstring states that titleize(\"the dog's life\") yields \"The Dog's Life\" (with the \"S\" from str.title() lowered back by the regex substitution), yet the assertion asserts \"The Dog's Lif\" \u2014 a truncated string missing the trailing \"e\".\n\nTracing the implementation confi",
+      "correct": true
+    },
+    {
+      "test": "test_humanize_lowercases_the_remaining_underscored_words",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's expected value is a typographical error: 'Employee salar' is simply missing the trailing 'y'. The component's actual output, 'Employee salary', is exactly what the documented behavior requires: the docstring's examples show lowercase input ('employee_salary' -> 'Employee salary'), and the",
+      "correct": true
+    },
+    {
+      "test": "test_underscore_handles_namespaced_expressions_by_keeping_separators",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's own docstring states the expected result is 'active_record::base', which is exactly what the implementation produces: 'ActiveRecord::Base' -> 'Active_Record::Base' (via the ([a-z\\d])([A-Z]) rule) -> lowercased 'active_record::base'. The assertion literal 'active_record::bas' is a simple t",
+      "correct": true
+    },
+    {
+      "test": "test_underscore_replaces_every_dash_occurrence",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test contradicts itself: its own docstring states \"str.replace applies to all occurrences of '-', so 'a-b-c' becomes 'a_b_c'\", yet the assertion expects 'a_b_' (which would only be correct for a single-dash input like 'a-b'). The component's implementation uses `word.replace(\"-\", \"_\")`, which re",
+      "correct": true
+    },
+    {
+      "test": "test_humanize_strips_id_suffix_after_converting_underscored_words",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's expected value is corrupted: it expects 'Employee salar' (a truncated 'salary', missing the trailing 'y'). Per the stated intent, 'employee_salary_id' should have the trailing '_id' stripped -> 'employee_salary', underscores converted to spaces -> 'employee salary', then the first charact",
+      "correct": true
+    },
+    {
+      "test": "test_camelize_lowercasing_single_word_stays_lowercase",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's own docstring states the expected behavior: \"camelize('device', False) == 'device'\". The component correctly implements this: with `uppercase_first_letter=False`, it returns `string[0].lower() + camelize(string)[1:]` = 'd' + 'evice' = 'device'. The assertion compares against `'devic'`, wh",
+      "correct": true
+    },
+    {
+      "test": "test_titleize_preserves_punctuation_while_capitalizing",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component's documented behavior is to capitalize words and replace separator characters (underscores, hyphens, camel-case boundaries) \u2014 it does not strip or drop punctuation. `titleize` builds its result from `humanize(underscore(word)).title()`, and Python's `str.title()` preserves punctuation;",
+      "correct": true
+    },
+    {
+      "test": "test_camelize_lowercasing_preserves_rest_of_camel_case_string",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component's behavior is correct and matches its documented contract: `camelize('DeviceType', False)` takes the `else` branch, lowercasing only the first character and delegating the rest to `camelize(string)[1:]`, which yields `'deviceType'`. This is exactly what the test's own docstring states ",
+      "correct": true
+    },
+    {
+      "test": "test_titleize_of_underscore_only_string_returns_empty_string",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component behaves correctly; the test's expected value is simply miscounted. `titleize('___')` evaluates as: `underscore('___')` -> `''`, `.title()` -> `''`; `humanize('___')` -> `'___'.replace('_', ' ')` -> `'   '` (one space per underscore, i.e. three spaces); `.title()` on whitespace is uncha",
+      "correct": true
+    },
+    {
+      "test": "test_dasherize_replaces_single_underscore_with_dash",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component `dasherize` correctly implements the stated intent: it replaces each underscore with a dash, so `dasherize('puni_puni')` returns `'puni-puni'`, which exactly matches the docstring's canonical example. The test asserts `'puni-pun'`, which is a truncated/mistyped expected value that does",
+      "correct": true
+    },
+    {
+      "test": "test_ordinalize_four_returns_fourth",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's own docstring states \"Any other last digit yields the generic 'th' suffix, e.g. 4 -> '4th'\" and the test name is `test_ordinalize_four_returns_fourth`, yet the assertion compares against '4t' \u2014 a truncated string missing the final 'h'. The component's documented behavior and its actual ou",
+      "correct": true
+    },
+    {
+      "test": "test_camelize_consumes_leading_underscore",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component behaves correctly. For '_device', re.sub with r\"(?:^|_)(.)\" matches at position 0 via the `^` branch, capturing the underscore and replacing it with '_'.upper() == '_'. Scanning resumes at index 1, where `^` no longer applies and there are no remaining underscores, so no substitution o",
+      "correct": true
+    },
+    {
+      "test": "test_titleize_handles_hyphenated_numbered_titles",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The actual output 'Top 10 List' is exactly the correct behavior for the stated intent. Tracing the implementation: underscore('top-10 list') converts the hyphen to an underscore ('top_10 list'), humanize() then turns the underscore into a space and capitalizes the first letter, .title() capitalizes ",
+      "correct": true
+    },
+    {
+      "test": "test_parameterize_preserves_allowed_alphanumerics_digits_underscores_and_dashes",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The failing assertion `parameterize('abc123') == 'abc12'` is self-contradictory with the test's own stated purpose (\"Letters, digits, underscores and dashes are allowed and pass through\") and with the component's behavior. The implementation's regex `(?i)[^a-z0-9\\-_]+` explicitly allows digits (`0-9",
+      "correct": true
+    }
+  ]
+}

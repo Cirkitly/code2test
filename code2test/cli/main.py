@@ -4,9 +4,15 @@ Main CLI application for Code2Test using Click framework.
 
 import sys
 import click
-from pathlib import Path
 
 from code2test import __version__
+from code2test.cli.commands.config import config_group
+from code2test.cli.commands.test import test_command
+from code2test.cli.commands.verify import verify_command
+from code2test.cli.commands.intent import intent_command
+from code2test.cli.commands.report import report_command
+from code2test.cli.commands.init import init_command
+from code2test.cli.commands.benchmark import benchmark_command
 
 
 @click.group()
@@ -19,7 +25,7 @@ def cli(ctx):
     Infers what each function and class is meant to do, generates pytest
     tests against that intent, runs and repairs them, and writes only tests
     that pass or are marked as expected failures (suspected bugs).
-    
+
     \b
     Quick Start:
       code2test test src/             # Generate tests interactively
@@ -37,24 +43,15 @@ def version():
     click.echo(f"Code2Test v{__version__}")
     click.echo("Intent-first test generation for legacy Python code")
     click.echo("Dependency analysis derived from FSoft AI4Code's CodeWiki")
-    
 
-# Import commands
-from code2test.cli.commands.config import config_group
-from code2test.cli.commands.test import test_command
-from code2test.cli.commands.verify import verify_command
-from code2test.cli.commands.intent import intent_command
-from code2test.cli.commands.report import report_command
-from code2test.cli.commands.init import init_command
-from code2test.cli.commands.benchmark import benchmark_command
 
 # Register commands
-cli.add_command(config_group)      # code2test config
-cli.add_command(test_command)      # code2test test
-cli.add_command(verify_command)    # code2test verify
-cli.add_command(intent_command)    # code2test intent
-cli.add_command(report_command)    # code2test report
-cli.add_command(init_command)      # code2test init
+cli.add_command(config_group)  # code2test config
+cli.add_command(test_command)  # code2test test
+cli.add_command(verify_command)  # code2test verify
+cli.add_command(intent_command)  # code2test intent
+cli.add_command(report_command)  # code2test report
+cli.add_command(init_command)  # code2test init
 cli.add_command(benchmark_command)  # code2test benchmark
 
 

@@ -13,7 +13,11 @@ from pathlib import Path
 from code2test.src.be.dependency_analyzer.utils.security import safe_open_text, assert_safe_path
 from code2test.src.be.dependency_analyzer.analysis.repo_analyzer import RepoAnalyzer
 from code2test.src.be.dependency_analyzer.analysis.call_graph_analyzer import CallGraphAnalyzer
-from code2test.src.be.dependency_analyzer.analysis.cloning import clone_repository, cleanup_repository, parse_github_url
+from code2test.src.be.dependency_analyzer.analysis.cloning import (
+    clone_repository,
+    cleanup_repository,
+    parse_github_url,
+)
 from code2test.src.be.dependency_analyzer.models.analysis import AnalysisResult
 from code2test.src.be.dependency_analyzer.models.core import Repository
 
@@ -39,56 +43,53 @@ class AnalysisService:
         self._temp_directories = []
 
     def analyze_local_repository(
-        self,
-        repo_path: str,
-        max_files: int = 100,
-        languages: Optional[List[str]] = None
+        self, repo_path: str, max_files: int = 100, languages: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         Analyze a local repository folder.
-        
+
         Args:
             repo_path: Path to local repository folder
             max_files: Maximum number of files to analyze
             languages: List of languages to include (e.g., ['python', 'javascript'])
-            
+
         Returns:
             Dict with analysis results including nodes and relationships
         """
         try:
             logger.debug(f"Analyzing local repository at {repo_path}")
-            
+
             # Get repo analyzer to find files
             repo_analyzer = RepoAnalyzer()
             structure_result = repo_analyzer.analyze_repository_structure(repo_path)
-            
+
             # Extract code files
             code_files = self.call_graph_analyzer.extract_code_files(structure_result["file_tree"])
-            
+
             # Filter by languages if specified
             if languages:
                 code_files = [f for f in code_files if f.get("language") in languages]
-            
+
             # Limit number of files
             if len(code_files) > max_files:
                 code_files = code_files[:max_files]
                 logger.debug(f"Limited analysis to {max_files} files")
-            
+
             logger.debug(f"Analyzing {len(code_files)} files")
-            
+
             # Analyze files
             result = self.call_graph_analyzer.analyze_code_files(code_files, repo_path)
-            
+
             return {
                 "nodes": result.get("functions", {}),
                 "relationships": result.get("relationships", []),
                 "summary": {
                     "total_files": len(code_files),
                     "total_nodes": len(result.get("functions", {})),
-                    "total_relationships": len(result.get("relationships", []))
-                }
+                    "total_relationships": len(result.get("relationships", [])),
+                },
             }
-            
+
         except Exception as e:
             logger.error(f"Local repository analysis failed: {str(e)}", exc_info=True)
             raise RuntimeError(f"Analysis failed: {str(e)}")
@@ -282,7 +283,9 @@ class AnalysisService:
         logger.debug("Extracting code files from file tree...")
         code_files = self.call_graph_analyzer.extract_code_files(file_tree)
 
-        logger.debug(f"Found {len(code_files)} total code files. Filtering for supported languages.")
+        logger.debug(
+            f"Found {len(code_files)} total code files. Filtering for supported languages."
+        )
         supported_files = self._filter_supported_languages(code_files)
         logger.debug(f"Analyzing {len(supported_files)} supported files.")
 

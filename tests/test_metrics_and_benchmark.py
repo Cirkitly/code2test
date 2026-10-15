@@ -36,9 +36,13 @@ def test_metrics_count_discarded_files(tmp_path):
 
 def test_only_really_passing_tests_make_a_component_accepted():
     metrics = RunMetrics(components=3)
-    metrics.files["a"] = FileMetrics(component_id="a", path="a", generated=2, kept=2, xfail=2, passing=0)
+    metrics.files["a"] = FileMetrics(
+        component_id="a", path="a", generated=2, kept=2, xfail=2, passing=0
+    )
     metrics.files["b"] = FileMetrics(component_id="b", path="b", generated=1, kept=1, passing=1)
-    metrics.files["c"] = FileMetrics(component_id="c", path="c", generated=1, kept=1, passing=0)  # only skipped tests
+    metrics.files["c"] = FileMetrics(
+        component_id="c", path="c", generated=1, kept=1, passing=0
+    )  # only skipped tests
     assert metrics.components_with_tests == 1
     assert metrics.acceptance_rate == 1 / 3
 
@@ -62,11 +66,16 @@ def test_mutants_change_one_site_each(tmp_path):
     assert "'low' -> 'lo'" in descriptions
     assert "return value -> None" in descriptions
     assert all(m.component_id == "m.check" for m in mutants)  # untested() is never mutated
-    assert all('"""Doc."""' in m.source or "'Doc.'" in m.source for m in mutants)  # docstrings are left alone
+    assert all(
+        '"""Doc."""' in m.source or "'Doc.'" in m.source for m in mutants
+    )  # docstrings are left alone
 
 
 def test_break_expected_value():
-    assert break_expected_value("def test_x():\n    assert f(2) == 5\n") == "def test_x():\n    assert f(2) == 6"
+    assert (
+        break_expected_value("def test_x():\n    assert f(2) == 5\n")
+        == "def test_x():\n    assert f(2) == 6"
+    )
     assert "== 'a'" in break_expected_value("def test_x():\n    assert f() == 'ab'\n")
     assert break_expected_value("def test_x():\n    assert f()\n") is None
 
@@ -74,18 +83,33 @@ def test_break_expected_value():
 def _benchmark_repo(tmp_path):
     repo = _make_repo(tmp_path)
     tf = File(
-        path="tests/calc/test_ops_add.py", component_id="calc.ops.add", component_path="calc/ops.py",
-        imports=["import pytest", "from calc.ops import add"], verified=True,
+        path="tests/calc/test_ops_add.py",
+        component_id="calc.ops.add",
+        component_path="calc/ops.py",
+        imports=["import pytest", "from calc.ops import add"],
+        verified=True,
         test_cases=[Case(name="test_add", intent_text="sum", test_code=PASSING)],
     )
     (repo / tf.path).parent.mkdir(parents=True)
     (repo / tf.path).write_text(tf.get_full_content())
     from code2test.core.models import Intent
 
-    intents = {"calc.ops.add": Intent(component_id="calc.ops.add", component_path="calc/ops.py",
-                                      intent_text="Return the sum", confidence=0.9)}
-    components = {"calc.ops.add": {"id": "calc.ops.add", "name": "add", "relative_path": "calc/ops.py",
-                                   "source_code": "def add(a, b):\n    return a + b\n"}}
+    intents = {
+        "calc.ops.add": Intent(
+            component_id="calc.ops.add",
+            component_path="calc/ops.py",
+            intent_text="Return the sum",
+            confidence=0.9,
+        )
+    }
+    components = {
+        "calc.ops.add": {
+            "id": "calc.ops.add",
+            "name": "add",
+            "relative_path": "calc/ops.py",
+            "source_code": "def add(a, b):\n    return a + b\n",
+        }
+    }
     return repo, tf, intents, components
 
 
@@ -98,6 +122,11 @@ def test_benchmark_kills_mutants_and_restores_source(tmp_path):
     assert result.mutants_total == 2  # a + b -> a - b, return value -> None
     assert result.mutants_killed == 2 and result.mutation_score == 1.0
     assert (repo / "calc/ops.py").read_text() == original
+    assert result.by_component == {
+        "calc.ops.add": {"mutants": 2, "killed": 2, "killed_by_own_tests": 2}
+    }
+    data = result.to_dict()
+    assert data["by_component"] == result.by_component and data["created_at"]
 
 
 def test_benchmark_scores_diagnoses_against_known_causes(tmp_path):
@@ -106,12 +135,17 @@ def test_benchmark_scores_diagnoses_against_known_causes(tmp_path):
     repo, tf, intents, components = _benchmark_repo(tmp_path)
     agent = DiagnosisAgent(model=scripted([tests_reply(PASSING)], diagnosis="CODE_BUG"))
 
-    result = asyncio.run(Benchmark(repo, [tf], intents, components, diagnosis_agent=agent)
-                         .run(max_mutants=10, max_diagnoses=1))
+    result = asyncio.run(
+        Benchmark(repo, [tf], intents, components, diagnosis_agent=agent).run(
+            max_mutants=10, max_diagnoses=1
+        )
+    )
 
     expected = sorted(c.expected for c in result.diagnosis_cases)
     assert expected == ["CODE_BUG", "TEST_WRONG"]
-    assert result.diagnosis_accuracy == 0.5  # always answering CODE_BUG gets only the code-bug case right
+    assert (
+        result.diagnosis_accuracy == 0.5
+    )  # always answering CODE_BUG gets only the code-bug case right
     assert not list((repo / "tests/calc").glob("_c2t_probe_*"))
 
 
@@ -140,8 +174,18 @@ def test_one_syntax_error_does_not_hide_the_other_tests_first_run(tmp_path):
     repo = _make_repo(tmp_path)
     reply = {
         "tests": [
-            {"name": "test_ok", "description": "", "test_code": "def test_ok():\n    assert add(1, 1) == 2\n", "tests_behavior": ""},
-            {"name": "test_broken", "description": "", "test_code": "def test_broken(:\n    pass\n", "tests_behavior": ""},
+            {
+                "name": "test_ok",
+                "description": "",
+                "test_code": "def test_ok():\n    assert add(1, 1) == 2\n",
+                "tests_behavior": "",
+            },
+            {
+                "name": "test_broken",
+                "description": "",
+                "test_code": "def test_broken(:\n    pass\n",
+                "tests_behavior": "",
+            },
         ],
         "imports": ["from calc.ops import add"],
     }
@@ -203,12 +247,22 @@ def test_failed_diagnosis_calls_are_not_scored(tmp_path):
 
     from pydantic_ai.models.function import FunctionModel
 
-    result = asyncio.run(Benchmark(repo, [tf], intents, components,
-                                   diagnosis_agent=DiagnosisAgent(model=FunctionModel(broken)))
-                         .run(max_mutants=10, max_diagnoses=1))
+    result = asyncio.run(
+        Benchmark(
+            repo,
+            [tf],
+            intents,
+            components,
+            diagnosis_agent=DiagnosisAgent(model=FunctionModel(broken)),
+        ).run(max_mutants=10, max_diagnoses=1)
+    )
     assert result.diagnosis_cases and all(c.actual is None for c in result.diagnosis_cases)
     assert result.diagnosis_accuracy is None
-    assert result.to_dict()["diagnosis_by_expected_cause"]["CODE_BUG"] == {"cases": 0, "correct": 0, "unscored": 1}
+    assert result.to_dict()["diagnosis_by_expected_cause"]["CODE_BUG"] == {
+        "cases": 0,
+        "correct": 0,
+        "unscored": 1,
+    }
 
 
 def test_unreachable_model_keeps_mutation_results(tmp_path):
@@ -221,8 +275,11 @@ def test_unreachable_model_keeps_mutation_results(tmp_path):
         async def diagnose_failure(self, *args, **kwargs):
             raise ModelAccessError("HTTP 401")
 
-    result = asyncio.run(Benchmark(repo, [tf], intents, components, diagnosis_agent=Unreachable())
-                         .run(max_mutants=10, max_diagnoses=1))
+    result = asyncio.run(
+        Benchmark(repo, [tf], intents, components, diagnosis_agent=Unreachable()).run(
+            max_mutants=10, max_diagnoses=1
+        )
+    )
     assert result.mutants_total == 2 and result.mutants_killed == 2
     assert result.diagnosis_error == "HTTP 401"
 
@@ -232,14 +289,25 @@ def test_wrong_test_probe_keeps_helpers_from_sibling_tests(tmp_path):
 
     repo, tf, intents, components = _benchmark_repo(tmp_path)
     tf.test_cases = [
-        Case(name="test_helper", intent_text="", test_code="TWO = 2\n\ndef test_helper():\n    assert TWO == 2\n"),
-        Case(name="test_add", intent_text="", test_code="def test_add():\n    assert add(TWO, 3) == 5\n"),
+        Case(
+            name="test_helper",
+            intent_text="",
+            test_code="TWO = 2\n\ndef test_helper():\n    assert TWO == 2\n",
+        ),
+        Case(
+            name="test_add",
+            intent_text="",
+            test_code="def test_add():\n    assert add(TWO, 3) == 5\n",
+        ),
     ]
     (repo / tf.path).write_text(tf.get_full_content())
     agent = DiagnosisAgent(model=scripted([tests_reply(PASSING)], diagnosis="TEST_WRONG"))
 
-    result = asyncio.run(Benchmark(repo, [tf], intents, components, diagnosis_agent=agent)
-                         .run(max_mutants=0, max_diagnoses=5))
+    result = asyncio.run(
+        Benchmark(repo, [tf], intents, components, diagnosis_agent=agent).run(
+            max_mutants=0, max_diagnoses=5
+        )
+    )
     wrong = [c for c in result.diagnosis_cases if c.expected == "TEST_WRONG"]
     assert {c.test for c in wrong} == {"test_helper", "test_add"}  # test_add's probe still sees TWO
 
@@ -253,13 +321,35 @@ def test_benchmark_skips_components_outside_the_repo(tmp_path):
 
 def test_mutants_run_against_the_whole_generated_suite(tmp_path):
     repo = _make_repo(tmp_path)
-    (repo / "calc/ops.py").write_text("def helper(x):\n    return x + 1\n\n\ndef add_one(x):\n    return helper(x)\n")
-    weak = File(path="tests/calc/test_ops_helper.py", component_id="calc.ops.helper", component_path="calc/ops.py",
-                imports=["from calc.ops import helper"],
-                test_cases=[Case(name="test_helper", intent_text="", test_code="def test_helper():\n    assert callable(helper)\n")])
-    strong = File(path="tests/calc/test_ops_add_one.py", component_id="calc.ops.add_one", component_path="calc/ops.py",
-                  imports=["from calc.ops import add_one"],
-                  test_cases=[Case(name="test_add_one", intent_text="", test_code="def test_add_one():\n    assert add_one(1) == 2\n")])
+    (repo / "calc/ops.py").write_text(
+        "def helper(x):\n    return x + 1\n\n\ndef add_one(x):\n    return helper(x)\n"
+    )
+    weak = File(
+        path="tests/calc/test_ops_helper.py",
+        component_id="calc.ops.helper",
+        component_path="calc/ops.py",
+        imports=["from calc.ops import helper"],
+        test_cases=[
+            Case(
+                name="test_helper",
+                intent_text="",
+                test_code="def test_helper():\n    assert callable(helper)\n",
+            )
+        ],
+    )
+    strong = File(
+        path="tests/calc/test_ops_add_one.py",
+        component_id="calc.ops.add_one",
+        component_path="calc/ops.py",
+        imports=["from calc.ops import add_one"],
+        test_cases=[
+            Case(
+                name="test_add_one",
+                intent_text="",
+                test_code="def test_add_one():\n    assert add_one(1) == 2\n",
+            )
+        ],
+    )
     for tf in (weak, strong):
         (repo / tf.path).parent.mkdir(parents=True, exist_ok=True)
         (repo / tf.path).write_text(tf.get_full_content())

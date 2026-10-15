@@ -55,7 +55,9 @@ def scripted(replies: Iterable[dict], diagnosis: str = "TEST_WRONG") -> Function
 
 def tests_reply(code: str, imports=("from calc.ops import add",)) -> dict:
     return {
-        "tests": [{"name": "test_add", "description": "adds", "test_code": code, "tests_behavior": "sum"}],
+        "tests": [
+            {"name": "test_add", "description": "adds", "test_code": code, "tests_behavior": "sum"}
+        ],
         "imports": list(imports),
     }
 
@@ -98,7 +100,9 @@ def _components(repo: Path) -> dict:
 def _run(repo: Path, model: FunctionModel):
     gen = generator_mod.TestGenerator(
         repo_path=str(repo),
-        config=GenerationConfig(auto_accept=True, confidence_threshold=0.0, output_dir="tests", model=model),
+        config=GenerationConfig(
+            auto_accept=True, confidence_threshold=0.0, output_dir="tests", model=model
+        ),
     )
     return asyncio.run(gen.generate_tests_for_module(str(repo), _components(repo)))
 
@@ -130,10 +134,12 @@ def test_failing_test_is_repaired_using_failure_output(tmp_path):
 
 def test_bad_import_is_repaired(tmp_path):
     repo = _make_repo(tmp_path)
-    model = scripted([
-        tests_reply(PASSING, imports=["from calculator import add"]),
-        tests_reply(PASSING),
-    ])
+    model = scripted(
+        [
+            tests_reply(PASSING, imports=["from calculator import add"]),
+            tests_reply(PASSING),
+        ]
+    )
     suite = _run(repo, model)
 
     assert suite.test_files[0].verified
@@ -206,11 +212,23 @@ def test_import_line_for(component, expected):
 
 
 def test_component_without_source_code_still_generates(tmp_path):
-    agent = test_agent_mod.TestAgent(model=scripted([tests_reply(PASSING)]), repo_path=str(tmp_path))
+    agent = test_agent_mod.TestAgent(
+        model=scripted([tests_reply(PASSING)]), repo_path=str(tmp_path)
+    )
     from code2test.core.models import Intent
 
-    intent = Intent(component_id="calc.ops.add", component_path="calc/ops.py", intent_text="adds", confidence=0.9)
-    component = {"id": "calc.ops.add", "name": "add", "relative_path": "calc/ops.py", "source_code": None}
+    intent = Intent(
+        component_id="calc.ops.add",
+        component_path="calc/ops.py",
+        intent_text="adds",
+        confidence=0.9,
+    )
+    component = {
+        "id": "calc.ops.add",
+        "name": "add",
+        "relative_path": "calc/ops.py",
+        "source_code": None,
+    }
     test_file = asyncio.run(agent.generate_unit_tests(component, intent))
     assert [tc.name for tc in test_file.test_cases] == ["test_add"]
 
@@ -219,7 +237,9 @@ def test_low_confidence_intent_is_refined_by_llm(tmp_path):
     repo = _make_repo(tmp_path)
     gen = generator_mod.TestGenerator(
         repo_path=str(repo),
-        config=GenerationConfig(auto_accept=True, confidence_threshold=0.95, model=scripted([tests_reply(PASSING)])),
+        config=GenerationConfig(
+            auto_accept=True, confidence_threshold=0.95, model=scripted([tests_reply(PASSING)])
+        ),
     )
     intents = asyncio.run(gen._extract_intents_phase(_components(repo)))
     intent = intents["calc.ops.add"]
@@ -235,7 +255,11 @@ def test_module_imports_are_resolved_to_absolute(tmp_path):
         "import math\nfrom .models import Item\nfrom . import utils\nfrom typing import List\n\ndef total(items):\n    return 0\n"
     )
     agent = test_agent_mod.TestAgent(model="test", repo_path=str(tmp_path))
-    component = {"name": "total", "file_path": str(pkg / "cart.py"), "relative_path": "shop/cart.py"}
+    component = {
+        "name": "total",
+        "file_path": str(pkg / "cart.py"),
+        "relative_path": "shop/cart.py",
+    }
     assert agent.module_imports_for(component).splitlines() == [
         "import math",
         "from shop.models import Item",
@@ -265,7 +289,10 @@ def test_escaped_test_code_is_unescaped():
 
 def test_package_init_tests_get_readable_names():
     agent = test_agent_mod.TestAgent(model="test", repo_path="/repo")
-    assert agent._generate_test_path("/repo/inflection/__init__.py", {"name": "humanize"}) == "tests/inflection/test_humanize.py"
+    assert (
+        agent._generate_test_path("/repo/inflection/__init__.py", {"name": "humanize"})
+        == "tests/inflection/test_humanize.py"
+    )
 
 
 def test_failures_are_matched_by_defined_function_not_reported_name(tmp_path):
@@ -285,17 +312,36 @@ def test_tests_that_break_each_other_are_dropped_by_the_suite_check(tmp_path):
     repo = _make_repo(tmp_path)
     (repo / "calc" / "state.py").write_text("ITEMS = []\n")
     polluter = File(
-        path="tests/calc/test_a_polluter.py", component_id="a", component_path="calc/state.py",
-        imports=["from calc import state"], verified=True,
-        test_cases=[Case(name="test_appends", intent_text="", test_code=
-                         "def test_appends():\n    state.ITEMS.append(1)\n    assert state.ITEMS\n")],
+        path="tests/calc/test_a_polluter.py",
+        component_id="a",
+        component_path="calc/state.py",
+        imports=["from calc import state"],
+        verified=True,
+        test_cases=[
+            Case(
+                name="test_appends",
+                intent_text="",
+                test_code="def test_appends():\n    state.ITEMS.append(1)\n    assert state.ITEMS\n",
+            )
+        ],
     )
     victim = File(
-        path="tests/calc/test_b_victim.py", component_id="b", component_path="calc/state.py",
-        imports=["from calc import state"], verified=True,
+        path="tests/calc/test_b_victim.py",
+        component_id="b",
+        component_path="calc/state.py",
+        imports=["from calc import state"],
+        verified=True,
         test_cases=[
-            Case(name="test_starts_empty", intent_text="", test_code="def test_starts_empty():\n    assert state.ITEMS == []\n"),
-            Case(name="test_is_list", intent_text="", test_code="def test_is_list():\n    assert isinstance(state.ITEMS, list)\n"),
+            Case(
+                name="test_starts_empty",
+                intent_text="",
+                test_code="def test_starts_empty():\n    assert state.ITEMS == []\n",
+            ),
+            Case(
+                name="test_is_list",
+                intent_text="",
+                test_code="def test_is_list():\n    assert isinstance(state.ITEMS, list)\n",
+            ),
         ],
     )
     gen = generator_mod.TestGenerator(repo_path=str(repo), config=GenerationConfig(model="test"))
@@ -315,7 +361,7 @@ def test_related_api_shows_signatures_of_imported_project_modules(tmp_path):
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
     (pkg / "storage.py").write_text(
-        "class MemoryStorage:\n    \"\"\"Keeps data in memory.\"\"\"\n"
+        'class MemoryStorage:\n    """Keeps data in memory."""\n'
         "    def __init__(self):\n        self.data = {}\n"
         "    def read(self) -> dict:\n        return self.data\n"
         "    def _secret(self):\n        pass\n"
@@ -326,10 +372,12 @@ def test_related_api_shows_signatures_of_imported_project_modules(tmp_path):
         "def helper(x: int) -> int:\n    return x\n"
     )
     agent = test_agent_mod.TestAgent(model="test", repo_path=str(tmp_path))
-    api = agent.related_api_for({"name": "DB", "file_path": str(pkg / "db.py"), "relative_path": "shop/db.py"})
+    api = agent.related_api_for(
+        {"name": "DB", "file_path": str(pkg / "db.py"), "relative_path": "shop/db.py"}
+    )
 
-    assert "def helper(x: int) -> int:" in api          # rest of its own module
-    assert "class DB" not in api                          # not the component itself
+    assert "def helper(x: int) -> int:" in api  # rest of its own module
+    assert "class DB" not in api  # not the component itself
     assert "class MemoryStorage:" in api and '"""Keeps data in memory."""' in api
     assert "def read(self) -> dict: ..." in api
     assert "_secret" not in api and "self.data = {}" not in api  # no private members or bodies

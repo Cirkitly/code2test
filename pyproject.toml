@@ -19,6 +19,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Testing",
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -50,9 +51,8 @@ dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
     "mypy>=1.5.0",
-    "ruff>=0.1.0",
+    "ruff>=0.17,<0.18",  # pinned minor: the format check depends on ruff's formatting style
 ]
 
 [project.scripts]
@@ -92,10 +92,6 @@ packages = [
 [tool.setuptools.package-data]
 code2test = ["templates/**/*", "py.typed"]
 
-[tool.black]
-line-length = 100
-target-version = ['py312']
-
 [tool.mypy]
 python_version = "3.12"
 warn_return_any = true
@@ -106,6 +102,10 @@ disallow_incomplete_defs = false
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+# Errors only (pyflakes and pycodestyle's error classes): an explicit set keeps CI stable across ruff releases
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

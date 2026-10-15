@@ -406,7 +406,12 @@ FUNCTION_DEFINITION_PATTERNS = {
     "rust": ["fn {name}", "pub fn {name}"],
     "c": ["void {name}", "int {name}", "{name}("],
     "cpp": ["void {name}", "int {name}", "{name}("],
-    "php": ["function {name}", "public function {name}", "private function {name}", "protected function {name}"],
+    "php": [
+        "function {name}",
+        "public function {name}",
+        "private function {name}",
+        "protected function {name}",
+    ],
     "general": ["{name}("],  # Fallback pattern
 }
 

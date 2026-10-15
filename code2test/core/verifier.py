@@ -45,10 +45,10 @@ def defined_test_names(code: str) -> set:
 class CaseResult:
     """Outcome of a single test as reported by pytest."""
 
-    name: str              # test function name, without parametrization ids
-    classname: str         # dotted module (and class) path, e.g. tests.calc.test_ops_add
-    outcome: str           # passed | failed | skipped
-    message: str = ""      # failure / error text
+    name: str  # test function name, without parametrization ids
+    classname: str  # dotted module (and class) path, e.g. tests.calc.test_ops_add
+    outcome: str  # passed | failed | skipped
+    message: str = ""  # failure / error text
 
 
 @dataclass
@@ -57,7 +57,7 @@ class PytestRun:
 
     returncode: int
     cases: List[CaseResult] = field(default_factory=list)
-    collection_error: str = ""   # error not tied to a test function (bad import, syntax)
+    collection_error: str = ""  # error not tied to a test function (bad import, syntax)
     stdout: str = ""
     stderr: str = ""
 
@@ -123,14 +123,18 @@ class TestVerifier:
         try:
             result = subprocess.run(
                 [
-                    sys.executable, "-m", "pytest",
+                    sys.executable,
+                    "-m",
+                    "pytest",
                     *targets,
                     f"--rootdir={repo}",
                     f"--junitxml={report_path}",
                     "-v",
                     "--tb=short",
-                    "-p", "no:cacheprovider",
-                    "-o", "addopts=",
+                    "-p",
+                    "no:cacheprovider",
+                    "-o",
+                    "addopts=",
                 ],
                 cwd=workdir,
                 env=env,
@@ -138,7 +142,9 @@ class TestVerifier:
                 text=True,
                 timeout=self.timeout,
             )
-            run = PytestRun(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr)
+            run = PytestRun(
+                returncode=result.returncode, stdout=result.stdout, stderr=result.stderr
+            )
             self._parse_junit_report(report_path, run)
             if not run.cases and not run.collection_error and result.returncode not in (0, 5):
                 run.collection_error = (result.stdout + "\n" + result.stderr).strip()[-3000:]
@@ -165,7 +171,9 @@ class TestVerifier:
             VerificationResult with pass/fail status
         """
         if test_file.framework != TestFramework.PYTEST:
-            logger.warning(f"Framework {test_file.framework} not fully supported, running with pytest")
+            logger.warning(
+                f"Framework {test_file.framework} not fully supported, running with pytest"
+            )
 
         # Always write the current content so re-runs never verify a stale file
         test_path = self.write_test_file(test_file)
@@ -178,7 +186,13 @@ class TestVerifier:
         # to every test case so the repair loop sees the real error.
         known = set(passed) | set(failed) | set(skipped)
         file_error = None
-        defined = set().union(*(defined_test_names(tc.test_code) | {tc.name} for tc in test_file.test_cases)) if test_file.test_cases else set()
+        defined = (
+            set().union(
+                *(defined_test_names(tc.test_code) | {tc.name} for tc in test_file.test_cases)
+            )
+            if test_file.test_cases
+            else set()
+        )
         if not run.ok and run.returncode != 5 and not (known & defined):
             file_error = run.collection_error or "pytest failed without reporting results"
             failed = [tc.name for tc in test_file.test_cases]

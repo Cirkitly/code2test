@@ -1,0 +1,333 @@
+{
+  "generation": {
+    "components": 26,
+    "components_with_tests": 26,
+    "acceptance_rate": 1.0,
+    "tests_generated": 588,
+    "first_run_passed": 494,
+    "first_run_pass_rate": 0.84,
+    "tests_kept": 584,
+    "tests_xfail": 0,
+    "tests_dropped": 4,
+    "components_reused": 0,
+    "skipped_low_confidence": 0,
+    "files_removed": 0,
+    "repair_rounds": 23,
+    "diagnoses": {
+      "TEST_WRONG": 4
+    },
+    "llm_failures": 0
+  },
+  "mutation_score": 0.8375,
+  "mutants_total": 80,
+  "mutants_killed": 67,
+  "own_tests_mutation_score": 0.8125,
+  "mutants_killed_by_own_tests": 65,
+  "diagnosis_accuracy": 0.9666666666666667,
+  "diagnosis_by_expected_cause": {
+    "CODE_BUG": {
+      "cases": 15,
+      "correct": 14,
+      "unscored": 0
+    },
+    "TEST_WRONG": {
+      "cases": 15,
+      "correct": 15,
+      "unscored": 0
+    }
+  },
+  "diagnosis_error": null,
+  "restored_files": [],
+  "survivors": [
+    {
+      "file": "tinydb/queries.py",
+      "line": 120,
+      "component": "tinydb.queries.QueryInstance",
+      "mutation": "'or' -> 'o'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 253,
+      "component": "tinydb.queries.Query",
+      "mutation": "'==' -> '='"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 266,
+      "component": "tinydb.queries.Query",
+      "mutation": "'!=' -> '!'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 279,
+      "component": "tinydb.queries.Query",
+      "mutation": "'<' -> '<<'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 305,
+      "component": "tinydb.queries.Query",
+      "mutation": "'>' -> '>>'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 329,
+      "component": "tinydb.queries.Query",
+      "mutation": "'exists' -> 'exist'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 484,
+      "component": "tinydb.queries.Query",
+      "mutation": "'fragment' -> 'fragmen'"
+    },
+    {
+      "file": "tinydb/storages.py",
+      "line": 104,
+      "component": "tinydb.storages.JSONStorage",
+      "mutation": "'rb+' -> 'rb'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 201,
+      "component": "tinydb.table.Table",
+      "mutation": "'Document with ID ' -> 'Document with ID'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 344,
+      "component": "tinydb.table.Table",
+      "mutation": "'You have to pass either cond or doc_id or doc_ids' -> 'You have to pass either cond or doc_id or doc_id'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 368,
+      "component": "tinydb.table.Table",
+      "mutation": "'You have to pass either cond or doc_id' -> 'You have to pass either cond or doc_i'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 528,
+      "component": "tinydb.table.Table",
+      "mutation": "'doc_id' -> 'doc_i'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 585,
+      "component": "tinydb.table.Table",
+      "mutation": "IsNot -> Is"
+    }
+  ],
+  "diagnosis_cases": [
+    {
+      "test": "test_matches_requires_whole_string_to_match",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The failing assertion `query({'f1': 42}) is False` matches the documented/intended behavior of `Query.matches()` (\"Run a regex test against a dict value (whole string has to match)\"). The implementation in `Query.matches` has an inverted guard:\n\n```python\ndef test(value):\n    if not isinstance(value",
+      "correct": true
+    },
+    {
+      "test": "test_update_without_condition_updates_all_documents",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "In Table.update(), the branch handling the 'no cond, no doc_ids' case (update all documents) collects `updated_ids` but then `return None` instead of returning that list. This contradicts the method's own signature annotation `-> List[int]` and its docstring (':returns: a list containing the updated",
+      "correct": true
+    },
+    {
+      "test": "test_touch_creates_file_in_existing_directory",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly implements the stated intent: call `touch(db_path, create_dirs=False)` in an existing directory and assert the file is created. The docstring of `touch` and the stated intent (\"Create a file if it doesn't exist yet\") also match the code's purpose, so the intent is accurate.\n\nThe f",
+      "correct": true
+    },
+    {
+      "test": "test_equal_hashvals_compare_equal",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly encodes the documented contract of QueryInstance: the class docstring states a query must have \"a stable hash value with the same query always returning the same hash\" so instances can be used as cache keys/dict keys. `__hash__` is implemented consistently with that (it hashes `se",
+      "correct": true
+    },
+    {
+      "test": "test_any_with_a_list_condition",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly encodes the documented behavior of Query.any() with a list condition (\"at least one common element\", matching the docstring examples {'f1': [1, 2]} and {'f1': [3, 4, 5]}). The implementation is inverted: in Query.any() the list branch is `any((e not in cond for e in value))` inste",
+      "correct": true
+    },
+    {
+      "test": "test_one_of_matches_values_contained_in_the_given_items",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly implements the documented behavior: `one_of()` should return True when the value at the query path is contained in the given items (docstring: \"Check if the value is contained in a list or generator\", example `Query().f1.one_of(['value 1', 'value 2'])`). The implementation in `Que",
+      "correct": true
+    },
+    {
+      "test": "test_json_storage_write_then_read_roundtrip",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The failure comes from `JSONStorage.write()` doing `self._handle.seek(1)` instead of seeking to the start of the file (`seek(0)`). On a freshly created (empty) file, seeking to offset 1 and then writing leaves the first byte of the file as a NUL filler byte ('\\x00') followed by the JSON payload. Whe",
+      "correct": true
+    },
+    {
+      "test": "test_json_storage_warns_for_write_access_mode",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The component's docstring explicitly states: \"Using an access mode other than `r` or `r+` will probably lead to data loss or data corruption!\" and the warning message itself reads \"Using an `access_mode` other than 'r', 'rb', 'r+' or 'rb+' can cause data loss or corruption\". However, the guard is in",
+      "correct": true
+    },
+    {
+      "test": "test_repr_contains_name_total_and_storage",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The failure originates entirely inside `Table.__repr__`, not in the test. The line\n\n    args = ['name={!r}'.format(self.name), 'total={}'.format(len(self)), 'storage={'.format(self._storage)]\n\npasses the literal string `'storage={'` to `str.format`. A lone opening brace is invalid in a format string",
+      "correct": true
+    },
+    {
+      "test": "test_contains_by_condition",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The Table.contains() method has inverted logic in its condition branch: it returns `self.get(cond) is None`, which is True precisely when NO document matches the query. The doc_id branch immediately above uses the correct polarity (`is not None`), and the surrounding API (get/search/count) treats a ",
+      "correct": true
+    },
+    {
+      "test": "test_orm_style_attribute_query_matches_documents",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "`Query.__getattr__` builds the child query object (setting `_path` and `_hash`) but then returns `None` instead of returning it. Therefore `Query().name` evaluates to `None`, and `Query().name == 'John Doe'` is plain Python equality between `None` and a string, yielding the bool `False`. Calling tha",
+      "correct": true
+    },
+    {
+      "test": "test_first_read_delegates_to_the_storage",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly encodes the caching middleware's stated behavior: on the first read, since the cache is empty (None), the middleware must delegate to the underlying storage to populate the cache and return the data (asserting storage.read_count == 1). The component under test has an inverted cond",
+      "correct": true
+    },
+    {
+      "test": "test_queries_with_the_same_path_share_the_same_hash",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The failure is a TypeError raised from Python itself: `Query.__hash__` returns `None`, which is not a valid hash value, so the interpreter refuses to compute `hash(Query())`. The test is a faithful expression of the stated intent (TinyDB queries are hashable and share a hash when they share the same",
+      "correct": true
+    },
+    {
+      "test": "test_json_storage_is_a_storage_instance",
+      "expected": "CODE_BUG",
+      "actual": "TEST_WRONG",
+      "explanation": "The failure comes from the test's setup, not from JSONStorage's behavior. `JSONStorage.__init__` documents exactly this contract: \"Also creates the storage file, if it doesn't exist and the access mode is appropriate for writing.\" It only calls `touch(path, ...)` when the mode contains '+', 'w' or '",
+      "correct": false
+    },
+    {
+      "test": "test_flush_writes_pending_data_to_the_storage",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly encodes the documented contract of flush(): \"Flush all unwritten data to disk.\" After middleware.write(data), there is exactly one pending modification held in the cache that has not reached the underlying storage, so flush() must issue exactly one storage.write() call. The implem",
+      "correct": true
+    },
+    {
+      "test": "test_insert_of_document_resets_the_generated_id_counter",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The code behaves correctly. After inserting `Document({'a': 'explicit'}, 42)`, the table contains a single entry with ID 42, and `_next_id` is reset to `None`. When a non-`Document` mapping is inserted, `insert()` falls through to `_get_next_id()`, which (since `self._next_id is None`) computes `max",
+      "correct": true
+    },
+    {
+      "test": "test_decrement_supports_empty_string_field_name",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The stated intent is \"Decrement a given field in the document by 1\", and the component implements exactly that: `doc[field] -= 1` for whatever key `field` holds, including the empty string. Starting from `{'': 5}`, the correct result is `{'': 4}`. The failure output confirms this (`assert 4 == 5`), ",
+      "correct": true
+    },
+    {
+      "test": "test_freeze_empty_containers",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The assertion `len(freeze({})) == 1` contradicts both the intent and the actual implementation. `freeze({})` builds `FrozenDict((k, freeze(v)) for k, v in {}.items())`, and an empty dict has no items, so the resulting FrozenDict is empty (length 0). The stated intent \u2014 \"freeze an object by making it",
+      "correct": true
+    },
+    {
+      "test": "test_data_is_readable_after_close",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The primary behavior under test \u2014 that data remains readable after `close()` \u2014 actually passes: `middleware.read() == data` succeeds because `CachingMiddleware.read()` returns the cached data and `close()` only flushes (writes) to storage without discarding the cache. The failing assertion, `storage",
+      "correct": true
+    },
+    {
+      "test": "test_len_counts_only_documents_of_the_default_table",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The failure occurs on the very first line of the test body, before any insertion happens: `assert len(db) == 1` gets `0` for a database whose repr shows `tables=[]`, `tables_count=0`, `default_table_documents_count=0`. The `db` fixture therefore hands the test an *empty* database, yet the test asser",
+      "correct": true
+    },
+    {
+      "test": "test_freeze_string_is_not_treated_as_a_list",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test name and intent both state that freezing a string should simply leave it as a string (i.e., strings are not treated as sequences/lists and must not be sliced, truncated, or converted). The component under test does exactly that: `isinstance('abc', str)` is neither `dict`, `list`, nor `set`,",
+      "correct": true
+    },
+    {
+      "test": "test_pop_with_default_and_pop_of_missing_key",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's expected value is a malformed string literal: it asserts `cache.pop('missing', 'default') == 'defaul'` (missing trailing 't'). The component's `pop` is provided by `abc.MutableMapping.pop(key, default=...)`, which correctly returns the supplied default `'default'` for an absent key, and `",
+      "correct": true
+    },
+    {
+      "test": "test_query_with_frozen_dict_hashval_is_hashable",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The failing assertion is `assert {query: 'matched'}[query] == 'matche'`. The dict literal stores the value 'matched', so lookup correctly yields 'matched'; the expected string in the test is a typo missing the trailing 'd' ('matche'). This is a defect in the test's expectation, not in the component.",
+      "correct": true
+    },
+    {
+      "test": "test_document_instances_have_independent_doc_ids",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's own name states the intended contract: \"Document instances have independent doc_ids\". The component implements exactly that: `__init__` stores the supplied `doc_id` on the instance via `self.doc_id = doc_id`, so `Document({'value': 1}, 1)` must have `doc_id == 1` and `Document({'value': 1",
+      "correct": true
+    },
+    {
+      "test": "test_first_read_delegates_to_the_storage",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component behaves exactly as described: `CachingMiddleware.read()` only touches the underlying storage when the cache is empty (`if self.cache is None: self.cache = self.storage.read()`). In this test the cache starts as `None`, so the single `middleware.read()` call triggers exactly ONE storage",
+      "correct": true
+    },
+    {
+      "test": "test_add_with_negative_n_reduces_the_value",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component `add(field, n)` returns a transform that does `doc[field] += n`. Starting from `{'value': 10}` and calling `add('value', -4)(doc)` yields `10 + (-4) = 6`, which is exactly what the code produces (the failure output shows `assert 6 == 7`). The behavior matches the stated intent (\"Add n ",
+      "correct": true
+    },
+    {
+      "test": "test_getitem_raises_keyerror_for_stored_none_value",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test only performs a single store (`cache['a'] = None`), so the cache legitimately contains exactly one entry; asserting `cache.length == 2` is an arithmetic error in the test itself. There is no plausible reading of the intent (\"A least-recently used (LRU) cache with a fixed cache size\") that w",
+      "correct": true
+    },
+    {
+      "test": "test_document_copies_content_instead_of_aliasing_the_source_mapping",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's expectation is a typo/nonsense value. The intent of the test (as its name states) is to verify that `Document` copies the source mapping rather than aliasing it: after mutating `source['name']` to 'Jane', `doc['name']` should still hold the original value 'John'. The component `Document._",
+      "correct": true
+    },
+    {
+      "test": "test_setting_existing_key_with_falsy_old_value_keeps_position",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The failing assertion `cache.length == 3` is impossible given the test's own setup: only two distinct keys ('a' and 'b') are inserted into a capacity-3 cache, so length can only be 1 or 2. Tracing the component confirms the real state after the three statements is {'a': 5, 'b': 1} \u2192 length 2, with `",
+      "correct": true
+    },
+    {
+      "test": "test_write_counting_restarts_after_an_automatic_flush",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's own assertions are self-contradictory, so the test is the faulty part.\n\nTracing the component with WRITE_CACHE_SIZE = 2:\n- write({'i':1}): _cache_modified_count = 1, 1 < 2 \u2192 no flush \u2192 storage.write_count == 0\n- write({'i':2}): _cache_modified_count = 2, 2 >= 2 \u2192 flush() \u2192 storage.write_c",
+      "correct": true
+    }
+  ]
+}

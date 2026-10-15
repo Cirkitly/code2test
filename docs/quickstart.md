@@ -89,6 +89,13 @@ code2test benchmark .
 
 This injects small bugs into the tested code one at a time and reports how many the generated tests catch. It also reports how often the diagnosis agent identifies the cause of a failure correctly. Your source files are restored after every injected bug.
 
+To see the results per component, next to the behaviors each component's tests check:
+
+```bash
+code2test report coverage                 # table in the terminal
+code2test report coverage --format html   # tests/reports/coverage.html
+```
+
 ## 7. Use it in CI
 
 ```bash

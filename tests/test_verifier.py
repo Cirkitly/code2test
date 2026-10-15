@@ -17,7 +17,9 @@ def repo(tmp_path):
 
 def make_file(*cases, imports=("from calc.ops import add",), path="tests/test_add.py"):
     return File(
-        path=path, component_id="calc.ops.add", component_path="calc/ops.py",
+        path=path,
+        component_id="calc.ops.add",
+        component_path="calc/ops.py",
         imports=list(imports),
         test_cases=[Case(name=name, intent_text="", test_code=code) for name, code in cases],
     )
@@ -39,7 +41,9 @@ def test_passing_and_failing_tests_get_their_own_status(repo):
 
 
 def test_collection_error_is_attributed_to_every_test(repo):
-    tf = make_file(("test_ok", "def test_ok():\n    assert True\n"), imports=["from calc.nope import add"])
+    tf = make_file(
+        ("test_ok", "def test_ok():\n    assert True\n"), imports=["from calc.nope import add"]
+    )
     result = TestVerifier(str(repo)).run_tests(tf)
     assert not result.all_passed
     assert tf.test_cases[0].status == Status.FAILED
@@ -48,7 +52,10 @@ def test_collection_error_is_attributed_to_every_test(repo):
 
 def test_xfail_counts_as_verified(repo):
     tf = make_file(
-        ("test_bug", "@pytest.mark.xfail(reason='known bug')\ndef test_bug():\n    assert add(1, 1) == 3\n"),
+        (
+            "test_bug",
+            "@pytest.mark.xfail(reason='known bug')\ndef test_bug():\n    assert add(1, 1) == 3\n",
+        ),
         imports=["import pytest", "from calc.ops import add"],
     )
     result = TestVerifier(str(repo)).run_tests(tf)
@@ -112,12 +119,21 @@ def test_pytest_adapter_summarizes_a_directory(repo):
 
 
 def test_tests_that_write_relative_paths_do_not_touch_the_repo(repo):
-    tf = make_file(("test_writes", "def test_writes():\n    open('stray.txt', 'w').write('x')\n    assert True\n"))
+    tf = make_file(
+        (
+            "test_writes",
+            "def test_writes():\n    open('stray.txt', 'w').write('x')\n    assert True\n",
+        )
+    )
     assert TestVerifier(str(repo)).run_tests(tf).all_passed
     assert not (repo / "stray.txt").exists()
 
 
 def test_results_keep_repo_relative_names_without_a_config_file(repo):
     tf = make_file(("test_ok", "def test_ok():\n    assert add(1, 2) == 3\n"))
-    run = TestVerifier(str(repo)).run_pytest([repo / tf.path]) if TestVerifier(str(repo)).write_test_file(tf) else None
+    run = (
+        TestVerifier(str(repo)).run_pytest([repo / tf.path])
+        if TestVerifier(str(repo)).write_test_file(tf)
+        else None
+    )
     assert [c.classname for c in run.cases] == ["tests.test_add"]

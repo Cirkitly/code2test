@@ -29,10 +29,10 @@ class CallGraphAnalyzer:
         Complete analysis: Analyze all files to build complete call graph with all nodes.
 
         This approach:
-        1. Analyzes all code files 
+        1. Analyzes all code files
         2. Extracts all functions and relationships
         3. Builds complete call graph
-        4. Returns all nodes and relationships 
+        4. Returns all nodes and relationships
         """
         logger.debug(f"Starting analysis of {len(code_files)} files")
 
@@ -155,9 +155,7 @@ class CallGraphAnalyzer:
         from code2test.src.be.dependency_analyzer.analyzers.python import analyze_python_file
 
         try:
-            functions, relationships = analyze_python_file(
-                file_path, content, repo_path=base_dir
-            )
+            functions, relationships = analyze_python_file(file_path, content, repo_path=base_dir)
 
             for func in functions:
                 func_id = func.id if func.id else f"{file_path}:{func.name}"
@@ -177,8 +175,9 @@ class CallGraphAnalyzer:
             repo_dir: Repository base directory
         """
         try:
-
-            from code2test.src.be.dependency_analyzer.analyzers.javascript import analyze_javascript_file_treesitter
+            from code2test.src.be.dependency_analyzer.analyzers.javascript import (
+                analyze_javascript_file_treesitter,
+            )
 
             functions, relationships = analyze_javascript_file_treesitter(
                 file_path, content, repo_path=repo_dir
@@ -195,15 +194,16 @@ class CallGraphAnalyzer:
 
     def _analyze_typescript_file(self, file_path: str, content: str, repo_dir: str):
         """
-        Analyze TypeScript file using tree-sitter based AST analyzer 
+        Analyze TypeScript file using tree-sitter based AST analyzer
 
         Args:
             file_path: Relative path to the TypeScript file
             content: File content string
         """
         try:
-
-            from code2test.src.be.dependency_analyzer.analyzers.typescript import analyze_typescript_file_treesitter
+            from code2test.src.be.dependency_analyzer.analyzers.typescript import (
+                analyze_typescript_file_treesitter,
+            )
 
             functions, relationships = analyze_typescript_file_treesitter(
                 file_path, content, repo_path=repo_dir
@@ -217,8 +217,6 @@ class CallGraphAnalyzer:
 
         except Exception as e:
             logger.error(f"Failed to analyze TypeScript file {file_path}: {e}", exc_info=True)
-
-
 
     def _analyze_c_file(self, file_path: str, content: str, repo_dir: str):
         """
@@ -249,9 +247,7 @@ class CallGraphAnalyzer:
         """
         from code2test.src.be.dependency_analyzer.analyzers.cpp import analyze_cpp_file
 
-        functions, relationships = analyze_cpp_file(
-            file_path, content, repo_path=repo_dir
-        )
+        functions, relationships = analyze_cpp_file(file_path, content, repo_path=repo_dir)
 
         for func in functions:
             func_id = func.id if func.id else f"{file_path}:{func.name}"
@@ -521,15 +517,12 @@ class CallGraphAnalyzer:
 
         selected_func_ids = sorted_func_ids[:target_count]
 
-        original_func_count = len(self.functions)
         self.functions = {
             fid: func for fid, func in self.functions.items() if fid in selected_func_ids
         }
 
-        original_rel_count = len(self.call_relationships)
         self.call_relationships = [
             rel
             for rel in self.call_relationships
             if rel.caller in selected_func_ids and rel.callee in selected_func_ids
         ]
-

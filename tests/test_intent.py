@@ -45,15 +45,24 @@ def test_untyped_source_has_signature_but_no_type_hints():
 
 def test_class_and_async_signatures():
     analyzer = PythonAnalyzer()
-    assert analyzer.extract_signature(component(source_code="class Foo(Base, Mixin):\n    pass\n")) == "class Foo(Base, Mixin)"
-    assert analyzer.extract_signature(
-        component(source_code="async def fetch(url: str) -> bytes:\n    ...\n")
-    ) == "async def fetch(url: str) -> bytes"
+    assert (
+        analyzer.extract_signature(component(source_code="class Foo(Base, Mixin):\n    pass\n"))
+        == "class Foo(Base, Mixin)"
+    )
+    assert (
+        analyzer.extract_signature(
+            component(source_code="async def fetch(url: str) -> bytes:\n    ...\n")
+        )
+        == "async def fetch(url: str) -> bytes"
+    )
 
 
 def test_indented_method_source_is_parsed():
     method = "    def area(self) -> float:\n        return 1.0\n"
-    assert PythonAnalyzer().extract_signature(component(source_code=method)) == "def area(self) -> float"
+    assert (
+        PythonAnalyzer().extract_signature(component(source_code=method))
+        == "def area(self) -> float"
+    )
 
 
 def test_type_hints_raise_confidence(extractor):
@@ -70,33 +79,53 @@ def test_documented_typed_function_clears_default_threshold(extractor):
 
 
 def test_naming_convention_is_a_signal(extractor):
-    intent = extractor.extract_intent(component(name="validate_email", docstring="", source_code="def validate_email(s): ..."))
+    intent = extractor.extract_intent(
+        component(name="validate_email", docstring="", source_code="def validate_email(s): ...")
+    )
     assert "validation" in intent.evidence.naming_signals
     assert intent.intent_text == "Performs validation operation"
 
 
 def test_fallback_text_uses_component_type(extractor):
     intent = extractor.extract_intent(
-        component(name="Widget", component_type="class", docstring=None, source_code="class Widget:\n    pass\n")
+        component(
+            name="Widget",
+            component_type="class",
+            docstring=None,
+            source_code="class Widget:\n    pass\n",
+        )
     )
     assert intent.intent_text == "Class 'Widget'"
 
 
 def test_missing_fields_do_not_crash(extractor):
-    intent = extractor.extract_intent({"id": "x", "name": "x", "language": None, "docstring": None,
-                                       "source_code": None, "file_path": None, "called_by": None})
+    intent = extractor.extract_intent(
+        {
+            "id": "x",
+            "name": "x",
+            "language": None,
+            "docstring": None,
+            "source_code": None,
+            "file_path": None,
+            "called_by": None,
+        }
+    )
     assert 0.1 <= intent.confidence <= 0.99
 
 
 def test_complexity_lowers_confidence(extractor):
     simple = extractor.extract_intent(component())
     complex_ = extractor.extract_intent(component(cyclomatic_complexity=12))
-    assert complex_.confidence == pytest.approx(simple.confidence - IntentExtractor.COMPLEXITY_PENALTY)
+    assert complex_.confidence == pytest.approx(
+        simple.confidence - IntentExtractor.COMPLEXITY_PENALTY
+    )
 
 
 def test_call_sites_raise_confidence(extractor):
     lonely = extractor.extract_intent(component(source_code=UNTYPED, docstring=""))
-    called = extractor.extract_intent(component(source_code=UNTYPED, docstring="", called_by=["a", "b", "c"]))
+    called = extractor.extract_intent(
+        component(source_code=UNTYPED, docstring="", called_by=["a", "b", "c"])
+    )
     assert called.confidence == pytest.approx(lonely.confidence + IntentExtractor.CALL_SITE_WEIGHT)
     assert called.evidence.call_sites == ["a", "b", "c"]
 
@@ -118,7 +147,9 @@ def test_dependency_intents_are_recorded_as_evidence(extractor):
     ],
 )
 def test_analyzer_selection(extractor, file_path, language, expected):
-    assert isinstance(extractor._get_analyzer({"file_path": file_path, "language": language}), expected)
+    assert isinstance(
+        extractor._get_analyzer({"file_path": file_path, "language": language}), expected
+    )
 
 
 def test_clarification_questions_cover_missing_evidence(extractor):
