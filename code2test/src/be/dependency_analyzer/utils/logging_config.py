@@ -1,5 +1,5 @@
 """
-Colored logging configuration for CodeWiki.
+Colored logging configuration for the dependency analyzer.
 
 This module provides a custom logging formatter with colored output for better readability.
 

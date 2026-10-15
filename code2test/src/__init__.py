@@ -1,1 +1,1 @@
-"""CodeWiki backend and frontend modules."""
+"""Repository analysis (dependency graph), derived from CodeWiki."""

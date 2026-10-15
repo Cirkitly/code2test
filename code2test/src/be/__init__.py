@@ -1,1 +1,1 @@
-"""CodeWiki backend modules for documentation generation."""
+"""Dependency analysis of a repository, derived from CodeWiki."""

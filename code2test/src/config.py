@@ -38,8 +38,7 @@ def is_cli_context() -> bool:
 
 
 # LLM services
-# In CLI mode, these will be loaded from ~/.codewiki/config.json + keyring
-# In web app mode, use environment variables
+# Inherited from CodeWiki; the dependency analysis does not use them
 MAIN_MODEL = os.getenv("MAIN_MODEL", "claude-sonnet-4")
 FALLBACK_MODEL_1 = os.getenv("FALLBACK_MODEL_1", "glm-4p5")
 CLUSTER_MODEL = os.getenv("CLUSTER_MODEL", MAIN_MODEL)
@@ -49,7 +48,7 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "sk-1234")
 
 @dataclass
 class Config:
-    """Configuration class for CodeWiki."""
+    """Configuration for the dependency analysis."""
 
     repo_path: str
     output_dir: str

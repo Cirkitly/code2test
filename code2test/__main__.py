@@ -1,5 +1,5 @@
 """
-Entry point for running codewiki as a module: python -m codewiki
+Entry point for running Code2Test as a module: python -m code2test
 """
 
 from code2test.cli.main import cli
