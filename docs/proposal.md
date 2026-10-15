@@ -1,5 +1,7 @@
 # CODE2TEST
 
+> This is the original product proposal from January 2026. It describes the planned product, including multi-language support and a business model, which are not part of v1. For what is implemented, see [task.md](task.md); for measured results, see the [README](../README.md#results). The README and the paper measure the first three MVP targets in Section 7.3.
+
 ## Intelligent Test Generation for Legacy Codebases
 
 ---

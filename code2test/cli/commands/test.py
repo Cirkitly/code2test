@@ -53,7 +53,7 @@ console = Console()
     "--framework",
     type=click.Choice(["pytest", "unittest"]),
     default="pytest",
-    help="Test framework to use"
+    help="Test framework (v1 generates pytest tests; unittest is not supported yet)"
 )
 @click.option(
     "--include",

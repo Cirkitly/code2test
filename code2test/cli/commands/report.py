@@ -22,12 +22,14 @@ def report_command(
     output: str
 ) -> None:
     """
-    Generate quality and coverage reports.
+    Summarize the stored intents by confidence.
+
+    Run it from the project root after 'code2test test'. The coverage report
+    is not implemented yet.
     
     \b
     Examples:
         code2test report summary          # View summary report
-        code2test report coverage --format html   # Generate HTML coverage report
     """
     display = DisplayManager()
     

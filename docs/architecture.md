@@ -28,7 +28,7 @@ graph TD
 | Module | Role |
 | --- | --- |
 | `code2test/cli/commands/` | Command-line entry points: `test`, `verify`, `benchmark`, `intent`, `report`, `init`, `config` |
-| `code2test/cli/utils/model.py` | Chooses the model (`CODE2TEST_MODEL`, saved configuration, Azure, default) |
+| `code2test/cli/utils/model.py` | Chooses the model (`CODE2TEST_MODEL`, saved main model, Azure, Google key, default) |
 | `code2test/src/be/dependency_analyzer/` | Parses the repository (derived from the CodeWiki analyzer) and builds the dependency graph; Python components are top-level functions and classes |
 | `code2test/core/intent.py`, `core/intent_analyzers/` | Static intent extraction and confidence scoring from docstrings, type hints, naming conventions, call sites and complexity |
 | `code2test/agents/intent_agent.py` | Re-infers low-confidence intents with the LLM |
@@ -47,6 +47,8 @@ Each component starts from a confidence of 0.5. Static signals add to it: a docs
 
 When the score is below the threshold (`--confidence`, default 0.6), the intent agent re-infers the intent from the source, and the more confident result is kept. Intents are stored. An intent edited with `code2test intent edit` gets confidence 0.95 and is never replaced by a later run.
 
+In `--auto` mode, a component whose intent is still below the threshold gets no tests, and a component whose tests were already verified in an earlier run keeps them instead of being regenerated. Both are counted in the run metrics.
+
 ## Generation
 
 The test agent's prompt contains:
@@ -57,11 +59,13 @@ The test agent's prompt contains:
 - the public API (signatures, constructors and public methods, no bodies) of the component's module and of the project modules it imports
 - the signature and up to 16,000 characters of the component's source
 
+The prompt also asks the model to work out each expected value from the source (and to assert a property such as a type, length or exception when it cannot), to build objects exactly as their signatures require, to put any file the code creates under pytest's `tmp_path`, and never to mock the component under test.
+
 The model returns test functions, imports and fixtures as structured output. Each component gets one file, `tests/<package>/test_<module>_<component>.py`. For a package's `__init__.py`, the file is `tests/<package>/test_<component>.py`.
 
 ## Verification and repair
 
-The verifier writes the file and runs it with `python -m pytest` from the repository root. It puts the root and `src/` on `PYTHONPATH`, ignores the target project's `addopts`, and turns off bytecode caching, so rewritten files are never served stale.
+The verifier writes the file and runs it with `python -m pytest` in a subprocess. The working directory is a new temporary directory, with `--rootdir` set to the repository, so a test that writes to a relative path cannot touch the user's files. The verifier puts the repository root and `src/` on `PYTHONPATH`, ignores the target project's `addopts`, and turns off bytecode caching, so rewritten files are never served stale.
 
 Results are read from pytest's JUnit XML and matched to the test functions each generated test defines. An error that prevents the file from being collected counts against every test in it. Failing tests, with their failure output, go back to the test agent for up to two repair rounds.
 
@@ -72,7 +76,7 @@ Tests that still fail are diagnosed against the stored intent:
 - **Code bug:** the test is kept with `pytest.mark.xfail` and the diagnosis as its reason.
 - **Wrong test or wrong intent:** the test is dropped.
 
-A file that cannot be collected is never kept. After every file passes on its own, the whole generated suite runs together, and tests that fail only there are dropped.
+An error raised by the test itself (an import, syntax or name error) always counts as a wrong test. A file that cannot be collected is never kept. After every file passes on its own, the whole generated suite runs together, and tests that fail only there are dropped, for up to three rounds.
 
 The result is the invariant the tool guarantees: every test it writes either passes or is an explicit expected failure.
 
@@ -85,7 +89,11 @@ All three agents use pydantic-ai with typed structured output and up to three ou
 `code2test benchmark` evaluates the tests already generated. It works in three stages:
 
 1. **Mutate.** It enumerates single-site mutants in the tested components: flipped comparisons, swapped operators, changed constants, and `return None`. Docstrings and type annotations are excluded.
-2. **Run.** It samples up to `--mutants` of them and runs each component's tests against each mutant. Before mutating a file it keeps a byte-exact backup in `.code2test/benchmark_backup/`, and it restores the file afterwards, including on SIGTERM. A run that was killed is repaired the next time `benchmark` starts.
+2. **Run.** It samples up to `--mutants` of them and runs the whole generated suite against each mutant. It also records whether the mutated component's own tests caught it. Before mutating a file it keeps a byte-exact backup in `.code2test/benchmark_backup/`, and it restores the file afterwards, including on SIGTERM. A run that was killed is repaired the next time `benchmark` starts.
 3. **Score diagnosis.** It checks the diagnosis agent against failures whose cause is known:
-   - tests failing on a mutant, which should be diagnosed as a code bug;
-   - passing tests whose expected value was changed, which should be diagnosed as a wrong test.
+   - tests of the mutated component that fail on a mutant, which should be diagnosed as a code bug (the mutated line must be within the source the agent is shown);
+   - passing tests whose first literal expected value was changed slightly, which should be diagnosed as a wrong test (only when that assertion is what fails).
+
+   The changes leave no marker, such as a `_wrong` suffix, that would give the answer away.
+
+Results are written to `.code2test/benchmark.json`, including every surviving mutant and every diagnosis case.

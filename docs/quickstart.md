@@ -51,6 +51,7 @@ Passed on first run               196 (96%)
 Tests kept                        205
   of which xfail (possible bugs)    0
 Tests dropped                     0
+Repair rounds                     8
 ```
 
 The tests are in `tests/`, one file per component. The same numbers are saved to `.code2test/metrics.json`.

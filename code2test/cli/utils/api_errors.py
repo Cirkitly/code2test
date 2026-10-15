@@ -46,8 +46,8 @@ class APIErrorHandler:
                 "LLM API authentication failed.\n\n"
                 "Your API key appears to be invalid or expired.\n\n"
                 "Troubleshooting:\n"
-                "  1. Verify your API key: codewiki config show\n"
-                "  2. Update your API key: codewiki config set --api-key <new-key>\n"
+                "  1. Verify your API key: code2test config show\n"
+                "  2. Update your API key: code2test config set --api-key <new-key>\n"
                 "  3. Check that your API key is active in your provider's dashboard"
             )
         elif "timeout" in error_message.lower():
@@ -66,7 +66,7 @@ class APIErrorHandler:
                 "Could not establish connection to the API.\n\n"
                 "Troubleshooting:\n"
                 "  1. Check your internet connection\n"
-                "  2. Verify the base URL: codewiki config show\n"
+                "  2. Verify the base URL: code2test config show\n"
                 "  3. Check if you're behind a proxy or firewall\n"
                 "  4. Try: curl -I <base-url> to test connectivity"
             )
@@ -75,7 +75,7 @@ class APIErrorHandler:
                 f"LLM API error: {error_message}\n\n"
                 "An unexpected error occurred while communicating with the LLM API.\n\n"
                 "Troubleshooting:\n"
-                "  1. Check your configuration: codewiki config validate\n"
+                "  1. Check your configuration: code2test config validate\n"
                 "  2. Verify API service status\n"
                 "  3. Review the error message above for specific details"
             )

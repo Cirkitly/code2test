@@ -1,5 +1,5 @@
 """
-Configuration commands for CodeWiki CLI.
+Configuration commands for the Code2Test CLI.
 """
 
 import json
@@ -33,7 +33,7 @@ def parse_patterns(patterns_str: str) -> List[str]:
 
 @click.group(name="config")
 def config_group():
-    """Manage CodeWiki configuration (API credentials and settings)."""
+    """Manage Code2Test configuration (API key and model)."""
     pass
 
 
@@ -41,27 +41,27 @@ def config_group():
 @click.option(
     "--api-key",
     type=str,
-    help="LLM API key (stored securely in system keychain)"
+    help="LLM API key (stored in the system keychain; exported as OPENAI_API_KEY when Code2Test runs)"
 )
 @click.option(
     "--base-url",
     type=str,
-    help="LLM API base URL (e.g., https://api.anthropic.com)"
+    help="LLM API base URL (used by the legacy generate command; Code2Test reads OPENAI_BASE_URL)"
 )
 @click.option(
     "--main-model",
     type=str,
-    help="Primary model for documentation generation"
+    help="Model for test generation, as a pydantic-ai model string (e.g. anthropic:claude-sonnet-5-5)"
 )
 @click.option(
     "--cluster-model",
     type=str,
-    help="Model for module clustering (recommend top-tier)"
+    help="Model for module clustering (legacy generate command only)"
 )
 @click.option(
     "--fallback-model",
     type=str,
-    help="Fallback model for documentation generation"
+    help="Fallback model (legacy generate command only)"
 )
 @click.option(
     "--max-tokens",
@@ -95,35 +95,23 @@ def config_set(
     max_depth: Optional[int]
 ):
     """
-    Set configuration values for CodeWiki.
+    Set configuration values for Code2Test.
+
+    Code2Test uses --api-key and --main-model. The other options configure
+    the legacy generate (documentation) command.
     
-    API keys are stored securely in your system keychain:
-      • macOS: Keychain Access
-      • Windows: Credential Manager  
-      • Linux: Secret Service (GNOME Keyring, KWallet)
-    
+    The API key is stored in your system keychain (macOS Keychain, Windows
+    Credential Manager, or Linux Secret Service).
+
     Examples:
-    
+
     \b
-    # Set all configuration
-    $ codewiki config set --api-key sk-abc123 --base-url https://api.anthropic.com \\
-        --main-model claude-sonnet-4 --cluster-model claude-sonnet-4 --fallback-model glm-4p5
-    
+    # Key and model for test generation
+    $ code2test config set --api-key sk-abc123 --main-model openai:gpt-4o-mini
+
     \b
-    # Update only API key
-    $ codewiki config set --api-key sk-new-key
-    
-    \b
-    # Set max tokens for LLM response
-    $ codewiki config set --max-tokens 16384
-    
-    \b
-    # Set all max token settings
-    $ codewiki config set --max-tokens 32768 --max-token-per-module 40000 --max-token-per-leaf-module 20000
-    
-    \b
-    # Set max depth for hierarchical decomposition
-    $ codewiki config set --max-depth 3
+    # Update only the API key
+    $ code2test config set --api-key sk-new-key
     """
     try:
         # Check if at least one option is provided
@@ -257,21 +245,20 @@ def config_show(output_json: bool):
     
     \b
     # Display configuration
-    $ codewiki config show
+    $ code2test config show
     
     \b
     # Display as JSON
-    $ codewiki config show --json
+    $ code2test config show --json
     """
     try:
         manager = ConfigManager()
         
         if not manager.load():
             click.secho("\n✗ Configuration not found.", fg="red", err=True)
-            click.echo("\nPlease run 'codewiki config set' to configure your API credentials:")
-            click.echo("  codewiki config set --api-key <key> --base-url <url> \\")
-            click.echo("    --main-model <model> --cluster-model <model> --fallback-model <model>")
-            click.echo("\nFor more help: codewiki config set --help")
+            click.echo("\nPlease run 'code2test config set' to configure your API credentials:")
+            click.echo("  code2test config set --api-key <key> --main-model <model>")
+            click.echo("\nFor more help: code2test config set --help")
             sys.exit(EXIT_CONFIG_ERROR)
         
         config = manager.get_config()
@@ -298,7 +285,7 @@ def config_show(output_json: bool):
         else:
             # Human-readable output
             click.echo()
-            click.secho("CodeWiki Configuration", fg="blue", bold=True)
+            click.secho("Code2Test Configuration", fg="blue", bold=True)
             click.echo("━" * 40)
             click.echo()
             
@@ -387,15 +374,15 @@ def config_validate(quick: bool, verbose: bool):
     
     \b
     # Full validation with API test
-    $ codewiki config validate
+    $ code2test config validate
     
     \b
     # Quick validation (config only)
-    $ codewiki config validate --quick
+    $ code2test config validate --quick
     
     \b
     # Verbose output
-    $ codewiki config validate --verbose
+    $ code2test config validate --verbose
     """
     try:
         click.echo()
@@ -412,7 +399,7 @@ def config_validate(quick: bool, verbose: bool):
         if not manager.load():
             click.secho("✗ Configuration file not found", fg="red")
             click.echo()
-            click.echo("Error: Configuration is incomplete. Run 'codewiki config set --help' for setup instructions.")
+            click.echo("Error: Configuration is incomplete. Run 'code2test config set --help' for setup instructions.")
             sys.exit(EXIT_CONFIG_ERROR)
         
         if verbose:
@@ -432,7 +419,7 @@ def config_validate(quick: bool, verbose: bool):
         if not api_key:
             click.secho("✗ API key missing", fg="red")
             click.echo()
-            click.echo("Error: API key not set. Run 'codewiki config set --api-key <key>'")
+            click.echo("Error: API key not set. Run 'code2test config set --api-key <key>'")
             sys.exit(EXIT_CONFIG_ERROR)
         
         if verbose:
@@ -560,43 +547,43 @@ def config_agent(
     clear: bool
 ):
     """
-    Configure default agent instructions for documentation generation.
+    Configure default agent instructions for the legacy generate (documentation) command.
     
-    These settings are used as defaults when running 'codewiki generate'.
+    These settings are used as defaults when running 'code2test generate'.
     Runtime options (--include, --exclude, etc.) override these defaults.
     
     Examples:
     
     \b
     # Set include patterns for C# projects
-    $ codewiki config agent --include "*.cs"
+    $ code2test config agent --include "*.cs"
     
     \b
     # Exclude test projects
-    $ codewiki config agent --exclude "*Tests*,*Specs*,test_*"
+    $ code2test config agent --exclude "*Tests*,*Specs*,test_*"
     
     \b
     # Focus on specific modules
-    $ codewiki config agent --focus "src/core,src/api"
+    $ code2test config agent --focus "src/core,src/api"
     
     \b
     # Set default doc type
-    $ codewiki config agent --doc-type architecture
+    $ code2test config agent --doc-type architecture
     
     \b
     # Add custom instructions
-    $ codewiki config agent --instructions "Focus on public APIs and include usage examples"
+    $ code2test config agent --instructions "Focus on public APIs and include usage examples"
     
     \b
     # Clear all agent instructions
-    $ codewiki config agent --clear
+    $ code2test config agent --clear
     """
     try:
         manager = ConfigManager()
         
         if not manager.load():
             click.secho("\n✗ Configuration not found.", fg="red", err=True)
-            click.echo("\nPlease run 'codewiki config set' first to configure your API credentials.")
+            click.echo("\nPlease run 'code2test config set' first to configure your API credentials.")
             sys.exit(EXIT_CONFIG_ERROR)
         
         config = manager.get_config()
@@ -634,7 +621,7 @@ def config_agent(
                 click.secho("  No agent instructions configured (using defaults)", fg="yellow")
             
             click.echo()
-            click.echo("Use 'codewiki config agent --help' for usage information.")
+            click.echo("Use 'code2test config agent --help' for usage information.")
             click.echo()
             return
         

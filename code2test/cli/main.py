@@ -14,10 +14,11 @@ from code2test import __version__
 @click.pass_context
 def cli(ctx):
     """
-    Code2Test: Intelligent Test Generation for Legacy Codebases.
-    
-    Generate comprehensive test suites using intent-first AI analysis.
-    Supports Python, Java, JavaScript, TypeScript, C, C++, and C#.
+    Code2Test: intent-first test generation for legacy Python code.
+
+    Infers what each function and class is meant to do, generates pytest
+    tests against that intent, runs and repairs them, and writes only tests
+    that pass or are marked as expected failures (suspected bugs).
     
     \b
     Quick Start:
@@ -34,8 +35,8 @@ def cli(ctx):
 def version():
     """Display version information."""
     click.echo(f"Code2Test v{__version__}")
-    click.echo("Intent-first test generation for legacy codebases")
-    click.echo("Built on FSoft AI4Code's CodeWiki framework")
+    click.echo("Intent-first test generation for legacy Python code")
+    click.echo("Dependency analysis derived from FSoft AI4Code's CodeWiki")
     
 
 # Import commands
@@ -50,7 +51,7 @@ from code2test.cli.commands.benchmark import benchmark_command
 
 # Register command groups
 cli.add_command(config_group)
-cli.add_command(generate_command, name="generate")  # Legacy docs command
+cli.add_command(generate_command, name="generate")  # Legacy CodeWiki documentation command
 
 # Register new test generation commands
 cli.add_command(test_command)      # code2test test

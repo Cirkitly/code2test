@@ -45,7 +45,7 @@ Code2Test picks the model in this order:
 4. Gemini, when the API key saved with `code2test config set --api-key` is a Google key.
 5. `openai:gpt-4o-mini` otherwise.
 
-Each provider reads its usual key variable, for example `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
+Each provider reads its usual key variable, for example `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. A key saved with `code2test config set --api-key` is stored in the system keychain and exported as `OPENAI_API_KEY` (and as the Google key variables) when Code2Test runs, replacing any value already in the environment.
 
 ```bash
 export ANTHROPIC_API_KEY=...
@@ -100,8 +100,11 @@ The suite Code2Test writes therefore always passes: every test either passes or 
 | `code2test benchmark [PATH]` | Measure mutation score and diagnosis accuracy of the generated tests |
 | `code2test intent show\|edit\|export [NAME]` | Review or correct inferred intents |
 | `code2test report` | Summarize stored intents by confidence |
-| `code2test init` | Create a `.code2test` configuration for a repository |
-| `code2test config set\|show\|validate` | Store API credentials and model settings |
+| `code2test init` | Write a starter `.code2test/config.json` (the other commands take their settings from options, not from this file) |
+| `code2test config set\|show\|validate` | Store the API key and model (`--api-key`, `--main-model`) |
+| `code2test version` | Show the installed version |
+
+The CLI also includes `code2test generate` and `code2test config agent`. They belong to CodeWiki's documentation generator, the project Code2Test's dependency analyzer comes from, and are not part of test generation.
 
 ### `code2test test`
 
@@ -161,6 +164,7 @@ The benchmark also scores the diagnosis agent on failures whose cause is known. 
 | `.code2test/metrics.json` | Metrics of the last `test --auto` run |
 | `.code2test/benchmark.json` | Results of the last `benchmark` run, including uncaught mutants |
 | `.code2test/dependency_graphs/` | The analyzed dependency graph |
+| `.code2test/config.json` | Starter settings written by `code2test init` (not read by other commands) |
 | `tests/reports/report.html`, `report.json` | Run reports, when `--report` is used |
 
 ## Results
@@ -187,7 +191,7 @@ On these well-documented libraries, nearly every inferred intent came from the d
 
 ## Limitations
 
-- **Python only.** Other languages are analyzed but get no tests; the tool says so when it skips them.
+- **Python only.** Files in other languages are part of the dependency graph but get no tests; the tool says so when it skips them.
 - **Behavior is inferred, not specified.** Expected values come from the inferred intent and the source. Review generated tests before relying on them, as you would review a colleague's.
 - **Each run calls the model.** A run sends source code to the configured provider and costs API usage: one or more calls per component, plus repairs.
 - **Results come from two libraries and two models of one provider, one run each.** Larger codebases, code with external services, other models and run-to-run variance are not yet measured.
@@ -195,20 +199,28 @@ On these well-documented libraries, nearly every inferred intent came from the d
 ## Development
 
 ```bash
+git clone https://github.com/Cirkitly/code2test.git
+cd code2test
 pip install -e ".[dev]"
 pytest
 ```
 
-The test suite drives the whole pipeline offline with scripted models, so no API key is needed. CI runs it on every push.
+The tests in `tests/` drive the whole pipeline offline with scripted models, so no API key is needed. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on every push and pull request.
+
+When changing the pipeline:
+
+- Add or update a test in `tests/` for every behavior change. `tests/test_pipeline.py` shows how to script model responses.
+- To check a change against a real model, run `code2test test --auto`, `code2test verify` and `code2test benchmark` on a small library with its own tests removed, as [`research/scripts/run_experiments.sh`](research/scripts/run_experiments.sh) does.
+- Keep [docs/architecture.md](docs/architecture.md) in step with the code it describes.
 
 Further documentation:
 
-- [docs/architecture.md](docs/architecture.md): components and data flow
+- [docs/architecture.md](docs/architecture.md): modules and data flow
 - [docs/quickstart.md](docs/quickstart.md): a step-by-step first run
+- [docs/task.md](docs/task.md): implementation status
 - [docs/proposal.md](docs/proposal.md): the original project proposal and its success criteria
 - [docs/real_model_run.md](docs/real_model_run.md): the first real-model runs and the failures they exposed
 - [research/](research/): the paper, experiment scripts and raw results
-- [docs/task.md](docs/task.md): implementation status
 
 ## License
 

@@ -16,10 +16,7 @@ def resolve_model(display) -> str:
     """
     # Load configuration
     config_manager = ConfigManager()
-    configured = config_manager.load() and config_manager.is_configured()
-    if not configured and not os.environ.get("CODE2TEST_MODEL"):
-        display.warning("Code2Test is not fully configured.")
-        display.info("Usage may fail if API keys are missing. Run 'code2test config set' to configure.")
+    config_manager.load()
 
     # Set API key in environment for agents
     api_key = config_manager.get_api_key()
@@ -69,5 +66,7 @@ def resolve_model(display) -> str:
 
         else:
             main_model = "openai:gpt-4o-mini"
+            display.info("No model configured; using openai:gpt-4o-mini. "
+                         "Set CODE2TEST_MODEL or run 'code2test config set --main-model' to choose another.")
 
     return main_model
