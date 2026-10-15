@@ -105,21 +105,17 @@ class InteractiveSession:
         """
         self.display.show_test_preview(test_file)
         
-        choices = "[y] Accept  [n] Skip  [e] Edit  [r] Run first  [i] Edit intent"
+        choices = "[y] Accept  [n] Skip  [i] Edit intent"
         self.display.show_prompt("", choices)
         
         choice = Prompt.ask(
             ">",
-            choices=["y", "n", "e", "r", "i"],
-            default="r"
+            choices=["y", "n", "i"],
+            default="y"
         )
-        
+
         if choice == "y":
             return UserAction.ACCEPT
-        elif choice == "r":
-            return UserAction.RUN
-        elif choice == "e":
-            return UserAction.EDIT
         elif choice == "i":
             return UserAction.EDIT_INTENT
         else:
@@ -337,28 +333,38 @@ def run_interactive_generation(
             # Present tests
             if not auto_accept:
                 action = session.present_tests(test_file, intent)
-                
+
                 if action == UserAction.SKIP:
                     skipped += 1
                     continue
-                elif action == UserAction.RUN:
-                    # Run verification
-                    result = generator.verifier.run_tests(test_file)
-                    action = session.present_verification_result(result, test_file)
-                    
-                    if action != UserAction.ACCEPT:
-                        # Handle failures
-                        for tc in test_file.test_cases:
-                            if tc.diagnosis:
-                                session.present_diagnosis(tc.diagnosis, tc)
-            
-            # Save test file
-            if session.confirm_save(test_file.path):
-                generator.verifier.write_test_file(test_file)
-                generator.test_registry.register_test(test_file)
+                elif action == UserAction.EDIT_INTENT:
+                    intent.update_intent(session.edit_intent(intent))
+                    test_file = await generator.test_agent.generate_unit_tests(component, intent)
+                    if not test_file.test_cases:
+                        display.warning(f"No tests generated for {comp_id}")
+                        continue
+
+            # Run the tests and repair failures before anything is kept
+            display.info(f"Verifying {test_file.path}...")
+            test_file = await generator.verify_and_fix(test_file, component, intent)
+            if test_file is None:
+                display.warning(f"No passing tests could be produced for {comp_id}")
+                skipped += 1
+                continue
+
+            for tc in test_file.test_cases:
+                if tc.diagnosis:
+                    display.warning(f"{tc.name} kept as xfail (possible bug in the code)")
+                    display.show_diagnosis_panel(tc.diagnosis)
+
+            if auto_accept or session.confirm_save(test_file.path):
                 generated += 1
-                display.success(f"Saved {test_file.path}")
-        
+                display.success(f"Saved {test_file.path} ({test_file.total_tests} tests)")
+            else:
+                (generator.repo_path / test_file.path).unlink(missing_ok=True)
+                generator.test_registry.delete_test(test_file.path)
+                skipped += 1
+
         # Show summary
         display.show_summary_table({
             "total_intents": len(components),

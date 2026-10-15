@@ -250,4 +250,5 @@ class GenerationConfig(BaseModel):
     include_fixtures: bool = True
     output_dir: Optional[str] = None
     framework: TestFramework = TestFramework.PYTEST
-    model: str = "openai:gpt-4o-mini"
+    model: Any = "openai:gpt-4o-mini"  # pydantic-ai model name or Model instance
+    max_fix_attempts: int = 2

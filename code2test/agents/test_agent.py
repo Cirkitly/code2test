@@ -65,6 +65,8 @@ PYTEST_GENERATION_PROMPT = """Generate pytest tests for the following component 
 **Intent:** {intent}
 **Confidence:** {confidence:.0%}
 
+**Import it with:** `{import_line}`
+
 **Signature:**
 ```python
 {signature}
@@ -81,7 +83,41 @@ Generate comprehensive tests that validate this intent. Include:
 3. Tests for error conditions
 4. Any necessary fixtures
 
+Rules:
+- Each test must be a complete, self-contained pytest function whose name starts with `test_`.
+- Put every import the tests need (including the import above) in `imports`, one statement per entry.
+- Only use the public behavior visible in the source; do not invent attributes or helpers.
+- Do not mock the component under test itself.
+
 Return tests using pytest syntax with clear docstrings explaining what each test validates."""
+
+
+FIX_TESTS_PROMPT = """These generated pytest tests for `{name}` fail. Fix them.
+
+**Intent:** {intent}
+
+**Import it with:** `{import_line}`
+
+**Source Code:**
+```python
+{source_code}
+```
+
+**Current imports:**
+```python
+{imports}
+```
+
+**Failing tests and their failure output:**
+{failures}
+
+For each failing test, return a corrected version with the SAME name. A test should
+assert what the source code actually does when that matches the intent. If you believe
+the source code has a genuine bug (it contradicts the intent), keep the assertion of the
+intended behavior unchanged.
+
+`imports` REPLACES the file's current imports: return the complete list every test in the
+file needs, and leave out any import that is failing (e.g. ModuleNotFoundError)."""
 
 
 class TestAgent:
@@ -143,8 +179,9 @@ class TestAgent:
             name=component.get("name", "unknown"),
             intent=intent.intent_text,
             confidence=intent.confidence,
-            signature=component.get("signature", ""),
-            source_code=component.get("source_code", "")[:3000],  # Limit size
+            signature=component.get("signature") or "",
+            source_code=(component.get("source_code") or "")[:6000],  # Limit size
+            import_line=self.import_line_for(component) or "(not importable: test via its module)",
         )
         
         try:
@@ -190,7 +227,7 @@ class TestAgent:
                 component_path=component_path,
                 test_cases=test_cases,
                 framework=framework,
-                imports=result.output.imports,
+                imports=self._ensure_import(result.output.imports, component),
                 fixtures=result.output.fixtures,
                 created_at=datetime.now(),
             )
@@ -300,6 +337,95 @@ Use pytest syntax with appropriate fixtures."""
                 framework=framework,
             )
     
+    def module_path_for(self, component: Dict[str, Any]) -> Optional[str]:
+        """Dotted module path for a component's source file, e.g. src/pkg/mod.py -> pkg.mod."""
+        rel = component.get("relative_path") or component.get("file_path") or ""
+        if self.repo_path and os.path.isabs(rel):
+            try:
+                rel = os.path.relpath(rel, self.repo_path)
+            except ValueError:
+                return None
+        if not rel.endswith(".py"):
+            return None
+        parts = rel[:-3].replace(os.sep, "/").split("/")
+        if parts and parts[0] == "src":
+            parts = parts[1:]
+        if parts and parts[-1] == "__init__":
+            parts = parts[:-1]
+        if not parts or not all(p.isidentifier() for p in parts):
+            return None
+        return ".".join(parts)
+
+    def import_line_for(self, component: Dict[str, Any]) -> Optional[str]:
+        """Import statement for the component under test."""
+        module = self.module_path_for(component)
+        name = str(component.get("name") or "").split(".")[0]
+        if not module or not name.isidentifier():
+            return None
+        return f"from {module} import {name}"
+
+    def _ensure_import(self, imports: List[str], component: Dict[str, Any]) -> List[str]:
+        """Make sure the component under test is imported."""
+        imports = [i.strip() for i in imports if i and i.strip()]
+        line = self.import_line_for(component)
+        module = self.module_path_for(component)
+        if line and not any(module and module in i for i in imports):
+            imports.insert(0, line)
+        if not any(i in ("import pytest",) or i.startswith("import pytest") for i in imports):
+            imports.insert(0, "import pytest")
+        return imports
+
+    async def fix_tests(
+        self,
+        test_file: TestFile,
+        failing: List[TestCase],
+        component: Dict[str, Any],
+        intent: Intent,
+    ) -> TestFile:
+        """
+        Ask the model to repair failing tests, using their failure output.
+
+        Returns the test file with failing tests replaced by their fixed versions
+        (tests the model did not return are kept unchanged).
+        """
+        failures = "\n\n".join(
+            f"### {tc.name}\n```python\n{tc.test_code}\n```\nFailure:\n```\n{(tc.failure_message or 'unknown')[:1500]}\n```"
+            for tc in failing
+        )
+        prompt = FIX_TESTS_PROMPT.format(
+            name=component.get("name", "unknown"),
+            intent=intent.intent_text,
+            import_line=self.import_line_for(component) or "(unknown)",
+            source_code=(component.get("source_code") or "")[:6000],
+            imports="\n".join(test_file.imports),
+            failures=failures,
+        )
+        try:
+            result = await self._get_agent().run(prompt, output_type=TestGenerationResult)
+        except Exception as e:
+            logger.error(f"Test repair failed: {e}")
+            return test_file
+
+        fixed = {t.name: t for t in result.output.tests}
+        new_cases = []
+        for tc in test_file.test_cases:
+            if tc.name in fixed:
+                new_cases.append(TestCase(
+                    name=tc.name,
+                    intent_text=tc.intent_text,
+                    test_code=fixed[tc.name].test_code,
+                    status=TestStatus.PENDING,
+                ))
+            else:
+                new_cases.append(tc)
+
+        return test_file.model_copy(update={
+            "test_cases": new_cases,
+            "imports": self._ensure_import(
+                list(dict.fromkeys(result.output.imports or test_file.imports)), component
+            ),
+        })
+
     def _generate_test_path(self, source_path: str, component: Optional[Dict[str, Any]] = None) -> str:
         """
         Generate test file path from source path.

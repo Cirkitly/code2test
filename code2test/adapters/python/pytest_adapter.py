@@ -5,9 +5,6 @@ Adapter for pytest test file generation and execution.
 """
 
 import os
-import subprocess
-import json
-import tempfile
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
@@ -155,80 +152,30 @@ class PytestAdapter:
         Returns:
             Dictionary with test results
         """
-        full_path = self.repo_path / test_path
-        
-        # Create temp file for JSON results
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json_path = f.name
-        
-        try:
-            result = subprocess.run(
-                [
-                    "python", "-m", "pytest",
-                    str(full_path),
-                    "-v",
-                    "--tb=short",
-                    f"--json-report",
-                    f"--json-report-file={json_path}",
-                ],
-                cwd=str(self.repo_path),
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-            
-            # Parse JSON report
-            tests_results = []
-            summary = {"passed": 0, "failed": 0, "skipped": 0, "total": 0}
-            
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path) as f:
-                        report = json.load(f)
-                    
-                    for test in report.get("tests", []):
-                        outcome = test.get("outcome", "")
-                        summary["total"] += 1
-                        
-                        if outcome == "passed":
-                            summary["passed"] += 1
-                        elif outcome == "failed":
-                            summary["failed"] += 1
-                        elif outcome == "skipped":
-                            summary["skipped"] += 1
-                        
-                        tests_results.append({
-                            "nodeid": test.get("nodeid", ""),
-                            "outcome": outcome,
-                            "duration": test.get("duration", 0),
-                            "call": test.get("call", {}),
-                        })
-                        
-                except Exception as e:
-                    pass  # Fall back to basic parsing
-            
-            return {
-                "success": result.returncode == 0,
-                "exit_code": result.returncode,
-                "tests": tests_results,
-                "summary": summary,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-            }
-            
-        except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "exit_code": -1,
-                "error": f"Timeout after {timeout} seconds",
-                "tests": [],
-                "summary": {"passed": 0, "failed": 0, "skipped": 0, "total": 0},
-            }
-            
-        finally:
-            if os.path.exists(json_path):
-                os.unlink(json_path)
-    
+        from code2test.core.verifier import TestVerifier
+
+        run = TestVerifier(str(self.repo_path), timeout=timeout).run_pytest(self.repo_path / test_path)
+        summary = {
+            "passed": len(run.names("passed")),
+            "failed": len(run.names("failed")),
+            "skipped": len(run.names("skipped")),
+        }
+        summary["total"] = sum(summary.values())
+        result = {
+            "success": run.ok,
+            "exit_code": run.returncode,
+            "tests": [
+                {"nodeid": f"{c.classname}::{c.name}", "outcome": c.outcome, "message": c.message}
+                for c in run.cases
+            ],
+            "summary": summary,
+            "stdout": run.stdout,
+            "stderr": run.stderr,
+        }
+        if run.collection_error:
+            result["error"] = run.collection_error
+        return result
+
     def generate_fixture(
         self,
         name: str,
