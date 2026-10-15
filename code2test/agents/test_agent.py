@@ -107,6 +107,8 @@ Rules:
   (type, length, membership, an exception) instead of a specific literal.
 - Construct objects exactly as their signatures in the source and related API require
   (e.g. pass a class where a class is expected, not an instance).
+- Any file or directory the code creates must go under pytest's `tmp_path` fixture;
+  never write relative paths into the working directory.
 
 Return tests using pytest syntax with clear docstrings explaining what each test validates."""
 
