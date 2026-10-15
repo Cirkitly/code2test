@@ -333,3 +333,10 @@ def test_related_api_shows_signatures_of_imported_project_modules(tmp_path):
     assert "class MemoryStorage:" in api and '"""Keeps data in memory."""' in api
     assert "def read(self) -> dict: ..." in api
     assert "_secret" not in api and "self.data = {}" not in api  # no private members or bodies
+
+
+def test_mixed_escaped_code_is_unescaped():
+    from code2test.agents.test_agent import clean_code
+
+    mixed = '@pytest.fixture\ndef doc():\n    return {\\"count\\": 5}\\n'
+    assert clean_code(mixed) == '@pytest.fixture\ndef doc():\n    return {"count": 5}\n'

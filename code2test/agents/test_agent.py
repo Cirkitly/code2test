@@ -197,10 +197,11 @@ def clean_code(code: str) -> str:
     """
     Undo double-escaping some models apply to code in JSON output.
 
-    Code returned as one line with literal ``\\n`` sequences doesn't compile;
-    when unescaping newlines/quotes makes it compile, use the unescaped version.
+    Code with literal ``\\n`` / ``\\"`` sequences (all on one line, or mixed into
+    real lines) doesn't compile; when unescaping makes it compile, use that.
+    Code that already compiles is never changed.
     """
-    if "\n" in code.strip() or "\\n" not in code:
+    if "\\" not in code:
         return code
     try:
         compile(code, "<test>", "exec")

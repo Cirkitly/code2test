@@ -417,7 +417,10 @@ class TestGenerator:
             failing = [tc for tc in test_file.test_cases if tc.status == TestStatus.FAILED]
             if result.all_passed or not failing or intent is None:
                 break
-            logger.info(f"Repairing {len(failing)} failing test(s) in {test_file.path} (attempt {attempt + 1})")
+            logger.info(
+                f"Repairing {len(failing)} failing test(s) in {test_file.path} (attempt {attempt + 1}): "
+                f"{_first_line(result.collection_error or failing[0].failure_message)}"
+            )
             file_metrics.repair_rounds += 1
             test_file = await self.test_agent.fix_tests(test_file, failing, component, intent)
             result = await self._run_verifier(test_file)
