@@ -214,9 +214,11 @@ git clone https://github.com/Cirkitly/code2test.git
 cd code2test
 pip install -e ".[dev]"
 pytest
+ruff check code2test tests research/scripts      # lint
+ruff format code2test tests research/scripts     # format
 ```
 
-The tests in `tests/` drive the whole pipeline offline with scripted models, so no API key is needed. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on every push and pull request.
+The tests in `tests/` drive the whole pipeline offline with scripted models, so no API key is needed. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs them on Python 3.12 and 3.13, and checks lint and formatting, on every push and pull request.
 
 When changing the pipeline:
 

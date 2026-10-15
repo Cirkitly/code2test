@@ -36,7 +36,7 @@ Python only. Test generation, verification and repair target pytest. Files in ot
 - [x] Evaluation on inflection and TinyDB with two models; results in the [README](../README.md#results) and [research/](../research/)
 
 **Project**
-- [x] CI running the test suite on every push and pull request
+- [x] CI on every push and pull request: tests on Python 3.12 and 3.13, ruff lint and format check
 - [x] CI examples for GitHub Actions and GitLab CI ([examples/ci](../examples/ci))
 
 ## In the code but not used by the v1 pipeline
