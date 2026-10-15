@@ -141,3 +141,18 @@ def test_file_or_subdirectory_target_uses_project_root(repo, monkeypatch, target
     assert result.exit_code == 0, result.output
     assert (repo / GENERATED).exists()
     assert not (repo / "calc" / ".code2test").exists()
+
+
+def test_intent_export_json_is_valid_json(repo, monkeypatch):
+    import json
+
+    (repo / "calc/ops.py").write_text(SOURCE.replace(
+        '"""Return the sum of a and b."""',
+        '"""Return the sum of a and b, which is a deliberately long sentence that would wrap in a narrow terminal."""',
+    ))
+    use_model(monkeypatch, scripted([tests_reply(PASSING)]))
+    assert run("test", "--auto", "--confidence", "0", ".").exit_code == 0
+
+    data = json.loads(run("intent", "export", "--format", "json").output)
+    assert [i["component_id"] for i in data] == ["calc.ops.add"]
+    assert "narrow terminal" in data[0]["evidence"]["docstring"]

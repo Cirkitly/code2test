@@ -66,10 +66,11 @@ def intent_command(
         if format == "json":
             import json
             data = [i.model_dump() for i in intents]
-            console.print(json.dumps(data, indent=2, default=str))
+            # plain output: rich would wrap long lines and break the JSON
+            click.echo(json.dumps(data, indent=2, default=str))
         else:
             for intent in intents:
-                console.print(f"{intent.component_id}: {intent.intent_text}")
+                click.echo(f"{intent.component_id}: {intent.intent_text}")
     
     elif action == "edit":
         if not component:
