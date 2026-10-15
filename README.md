@@ -42,7 +42,8 @@ Code2Test picks the model in this order:
 1. The `CODE2TEST_MODEL` environment variable, which takes any pydantic-ai model string.
 2. The main model saved with `code2test config set --main-model ...`.
 3. Azure OpenAI, when `AZURE_OPENAI_DEPLOYMENT` and `AZURE_OPENAI_ENDPOINT` are set.
-4. `openai:gpt-4o-mini` otherwise.
+4. Gemini, when the API key saved with `code2test config set --api-key` is a Google key.
+5. `openai:gpt-4o-mini` otherwise.
 
 Each provider reads its usual key variable, for example `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
 
@@ -110,7 +111,7 @@ The suite Code2Test writes therefore always passes: every test either passes or 
 | `--confidence FLOAT` | 0.6 | Intent confidence needed to generate tests in `--auto` mode |
 | `--output-dir PATH` | `tests` | Where generated tests are written |
 | `--include`, `--exclude GLOB` | | Limit which files are analyzed |
-| `--dry-run` | off | Generate without writing or running anything |
+| `--dry-run` | off | Generate tests (this calls the model) without writing or running test files |
 | `--exit-code` | off | Exit 1 if any written file failed verification (for CI) |
 | `--report html\|json\|all` | none | Write a run report to `<output-dir>/reports/` |
 
@@ -155,7 +156,7 @@ The benchmark also scores the diagnosis agent on failures whose cause is known. 
 
 | Path | Contents |
 | --- | --- |
-| `tests/<package>/test_<module>_<component>.py` | Generated tests, one file per component |
+| `tests/<package>/test_<module>_<component>.py` | Generated tests, one file per component (`test_<component>.py` for a package's `__init__.py`) |
 | `.code2test/code2test.db` | Inferred intents and the registry of generated tests (SQLite) |
 | `.code2test/metrics.json` | Metrics of the last `test --auto` run |
 | `.code2test/benchmark.json` | Results of the last `benchmark` run, including uncaught mutants |

@@ -1,96 +1,98 @@
-# Code2Test Quickstart Guide
+# Quickstart
 
-This guide will help you get started with **Code2Test** to automatically generate comprehensive test suites for your legacy codebase.
+This guide takes you from installation to a verified, generated test suite for your own Python project.
 
-## Prerequisites
+## 1. Install
 
-- Python 3.9 or higher
-- An OpenAI-compatible API Key (e.g., OpenAI, Anthropic, OpenRouter) set as `OPENAI_API_KEY` environment variable.
-
-## 1. Installation
-
-Clone the repository and install the package:
+Code2Test needs Python 3.12 or later.
 
 ```bash
-git clone https://github.com/cirkitly/code2test.git
+git clone https://github.com/Cirkitly/code2test.git
 cd code2test
 pip install .
-```
-
-Verify the installation:
-
-```bash
 code2test --version
 ```
 
-## 2. Initialization
+## 2. Choose a model
 
-Navigate to your project root (the code you want to test) and initialize Code2Test:
+Set an API key and, optionally, the model. Any [pydantic-ai model string](https://ai.pydantic.dev/models/) works:
+
+```bash
+export ANTHROPIC_API_KEY=...
+export CODE2TEST_MODEL=anthropic:claude-sonnet-5-5
+```
+
+For an OpenAI-compatible provider, set `OPENAI_BASE_URL` and use the `openai-chat:` prefix:
+
+```bash
+export OPENAI_API_KEY=...
+export OPENAI_BASE_URL=https://api.minimax.io/v1
+export CODE2TEST_MODEL=openai-chat:MiniMax-M3.1-Flash-Preview
+```
+
+To check the installation without a key, use `CODE2TEST_MODEL=test`. It runs the pipeline with a placeholder model, and the tests it produces are discarded.
+
+## 3. Generate tests
+
+From the root of the project you want to test:
 
 ```bash
 cd /path/to/your/project
-code2test init
+code2test test --auto .
 ```
 
-This command will:
-1.  Detect your primary language (Python, JavaScript/TypeScript, or Java).
-2.  Create a `.code2test/config.json` file with default settings.
+Code2Test infers an intent for each function and class, generates tests, runs them and repairs failures. It ends with a summary like this:
 
-## 3. Generating Tests (Interactive Mode)
+```text
+Components                        13
+Components with passing tests     13 (100%)
+Tests generated                   302
+Passed on first run               231 (76%)
+Tests kept                        300
+  of which xfail (possible bugs)    0
+Tests dropped                     2
+```
 
-The most common way to use Code2Test is the interactive mode. It guides you through the process of verifying inferred intents before writing any code.
+The tests are in `tests/`, one file per component. The same numbers are saved to `.code2test/metrics.json`.
+
+To review intents and tests before they are saved, run `code2test test .` without `--auto`. For each component you can accept the intent, edit it, or skip the component; then you accept or skip its tests.
+
+To test only part of a project, pass a file or directory, for example `code2test test --auto src/mypkg/utils.py`. Paths still resolve to the project root.
+
+## 4. Check the result
 
 ```bash
-# Generate tests for the entire current directory
-code2test test .
-
-# Or for a specific file/module
-code2test test src/utils/string_utils.py
+code2test verify tests/
 ```
 
-**What happens next?**
-1.  **Analysis**: Code2Test scans your code and dependencies.
-2.  **Intent Proposal**: It shows you what it thinks each function *should* do.
-3.  **Review**: You can `[y]es` to accept, `[e]dit` the intent, or `[s]kip`.
-4.  **Generation**: Once accepted, it generates the test file.
-5.  **Verification**: It immediately runs the test.
-6.  **Refinement**: If the test fails, it tries to fix it automatically (or asks you).
-
-## 4. Automated Mode (CI/CD)
-
-For Continuous Integration pipelines, use the `--auto` flag. This runs without user prompts, skipping items with low confidence.
+This runs the suite and exits with status 1 if any test fails. After you change the code, you can repair the generated tests:
 
 ```bash
-code2test test --auto --confidence 0.8 --exit-code src/
+code2test verify --diagnose tests/   # explain each failure
+code2test verify --fix tests/        # repair generated tests that you have not edited
 ```
 
--   `--auto`: Non-interactive mode.
--   `--confidence 0.8`: Skip functions where intent confidence is < 80%.
--   `--exit-code`: Return a non-zero exit code if verification fails (breaks the build).
-
-## 5. Generating Reports
-
-You can generate HTML or JSON reports to visualize test coverage and verification status.
+## 5. Review and correct intents
 
 ```bash
-code2test test --auto --report html src/
+code2test intent show            # all intents
+code2test intent show my_func    # one function or class
+code2test intent edit my_func    # correct it; later runs reuse your version
 ```
 
-Open `reports/report.html` in your browser to see the results.
-
-## 6. Viewing & Editing Intents
-
-Code2Test remembers what it learned about your code. You can view or refine these "intents" later.
+## 6. Measure test quality
 
 ```bash
-# Show stored intents
-code2test intent show
-
-# Edit a specific intent (useful if code changes behavior)
-code2test intent edit src.utils.string_utils.to_camel_case
+code2test benchmark .
 ```
 
-## Next Steps
+This injects small bugs into the tested code one at a time and reports how many the generated tests catch. It also reports how often the diagnosis agent identifies the cause of a failure correctly. Your source files are restored after every injected bug.
 
-- Check out [Architecture Guide](architecture.md) for a deep dive into how it works.
-- Customize `.code2test/config.json` to change prompt templates or model parameters.
+## 7. Use it in CI
+
+```bash
+code2test test --auto --exit-code .
+code2test verify tests/
+```
+
+See [`examples/ci`](../examples/ci) for GitHub Actions and GitLab CI configurations, and [architecture.md](architecture.md) for how the pipeline works.
