@@ -115,6 +115,27 @@ code2test test --auto --report html .
 ```
 This creates `tests/reports/report.html` (under `--output-dir`) with a visual summary of the run.
 
+## 📊 Results
+
+Measured with a real model (MiniMax `MiniMax-M3.1-Flash-Preview`) on two open-source libraries whose own tests were removed first. Full write-up: [docs/real_model_run.md](docs/real_model_run.md).
+
+| | [inflection](https://pypi.org/project/inflection/) 0.5.1 | [TinyDB](https://pypi.org/project/tinydb/) 4.8.2 | MVP target |
+|---|---|---|---|
+| Code under test | 426 lines, 13 functions | 2,170 lines, 26 classes and functions, file I/O | |
+| Components that got tests | 100% (13/13) | 92% (24/26) | 70% ✓ |
+| Generated tests passing on the first try | 76% (231/302) | 69% (375/541) | 80% ✗ |
+| Test cases in the written suite (incl. parametrized) | 573, all passing | 595, all passing | |
+| Injected bugs caught (mutation score) | 100% (80/80) | 79% (63/80) | |
+| Diagnosis accuracy on failures with a known cause | 97% (29/30) | 93% (28/30) | 75% ✓ |
+| Wall time (generate + verify + repair) | about 5 min | about 8 min | |
+
+- **Acceptance** = share of components that end up with at least one passing test that isn't an expected failure.
+- **First try** = generated tests that pass before any repair. The repair loop takes every written suite to 100% passing; reaching 80% on the first try is still open.
+- **Mutation score** = share of single-site injected bugs (flipped comparisons, changed constants, swapped operators, `return None`) that make the generated tests fail.
+- **Diagnosis accuracy** = how often the diagnosis agent names the right cause of a failure whose cause is known: a failure from mutated code should be `CODE_BUG`, and a passing test whose expected value was changed should be `TEST_WRONG`.
+
+Reproduce on your own project with `code2test test --auto .` followed by `code2test benchmark .`.
+
 ## 🏗️ Architecture
 
 Code2Test operates in five phases:
