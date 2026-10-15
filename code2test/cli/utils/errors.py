@@ -23,8 +23,8 @@ EXIT_API_ERROR = 4
 EXIT_FILESYSTEM_ERROR = 5
 
 
-class CodeWikiError(Exception):
-    """Base exception for CodeWiki CLI errors."""
+class Code2TestError(Exception):
+    """Base exception for Code2Test CLI errors."""
 
     def __init__(self, message: str, exit_code: int = EXIT_GENERAL_ERROR):
         self.message = message
@@ -32,28 +32,28 @@ class CodeWikiError(Exception):
         super().__init__(self.message)
 
 
-class ConfigurationError(CodeWikiError):
+class ConfigurationError(Code2TestError):
     """Configuration-related errors."""
 
     def __init__(self, message: str):
         super().__init__(message, EXIT_CONFIG_ERROR)
 
 
-class RepositoryError(CodeWikiError):
+class RepositoryError(Code2TestError):
     """Repository-related errors."""
 
     def __init__(self, message: str):
         super().__init__(message, EXIT_REPOSITORY_ERROR)
 
 
-class APIError(CodeWikiError):
+class APIError(Code2TestError):
     """LLM API-related errors."""
 
     def __init__(self, message: str):
         super().__init__(message, EXIT_API_ERROR)
 
 
-class FileSystemError(CodeWikiError):
+class FileSystemError(Code2TestError):
     """File system-related errors."""
 
     def __init__(self, message: str):
@@ -71,7 +71,7 @@ def handle_error(error: Exception, verbose: bool = False) -> int:
     Returns:
         Exit code for the error
     """
-    if isinstance(error, CodeWikiError):
+    if isinstance(error, Code2TestError):
         click.secho(f"\n✗ Error: {error.message}", fg="red", err=True)
         return error.exit_code
     else:

@@ -197,6 +197,20 @@ class DisplayManager:
         self.console.print()
         self.console.print(table)
 
+    def show_session_summary(
+        self, components: int, files_saved: int, tests_saved: int, skipped: int
+    ) -> None:
+        """Display what an interactive session saved."""
+        table = Table(title="Session Summary")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+        table.add_row("Components", str(components))
+        table.add_row("Test files saved", str(files_saved))
+        table.add_row("Tests saved", str(tests_saved))
+        table.add_row("Skipped", str(skipped))
+        self.console.print()
+        self.console.print(table)
+
     def show_test_tree(self, test_files: List[TestFile]) -> None:
         """
         Display hierarchical test structure.

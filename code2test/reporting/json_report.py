@@ -6,6 +6,7 @@ import json
 import datetime
 from typing import Any, Dict, Optional
 
+from code2test import __version__
 from code2test.core.models import TestSuite, Intent
 
 
@@ -37,7 +38,7 @@ class JSONReportGenerator:
             "metadata": {
                 "timestamp": datetime.datetime.now().isoformat(),
                 "tool": "code2test",
-                "version": "0.1.0",
+                "version": __version__,
             },
             "summary": {
                 "module_path": test_suite.module_path,
@@ -80,7 +81,7 @@ class JSONReportGenerator:
             "metadata": {
                 "timestamp": datetime.datetime.now().isoformat(),
                 "tool": "code2test",
-                "version": "0.1.0",
+                "version": __version__,
             },
             **quality,
         }

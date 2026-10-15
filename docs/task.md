@@ -28,7 +28,7 @@ Python only. Test generation, verification and repair target pytest. Files in ot
 - [x] `benchmark`: mutation score and diagnosis accuracy on failures of known cause
 - [x] `report summary`: intents by confidence
 - [x] `report coverage` and the `--report` output: behavioral coverage (behaviors tested, mutants caught) and diagnostic accuracy per component
-- [x] `init`: writes a starter `.code2test/config.json`
+- [x] `init`: saves project defaults for `test` (confidence threshold, output directory, exclude patterns) in `.code2test/config.json`
 - [x] `config set|show|validate`: API key and model; `validate` sends the model one test request
 
 **Measurement and evaluation**
@@ -38,18 +38,17 @@ Python only. Test generation, verification and repair target pytest. Files in ot
 **Project**
 - [x] CI on every push and pull request: tests on Python 3.12 and 3.13, ruff lint and format check
 - [x] CI examples for GitHub Actions and GitLab CI ([examples/ci](../examples/ci))
+- [x] Release 0.1.0: [CHANGELOG](../CHANGELOG.md), PyPI publishing from GitHub releases (`.github/workflows/publish.yml`)
 
 ## In the code but not used by the v1 pipeline
 
 - `code2test/adapters/` (pytest, Jest and JUnit adapters) and `code2test/core/templates.py`: the pipeline generates tests with the test agent and runs them with `core/verifier.py` instead.
 - `code2test/core/intent_analyzers/` for JavaScript and Java: never reached, because `code2test test` passes only Python components to the pipeline.
 - `TestAgent.generate_integration_tests`: not called by any command.
-- `--framework unittest`: accepted, but tests are generated in pytest style.
 
 ## Not done
 
 - [ ] Markdown run reports
-- [ ] Settings from `.code2test/config.json` (written by `init`, not read by other commands)
 - [ ] Incremental generation for changed files only (re-runs reuse verified tests per component, whether or not the code changed)
 - [ ] An experiment on code with known bugs, to test whether intent-first generation avoids locking bugs into the suite (see the paper's Discussion)
 

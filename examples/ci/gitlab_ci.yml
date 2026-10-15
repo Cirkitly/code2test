@@ -19,7 +19,7 @@ default:
   before_script:
     - pip install --upgrade pip
     - pip install -e .
-    - pip install git+https://github.com/Cirkitly/code2test.git
+    - pip install code2test
 
 generate_tests:
   stage: generate

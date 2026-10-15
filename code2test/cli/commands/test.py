@@ -6,14 +6,20 @@ import sys
 import logging
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import click
+from click.core import ParameterSource
 from rich.console import Console
 
 from code2test.cli.display import DisplayManager
 from code2test.cli.interactive import run_interactive_generation
 from code2test.cli.utils.model import resolve_model
+from code2test.cli.utils.project_config import (
+    PROJECT_DEFAULTS,
+    load_project_settings,
+    project_config_path,
+)
 from code2test.core import TestGenerator, GenerationConfig, TestFramework
 from code2test.src.be.dependency_analyzer import DependencyGraphBuilder
 from code2test.src.config import Config
@@ -33,8 +39,10 @@ console = Console()
 @click.option(
     "--confidence",
     type=float,
-    default=0.6,
-    help="Minimum confidence threshold for auto-acceptance (0.0-1.0)",
+    default=PROJECT_DEFAULTS["confidence_threshold"],
+    show_default=True,
+    help="Intent confidence needed to generate tests in --auto mode (0.0-1.0); "
+    "overrides .code2test/config.json",
 )
 @click.option(
     "--dry-run",
@@ -43,19 +51,22 @@ console = Console()
     help="Show what would be generated without writing files",
 )
 @click.option(
-    "--output-dir", type=click.Path(), default="tests", help="Output directory for generated tests"
-)
-@click.option(
-    "--framework",
-    type=click.Choice(["pytest", "unittest"]),
-    default="pytest",
-    help="Test framework (v1 generates pytest tests; unittest is not supported yet)",
+    "--output-dir",
+    type=click.Path(),
+    default=PROJECT_DEFAULTS["output_dir"],
+    show_default=True,
+    help="Directory for generated tests, relative to the project root; "
+    "overrides .code2test/config.json",
 )
 @click.option(
     "--include", type=str, default=None, help="Glob pattern for files to include (e.g., '*.py')"
 )
 @click.option(
-    "--exclude", type=str, default=None, help="Glob pattern for files to exclude (e.g., '*test*')"
+    "--exclude",
+    type=str,
+    multiple=True,
+    help="Glob pattern of files to leave out of the analysis (repeatable); "
+    "added to the built-in exclusions and those in .code2test/config.json",
 )
 @click.option(
     "--exit-code/--no-exit-code",
@@ -69,15 +80,16 @@ console = Console()
     help="Generate reports after test generation",
 )
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Enable verbose logging")
+@click.pass_context
 def test_command(
+    ctx: click.Context,
     path: str,
     auto: bool,
     confidence: float,
     dry_run: bool,
     output_dir: str,
-    framework: str,
     include: Optional[str],
-    exclude: Optional[str],
+    exclude: Tuple[str, ...],
     exit_code: bool,
     report: str,
     verbose: bool,
@@ -103,14 +115,24 @@ def test_command(
     else:
         logging.basicConfig(level=logging.WARNING)
 
+    target_path = Path(path).resolve()
+    repo_path = find_repo_root(target_path)
+
+    # Project settings from `code2test init` are defaults; options on the command line win
+    settings = load_project_settings(repo_path)
+    if ctx.get_parameter_source("confidence") == ParameterSource.DEFAULT:
+        confidence = settings.get("confidence_threshold", confidence)
+    if ctx.get_parameter_source("output_dir") == ParameterSource.DEFAULT:
+        output_dir = settings.get("output_dir", output_dir)
+    if settings:
+        display.info(f"Using project settings from {project_config_path(repo_path)}")
+
     # Validate confidence
     if not 0.0 <= confidence <= 1.0:
         display.error("Confidence must be between 0.0 and 1.0")
         sys.exit(1)
 
     main_model = resolve_model(display)
-    target_path = Path(path).resolve()
-    repo_path = find_repo_root(target_path)
     display.info(f"Using model: {main_model}")
     display.info(f"Analyzing: {target_path}")
 
@@ -121,7 +143,7 @@ def test_command(
             auto_accept=auto,
             dry_run=dry_run,
             output_dir=output_dir,
-            framework=TestFramework.PYTEST if framework == "pytest" else TestFramework.UNITTEST,
+            framework=TestFramework.PYTEST,
             model=main_model,
         )
 
@@ -141,7 +163,13 @@ def test_command(
             ".env",
             "venv",
         ]
-        exclude_patterns = [exclude] if exclude else default_excludes
+        # Never analyze the generated tests themselves, wherever they are written
+        exclude_patterns = (
+            default_excludes
+            + _relative_dir_patterns(output_dir, repo_path)
+            + settings.get("exclude_patterns", [])
+            + list(exclude)
+        )
 
         # Analyze codebase
         display.info("Parsing codebase...")
@@ -244,7 +272,7 @@ def test_command(
                         from code2test.core.quality import quality_report
                         from code2test.reporting import HTMLReportGenerator, JSONReportGenerator
 
-                        report_dir = Path(output_dir) / "reports"
+                        report_dir = repo_path / output_dir / "reports"
                         report_dir.mkdir(parents=True, exist_ok=True)
                         intents = generator.intent_db.get_all_intents_dict()
                         quality = quality_report(
@@ -318,6 +346,18 @@ def find_repo_root(target: Path) -> Path:
     if start == cwd or cwd in start.parents:
         return cwd
     return start
+
+
+def _relative_dir_patterns(directory: str, repo_path: Path) -> List[str]:
+    """The output directory as an exclude pattern relative to the project root."""
+    path = Path(directory)
+    if path.is_absolute():
+        try:
+            path = path.relative_to(repo_path)
+        except ValueError:
+            return []  # outside the project: never analyzed anyway
+    text = path.as_posix().strip("/")
+    return [] if text in ("", ".") else [text]
 
 
 def _is_within(file_path: str, repo_path: Path, target: Path) -> bool:

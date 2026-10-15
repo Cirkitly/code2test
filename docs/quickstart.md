@@ -7,11 +7,11 @@ This guide takes you from installation to a verified, generated test suite for y
 Code2Test needs Python 3.12 or later.
 
 ```bash
-git clone https://github.com/Cirkitly/code2test.git
-cd code2test
-pip install .
+pip install code2test
 code2test --version
 ```
+
+If the package index is not available to you, install the release from GitHub: `pip install git+https://github.com/Cirkitly/code2test@v0.1.0`.
 
 ## 2. Choose a model
 
