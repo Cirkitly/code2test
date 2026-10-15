@@ -7,7 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from code2test.cli.main import cli
-from tests.test_pipeline import FAILING, PASSING, diagnosis_reply, scripted, tests_reply
+from tests.test_pipeline import FAILING, PASSING, scripted, tests_reply
 
 test_cmd_module = importlib.import_module("code2test.cli.commands.test")
 model_module = importlib.import_module("code2test.cli.utils.model")
@@ -92,7 +92,7 @@ def test_verify_diagnose_explains_failure(repo, monkeypatch):
     assert run("test", "--auto", "--confidence", "0", ".").exit_code == 0
     (repo / "calc/ops.py").write_text(SOURCE.replace("return a + b", "return a - b"))
 
-    use_model(monkeypatch, scripted([diagnosis_reply("CODE_BUG")]))
+    use_model(monkeypatch, scripted([tests_reply(PASSING)], diagnosis="CODE_BUG"))
     result = run("verify", "--diagnose", "tests")
     assert result.exit_code == 1
     assert "add returns the wrong value" in result.output

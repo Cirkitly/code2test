@@ -154,41 +154,47 @@ class TestGenerator:
         logger.info("Phase 1: Extracting intents...")
         intents: Dict[str, Intent] = {}
         
-        # Process in dependency order (leaves first)
+        # Static analysis first, in dependency order (leaves first)
         for comp_id, component in components.items():
-            # Check if intent already exists
+            # Keep intents the user has edited
             existing = self.intent_db.get_intent(comp_id)
             if existing and existing.user_edited:
                 intents[comp_id] = existing
                 continue
-            
-            # Get dependency intents for context
+
             dep_intents = {
                 dep: intents.get(dep)
                 for dep in component.get("dependencies", [])
                 if dep in intents
             }
-            
-            # Extract using static analysis first
-            intent = self.intent_extractor.extract_intent(component, dep_intents)
-            
-            # If low confidence and not auto-accept, use LLM
-            if intent.needs_clarification(self.config.confidence_threshold):
-                if not self.config.auto_accept:
-                    # Use LLM for better inference
-                    try:
-                        intent = await self.intent_agent.infer_intent(component, {
-                            "dependencies": list(dep_intents.keys())
-                        })
-                    except Exception as e:
-                        logger.warning(f"LLM intent inference failed: {e}")
-            
-            intents[comp_id] = intent
+            intents[comp_id] = self.intent_extractor.extract_intent(component, dep_intents)
+
+        # Ask the LLM about components static analysis isn't sure about
+        semaphore = asyncio.Semaphore(5)
+
+        async def refine(comp_id: str) -> None:
+            intent = intents[comp_id]
+            if intent.user_edited or not intent.needs_clarification(self.config.confidence_threshold):
+                return
+            component = components[comp_id]
+            async with semaphore:
+                try:
+                    inferred = await self.intent_agent.infer_intent(component, {
+                        "dependencies": component.get("dependencies", []),
+                    })
+                except Exception as e:
+                    logger.warning(f"LLM intent inference failed for {comp_id}: {e}")
+                    return
+            if inferred.confidence > intent.confidence:
+                intents[comp_id] = inferred
+
+        await asyncio.gather(*(refine(cid) for cid in intents))
+
+        for intent in intents.values():
             self.intent_db.save_intent(intent)
-            
             if self.on_intent_extracted:
                 self.on_intent_extracted(intent)
-        
+
         logger.info(f"Extracted {len(intents)} intents")
         return intents
     

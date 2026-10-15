@@ -119,13 +119,13 @@ class IntentAgent:
         # Format prompt
         prompt = INTENT_USER_PROMPT_TEMPLATE.format(
             name=component.get("name", "unknown"),
-            component_type=component.get("type", "function"),
-            file_path=component.get("file_path", ""),
-            signature=component.get("signature", ""),
-            language=component.get("language", "python"),
-            source_code=component.get("source_code", "")[:2000],  # Limit size
-            docstring=component.get("docstring", "None provided"),
-            call_sites=", ".join(component.get("called_by", [])[:5]) or "None",
+            component_type=component.get("component_type") or component.get("type") or "function",
+            file_path=component.get("relative_path") or component.get("file_path", ""),
+            signature=component.get("signature") or "",
+            language=component.get("language") or "python",
+            source_code=(component.get("source_code") or "")[:4000],  # Limit size
+            docstring=component.get("docstring") or "None provided",
+            call_sites=", ".join((component.get("called_by") or [])[:5]) or "None",
             dependencies=", ".join(context.get("dependencies", [])[:5]) or "None",
         )
         
@@ -154,11 +154,11 @@ class IntentAgent:
             
             # Build evidence
             evidence = IntentEvidence(
-                docstring=component.get("docstring"),
-                signature=component.get("signature"),
-                type_hints=component.get("signature") if "->" in component.get("signature", "") else None,
+                docstring=component.get("docstring") or None,
+                signature=component.get("signature") or None,
+                type_hints=component.get("signature") if "->" in (component.get("signature") or "") else None,
                 naming_signals=[],
-                call_sites=component.get("called_by", [])[:5],
+                call_sites=(component.get("called_by") or [])[:5],
                 dependency_intents=[],
             )
             

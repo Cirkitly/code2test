@@ -24,15 +24,29 @@ PASSING = "def test_add():\n    assert add(2, 3) == 5\n"
 FAILING = "def test_add():\n    assert add(2, 3) == 6\n"
 
 
-def scripted(replies: Iterable[dict]) -> FunctionModel:
-    """A model that answers each structured-output request with the next scripted reply."""
+INTENT = {"intent_text": "Returns the sum of a and b", "confidence": 0.9, "reasoning": "docstring"}
+
+
+def scripted(replies: Iterable[dict], diagnosis: str = "TEST_WRONG") -> FunctionModel:
+    """
+    A model that answers by requested output type: intent and diagnosis requests get
+    fixed answers, test generation/repair requests get the next scripted reply
+    (the last one repeats).
+    """
     queue: List[dict] = list(replies)
     prompts: List[str] = []
 
     def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
-        prompts.append(str(messages[-1]))
-        args = queue.pop(0) if len(queue) > 1 else queue[0]
-        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, args)])
+        tool = info.output_tools[0]
+        fields = tool.parameters_json_schema.get("properties", {})
+        if "intent_text" in fields:
+            args = INTENT
+        elif "cause" in fields:
+            args = diagnosis_reply(diagnosis)
+        else:
+            prompts.append(str(messages[-1]))
+            args = queue.pop(0) if len(queue) > 1 else queue[0]
+        return ModelResponse(parts=[ToolCallPart(tool.name, args)])
 
     model = FunctionModel(respond)
     model.prompts = prompts  # type: ignore[attr-defined]
@@ -81,13 +95,11 @@ def _components(repo: Path) -> dict:
     return components
 
 
-def _run(repo: Path, test_model: FunctionModel, diagnosis_model: FunctionModel = None):
+def _run(repo: Path, model: FunctionModel):
     gen = generator_mod.TestGenerator(
         repo_path=str(repo),
-        config=GenerationConfig(auto_accept=True, confidence_threshold=0.0, output_dir="tests"),
+        config=GenerationConfig(auto_accept=True, confidence_threshold=0.0, output_dir="tests", model=model),
     )
-    gen.test_agent.model = test_model
-    gen.diagnosis_agent.model = diagnosis_model or scripted([diagnosis_reply("TEST_WRONG")])
     return asyncio.run(gen.generate_tests_for_module(str(repo), _components(repo)))
 
 
@@ -130,7 +142,7 @@ def test_bad_import_is_repaired(tmp_path):
 
 def test_unfixable_test_suspected_code_bug_is_kept_as_xfail(tmp_path):
     repo = _make_repo(tmp_path)
-    suite = _run(repo, scripted([tests_reply(FAILING)]), scripted([diagnosis_reply("CODE_BUG")]))
+    suite = _run(repo, scripted([tests_reply(FAILING)], diagnosis="CODE_BUG"))
 
     test_file = suite.test_files[0]
     content = (repo / test_file.path).read_text()
@@ -141,7 +153,7 @@ def test_unfixable_test_suspected_code_bug_is_kept_as_xfail(tmp_path):
 
 def test_unfixable_wrong_test_is_dropped(tmp_path):
     repo = _make_repo(tmp_path)
-    suite = _run(repo, scripted([tests_reply(FAILING)]), scripted([diagnosis_reply("TEST_WRONG")]))
+    suite = _run(repo, scripted([tests_reply(FAILING)], diagnosis="TEST_WRONG"))
 
     assert suite.test_files == []
     assert not (repo / "tests/calc/test_ops_add.py").exists()
@@ -201,3 +213,15 @@ def test_component_without_source_code_still_generates(tmp_path):
     component = {"id": "calc.ops.add", "name": "add", "relative_path": "calc/ops.py", "source_code": None}
     test_file = asyncio.run(agent.generate_unit_tests(component, intent))
     assert [tc.name for tc in test_file.test_cases] == ["test_add"]
+
+
+def test_low_confidence_intent_is_refined_by_llm(tmp_path):
+    repo = _make_repo(tmp_path)
+    gen = generator_mod.TestGenerator(
+        repo_path=str(repo),
+        config=GenerationConfig(auto_accept=True, confidence_threshold=0.95, model=scripted([tests_reply(PASSING)])),
+    )
+    intents = asyncio.run(gen._extract_intents_phase(_components(repo)))
+    intent = intents["calc.ops.add"]
+    assert intent.intent_text == INTENT["intent_text"]
+    assert intent.confidence == 0.9
