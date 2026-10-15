@@ -26,7 +26,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install git+https://github.com/Cirkitly/code2test.git
+          pip install code2test
 
       - name: Generate tests
         # --exit-code fails the job if any written test file failed verification

@@ -29,11 +29,11 @@ On two open-source libraries whose own tests were removed, Code2Test produced pa
 ## Installation
 
 ```bash
-git clone https://github.com/Cirkitly/code2test.git
-cd code2test
-pip install .
-code2test --help
+pip install code2test
+code2test --version
 ```
+
+To install a release straight from GitHub instead, use `pip install git+https://github.com/Cirkitly/code2test@v0.1.0`. To work on Code2Test itself, see [Development](#development). Changes in each release are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Choosing a model
 

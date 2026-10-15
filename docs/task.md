@@ -38,6 +38,7 @@ Python only. Test generation, verification and repair target pytest. Files in ot
 **Project**
 - [x] CI on every push and pull request: tests on Python 3.12 and 3.13, ruff lint and format check
 - [x] CI examples for GitHub Actions and GitLab CI ([examples/ci](../examples/ci))
+- [x] Release 0.1.0: [CHANGELOG](../CHANGELOG.md), PyPI publishing from GitHub releases (`.github/workflows/publish.yml`)
 
 ## In the code but not used by the v1 pipeline
 
