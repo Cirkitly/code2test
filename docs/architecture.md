@@ -1,81 +1,91 @@
-# Code2Test Architecture
+# Architecture
 
-**Code2Test** is designed around a three-phase pipeline: **Analysis & Intent**, **Test Generation**, and **Verification**. This architecture ensures that tests are not just syntactically correct but semantically meaningful and verified against the actual code.
+Code2Test turns a Python repository into a passing pytest suite in seven steps: analyze, infer intent, generate, run, repair, diagnose, and check the whole suite. This document describes the modules behind each step and the data they share.
 
-## System Overview
+## Data flow
 
 ```mermaid
 graph TD
-    A[Codebase] --> B[Phase 1: Analysis & Intent];
-    B --> C[Intent Database];
-    C --> D[Phase 2: Test Generation];
-    D --> E[Generated Tests];
-    E --> F[Phase 3: Verification];
-    F -->|Pass| G[Test Suite];
-    F -->|Fail| H[Diagnosis Agent];
-    H -->|Fix Test| D;
-    H -->|Flag Bug| I[Report];
+    A[Repository] --> B[Dependency analyzer]
+    B --> C[Intent extraction: static signals]
+    C -->|confidence below threshold| D[Intent agent: LLM]
+    C --> E[(Intent database)]
+    D --> E
+    E --> F[Test agent: LLM]
+    F --> G[Verifier: pytest per file]
+    G -->|failures| H[Repair: test agent with pytest output]
+    H --> G
+    G -->|still failing| I[Diagnosis agent: LLM]
+    I -->|code bug| J[Keep as xfail]
+    I -->|wrong test or intent| K[Drop]
+    G -->|passing| L[Whole-suite check]
+    J --> L
+    L --> M[Written test suite]
 ```
 
-## Phase 1: Analysis & Intent Extraction
+## Modules
 
-This phase builds a semantic understanding of the codebase.
+| Module | Role |
+| --- | --- |
+| `code2test/cli/commands/` | Command-line entry points: `test`, `verify`, `benchmark`, `intent`, `report`, `init`, `config` |
+| `code2test/cli/utils/model.py` | Chooses the model (`CODE2TEST_MODEL`, saved configuration, Azure, default) |
+| `code2test/src/be/dependency_analyzer/` | Parses the repository (derived from the CodeWiki analyzer) and builds the dependency graph; Python components are top-level functions and classes |
+| `code2test/core/intent.py`, `core/intent_analyzers/` | Static intent extraction and confidence scoring from docstrings, type hints, naming conventions, call sites and complexity |
+| `code2test/agents/intent_agent.py` | Re-infers low-confidence intents with the LLM |
+| `code2test/agents/test_agent.py` | Builds the generation prompt (intent, source, import line, related API) and repairs failing tests |
+| `code2test/agents/diagnosis_agent.py` | Classifies a failing test as a wrong test, a code bug or a wrong intent |
+| `code2test/core/generator.py` | Orchestrates the pipeline: intent phase, generation phase, verify-and-repair loop, whole-suite check, run metrics |
+| `code2test/core/verifier.py` | Runs pytest in a subprocess and reads its JUnit XML report |
+| `code2test/storage/` | SQLite intent database and test registry in `.code2test/code2test.db` |
+| `code2test/core/metrics.py` | Per-run metrics written to `.code2test/metrics.json` |
+| `code2test/core/benchmark.py` | Mutation testing and diagnosis-accuracy evaluation for `code2test benchmark` |
+| `code2test/reporting/` | HTML and JSON run reports |
 
-### Components
-1.  **Dependency Graph Builder**: Uses `tree-sitter` to parse code and build a graph of component dependencies (functions, classes, modules).
-2.  **Intent Extractor**: A multi-signal analysis engine that infers *what* a component does.
-    *   **Inputs**: Docstrings, type hints, function names, and dependency usages.
-    *   **Process**:
-        *   Static analysis extracts explicit signals (e.g., docstrings).
-        *   `IntentAgent` (LLM) synthesizes these signals into a clear "Intent Statement".
-        *   Confidence scoring determines if human clarification is needed.
-3.  **Intent Database**: A local SQLite database stores inferred intents. This allows for incremental generation and manual refinement.
+## Intent extraction
 
-## Phase 2: Test Generation
+Each component starts from a confidence of 0.5. Static signals add to it: a docstring adds up to 0.30 (more for longer docstrings), type hints add 0.20, a recognized naming convention such as `validate_*` or `is_*` adds 0.15, and call sites add up to 0.20. High cyclomatic complexity subtracts up to 0.15, and the result is clamped to the range 0.1 to 0.99.
 
-This phase translates intents into executable test code.
+When the score is below the threshold (`--confidence`, default 0.6), the intent agent re-infers the intent from the source, and the more confident result is kept. Intents are stored. An intent edited with `code2test intent edit` gets confidence 0.95 and is never replaced by a later run.
 
-### Components
-1.  **Test Generator**: The orchestrator that manages the generation lifecycle.
-2.  **Test Agent**: An LLM-powered agent specialized in writing tests.
-    *   It takes the Component Source + Inferred Intent + Dependencies.
-    *   It produces test code using the project's framework (Pytest, Jest, or JUnit).
-3.  **Template Engine**: Uses Jinja2 templates to ensure generated tests follow a consistent, idiomatic structure (imports, classes, fixtures).
+## Generation
 
-## Phase 3: Verification & Refinement
+The test agent's prompt contains:
 
-This phase ensures quality and correctness.
+- the intent and its confidence
+- the exact import line for the component
+- the imports at the top of its module, with relative imports made absolute
+- the public API (signatures, constructors and public methods, no bodies) of the component's module and of the project modules it imports
+- the signature and up to 16,000 characters of the component's source
 
-### Components
-1.  **Verifier**: Runs the generated tests in a sandboxed environment.
-2.  **Diagnosis Agent**: If a test fails, this agent analyzes the failure output.
-    *   **Classification**: Determines if the failure is due to:
-        *   `TEST_WRONG`: The test code is incorrect (e.g., syntax error, wrong assertion).
-        *   `CODE_BUG`: The implementation doesn't match the intent.
-        *   `INTENT_WRONG`: The initial intent inference was incorrect.
-    *   **Self-Healing**: If `TEST_WRONG`, it feeds the error back to the Test Agent to regenerate a fixed test.
+The model returns test functions, imports and fixtures as structured output. Each component gets one file, `tests/<package>/test_<module>_<component>.py`. For a package's `__init__.py`, the file is `tests/<package>/test_<component>.py`.
 
-## Key Modules
+## Verification and repair
 
-### `code2test.core`
-The brain of the system.
--   `generator.py`: Orchestrates the 3-phase pipeline.
--   `intent.py`: Logic for extracting and scoring intents.
--   `verifier.py`: Wrapper around test runners (pytest, etc.).
+The verifier writes the file and runs it with `python -m pytest` from the repository root. It puts the root and `src/` on `PYTHONPATH`, ignores the target project's `addopts`, and turns off bytecode caching, so rewritten files are never served stale.
 
-### `code2test.agents`
-The AI workers.
--   `intent_agent.py`: LLM interface for intent inference.
--   `test_agent.py`: LLM interface for writing test code.
--   `diagnosis_agent.py`: LLM interface for analyzing failures.
+Results are read from pytest's JUnit XML and matched to the test functions each generated test defines. An error that prevents the file from being collected counts against every test in it. Failing tests, with their failure output, go back to the test agent for up to two repair rounds.
 
-### `code2test.adapters`
-Language-specific logic.
--   `python/`: Pytest adapter.
--   `javascript/`: Jest adapter.
--   `java/`: JUnit adapter.
+## Diagnosis and the written-suite invariant
 
-### `code2test.cli`
-The user interface.
--   `main.py`: Entry point.
--   `interactive.py`: Rich-based TUI for human-in-the-loop flows.
+Tests that still fail are diagnosed against the stored intent:
+
+- **Code bug:** the test is kept with `pytest.mark.xfail` and the diagnosis as its reason.
+- **Wrong test or wrong intent:** the test is dropped.
+
+A file that cannot be collected is never kept. After every file passes on its own, the whole generated suite runs together, and tests that fail only there are dropped.
+
+The result is the invariant the tool guarantees: every test it writes either passes or is an explicit expected failure.
+
+## Model access
+
+All three agents use pydantic-ai with typed structured output and up to three output retries. Any pydantic-ai model string works, including OpenAI-compatible endpoints through `OPENAI_BASE_URL` and the `openai-chat:` prefix. HTTP 401, 403 and 404 from the provider stop the run, so a bad key or model name cannot produce an apparently successful run with no tests.
+
+## Benchmark
+
+`code2test benchmark` evaluates the tests already generated. It works in three stages:
+
+1. **Mutate.** It enumerates single-site mutants in the tested components: flipped comparisons, swapped operators, changed constants, and `return None`. Docstrings and type annotations are excluded.
+2. **Run.** It samples up to `--mutants` of them and runs each component's tests against each mutant. Before mutating a file it keeps a byte-exact backup in `.code2test/benchmark_backup/`, and it restores the file afterwards, including on SIGTERM. A run that was killed is repaired the next time `benchmark` starts.
+3. **Score diagnosis.** It checks the diagnosis agent against failures whose cause is known:
+   - tests failing on a mutant, which should be diagnosed as a code bug;
+   - passing tests whose expected value was changed, which should be diagnosed as a wrong test.

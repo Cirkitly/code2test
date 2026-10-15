@@ -308,3 +308,35 @@ def test_tests_that_break_each_other_are_dropped_by_the_suite_check(tmp_path):
     assert [tc.name for tc in victim.test_cases] == ["test_is_list"]
     assert {tf.path for tf in kept} == {polluter.path, victim.path}
     assert gen.verifier.run_pytest([repo / polluter.path, repo / victim.path]).ok
+
+
+def test_related_api_shows_signatures_of_imported_project_modules(tmp_path):
+    pkg = tmp_path / "shop"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "storage.py").write_text(
+        "class MemoryStorage:\n    \"\"\"Keeps data in memory.\"\"\"\n"
+        "    def __init__(self):\n        self.data = {}\n"
+        "    def read(self) -> dict:\n        return self.data\n"
+        "    def _secret(self):\n        pass\n"
+    )
+    (pkg / "db.py").write_text(
+        "from .storage import MemoryStorage\n\n"
+        "class DB:\n    def __init__(self, storage=MemoryStorage):\n        self.storage = storage()\n\n"
+        "def helper(x: int) -> int:\n    return x\n"
+    )
+    agent = test_agent_mod.TestAgent(model="test", repo_path=str(tmp_path))
+    api = agent.related_api_for({"name": "DB", "file_path": str(pkg / "db.py"), "relative_path": "shop/db.py"})
+
+    assert "def helper(x: int) -> int:" in api          # rest of its own module
+    assert "class DB" not in api                          # not the component itself
+    assert "class MemoryStorage:" in api and '"""Keeps data in memory."""' in api
+    assert "def read(self) -> dict: ..." in api
+    assert "_secret" not in api and "self.data = {}" not in api  # no private members or bodies
+
+
+def test_mixed_escaped_code_is_unescaped():
+    from code2test.agents.test_agent import clean_code
+
+    mixed = '@pytest.fixture\ndef doc():\n    return {\\"count\\": 5}\\n'
+    assert clean_code(mixed) == '@pytest.fixture\ndef doc():\n    return {"count": 5}\n'

@@ -171,3 +171,17 @@ def test_rejected_api_key_fails_the_run(repo, monkeypatch):
     assert "HTTP 401" in result.output
     assert "Generated 0 tests" not in result.output
     assert not (repo / GENERATED).exists()
+
+
+def test_benchmark_command_reports_mutation_score(repo, monkeypatch):
+    import json
+
+    use_model(monkeypatch, scripted([tests_reply(PASSING)], diagnosis="CODE_BUG"))
+    assert run("test", "--auto", "--confidence", "0", ".").exit_code == 0
+
+    result = run("benchmark", "--mutants", "5", "--diagnoses", "1", ".")
+    assert result.exit_code == 0, result.output
+    assert "Mutants killed" in result.output
+    data = json.loads((repo / ".code2test" / "benchmark.json").read_text())
+    assert data["mutants_total"] == 2 and data["mutants_killed"] == 2
+    assert data["generation"]["acceptance_rate"] == 1.0

@@ -109,3 +109,15 @@ def test_pytest_adapter_summarizes_a_directory(repo):
     assert results["success"] is False
     assert results["summary"] == {"passed": 1, "failed": 1, "skipped": 0, "total": 2}
     assert {t["outcome"] for t in results["tests"]} == {"passed", "failed"}
+
+
+def test_tests_that_write_relative_paths_do_not_touch_the_repo(repo):
+    tf = make_file(("test_writes", "def test_writes():\n    open('stray.txt', 'w').write('x')\n    assert True\n"))
+    assert TestVerifier(str(repo)).run_tests(tf).all_passed
+    assert not (repo / "stray.txt").exists()
+
+
+def test_results_keep_repo_relative_names_without_a_config_file(repo):
+    tf = make_file(("test_ok", "def test_ok():\n    assert add(1, 2) == 3\n"))
+    run = TestVerifier(str(repo)).run_pytest([repo / tf.path]) if TestVerifier(str(repo)).write_test_file(tf) else None
+    assert [c.classname for c in run.cases] == ["tests.test_add"]

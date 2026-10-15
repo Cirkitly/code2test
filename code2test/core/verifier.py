@@ -10,6 +10,7 @@ import sys
 import xml.etree.ElementTree as ET
 import os
 import re
+import shutil
 import tempfile
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -90,16 +91,24 @@ class TestVerifier:
 
     def run_pytest(self, target) -> PytestRun:
         """
-        Run pytest on a file or directory from the repo root.
+        Run pytest on a file or directory of the repository.
 
         The repo root (and ``src/`` if present) is put on PYTHONPATH so the code
         under test is importable, and the target repo's ``addopts`` are ignored so
         options like ``--cov`` can't fail the run when their plugin isn't installed.
+
+        pytest runs from a throwaway working directory, with ``--rootdir`` at the
+        repository: generated tests that write relative paths (often before they
+        are repaired) cannot litter or overwrite files in the user's project.
         """
+        repo = self.repo_path.resolve()
+        targets = target if isinstance(target, (list, tuple)) else [target]
+        targets = [str(p if Path(p).is_absolute() else repo / p) for p in targets]
+
         env = os.environ.copy()
-        extra_paths = [str(self.repo_path)]
-        if (self.repo_path / "src").is_dir():
-            extra_paths.append(str(self.repo_path / "src"))
+        extra_paths = [str(repo)]
+        if (repo / "src").is_dir():
+            extra_paths.append(str(repo / "src"))
         if env.get("PYTHONPATH"):
             extra_paths.append(env["PYTHONPATH"])
         env["PYTHONPATH"] = os.pathsep.join(extra_paths)
@@ -109,19 +118,21 @@ class TestVerifier:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
             report_path = f.name
+        workdir = tempfile.mkdtemp(prefix="code2test-run-")
 
         try:
             result = subprocess.run(
                 [
                     sys.executable, "-m", "pytest",
-                    *([str(t) for t in target] if isinstance(target, (list, tuple)) else [str(target)]),
+                    *targets,
+                    f"--rootdir={repo}",
                     f"--junitxml={report_path}",
                     "-v",
                     "--tb=short",
                     "-p", "no:cacheprovider",
                     "-o", "addopts=",
                 ],
-                cwd=str(self.repo_path),
+                cwd=workdir,
                 env=env,
                 capture_output=True,
                 text=True,
@@ -141,6 +152,7 @@ class TestVerifier:
         finally:
             if os.path.exists(report_path):
                 os.unlink(report_path)
+            shutil.rmtree(workdir, ignore_errors=True)
 
     def run_tests(self, test_file: TestFile) -> VerificationResult:
         """

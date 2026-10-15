@@ -76,6 +76,11 @@ PYTEST_GENERATION_PROMPT = """Generate pytest tests for the following component 
 {module_imports}
 ```
 
+**API of related code in this project (signatures only; use these exactly as defined):**
+```python
+{related_api}
+```
+
 **Signature:**
 ```python
 {signature}
@@ -97,6 +102,13 @@ Rules:
 - Put every import the tests need (including the import above) in `imports`, one statement per entry.
 - Only use the public behavior visible in the source; do not invent attributes or helpers.
 - Do not mock the component under test itself.
+- Work out every expected value by tracing the source code above; never guess an output.
+  If you can't determine an exact value with confidence, assert a property you can
+  (type, length, membership, an exception) instead of a specific literal.
+- Construct objects exactly as their signatures in the source and related API require
+  (e.g. pass a class where a class is expected, not an instance).
+- Any file or directory the code creates must go under pytest's `tmp_path` fixture;
+  never write relative paths into the working directory.
 
 Return tests using pytest syntax with clear docstrings explaining what each test validates."""
 
@@ -110,6 +122,11 @@ FIX_TESTS_PROMPT = """These generated pytest tests for `{name}` fail. Fix them.
 **Source Code:**
 ```python
 {source_code}
+```
+
+**API of related code in this project:**
+```python
+{related_api}
 ```
 
 **Current imports:**
@@ -136,6 +153,42 @@ file needs, and leave out any import that is failing (e.g. ModuleNotFoundError).
 the cause of the failure (e.g. a syntax error outside the test functions)."""
 
 
+def _signature(node: ast.AST) -> str:
+    prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+    returns = f" -> {ast.unparse(node.returns)}" if node.returns else ""
+    return f"{prefix} {node.name}({ast.unparse(node.args)}){returns}"
+
+
+def _module_api(path: str, skip: Optional[str] = None) -> str:
+    """Bodiless public API of a Python module (first docstring line included)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+    except (OSError, SyntaxError, ValueError):
+        return ""
+
+    def doc(node: ast.AST, indent: str) -> List[str]:
+        text = ast.get_docstring(node)
+        return [f'{indent}"""{text.strip().splitlines()[0]}"""'] if text else []
+
+    lines: List[str] = []
+    for node in tree.body:
+        if getattr(node, "name", None) == skip or getattr(node, "name", "_").startswith("_"):
+            continue
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            lines += [_signature(node) + ":"] + doc(node, "    ") + ["    ..."]
+        elif isinstance(node, ast.ClassDef):
+            bases = ", ".join(ast.unparse(b) for b in node.bases)
+            lines += [f"class {node.name}({bases}):" if bases else f"class {node.name}:"] + doc(node, "    ")
+            for item in node.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
+                    not item.name.startswith("_") or item.name in ("__init__", "__call__")
+                ):
+                    lines.append(f"    {_signature(item)}: ...")
+            lines.append("")
+    return "\n".join(lines).strip()
+
+
 def test_function_name(code: str, fallback: str) -> str:
     """The name of the first test function the code defines (what pytest reports)."""
     match = re.search(r"^\s*(?:async\s+)?def\s+(test\w*)\s*\(", clean_code(code), re.M)
@@ -146,10 +199,11 @@ def clean_code(code: str) -> str:
     """
     Undo double-escaping some models apply to code in JSON output.
 
-    Code returned as one line with literal ``\\n`` sequences doesn't compile;
-    when unescaping newlines/quotes makes it compile, use the unescaped version.
+    Code with literal ``\\n`` / ``\\"`` sequences (all on one line, or mixed into
+    real lines) doesn't compile; when unescaping makes it compile, use that.
+    Code that already compiles is never changed.
     """
-    if "\n" in code.strip() or "\\n" not in code:
+    if "\\" not in code:
         return code
     try:
         compile(code, "<test>", "exec")
@@ -198,6 +252,8 @@ class TestAgent:
             self._agent = Agent(
                 self.model,
                 system_prompt=TEST_SYSTEM_PROMPT,
+                # some models need more than one try to produce valid structured output
+                retries=3,
             )
         return self._agent
     
@@ -226,9 +282,10 @@ class TestAgent:
             intent=intent.intent_text,
             confidence=intent.confidence,
             signature=component.get("signature") or "",
-            source_code=(component.get("source_code") or "")[:6000],  # Limit size
+            source_code=(component.get("source_code") or "")[:16000],  # Limit size
             import_line=self.import_line_for(component) or "(not importable: test via its module)",
             module_imports=self.module_imports_for(component) or "# none",
+            related_api=self.related_api_for(component) or "# none",
         )
         
         try:
@@ -281,7 +338,7 @@ class TestAgent:
             
         except Exception as e:
             raise_if_fatal(e)
-            logger.error(f"Test generation failed: {e}")
+            logger.error(f"Test generation failed for {component.get('id', component.get('name'))}: {e}")
             # Return empty test file
             return TestFile(
                 path=self._generate_test_path(component.get("file_path", "unknown.py"), component),
@@ -413,6 +470,35 @@ Use pytest syntax with appropriate fixtures."""
             return None
         return f"from {module} import {name}"
 
+    def related_api_for(self, component: Dict[str, Any], limit: int = 6000) -> str:
+        """
+        Public API of the component's own module and of the project modules it
+        imports: signatures, constructors and public methods, without bodies.
+        """
+        own_file = component.get("file_path") or ""
+        if self.repo_path and own_file and not os.path.isabs(own_file):
+            own_file = os.path.join(self.repo_path, own_file)
+        files = [own_file] if own_file else []
+        for line in self.module_imports_for(component).splitlines():
+            match = re.match(r"from ([\w.]+) import", line)
+            if not match or not self.repo_path:
+                continue
+            parts = match.group(1).split(".")
+            for base in (self.repo_path, os.path.join(self.repo_path, "src")):
+                for candidate in (os.path.join(base, *parts) + ".py", os.path.join(base, *parts, "__init__.py")):
+                    if os.path.isfile(candidate) and candidate not in files:
+                        files.append(candidate)
+
+        own_name = str(component.get("name") or "")
+        chunks = []
+        for path in files:
+            summary = _module_api(path, skip=own_name if path == own_file else None)
+            if summary:
+                module = os.path.relpath(path, self.repo_path) if self.repo_path else path
+                chunks.append(f"# {module}\n{summary}")
+        text = "\n\n".join(chunks)
+        return text if len(text) <= limit else text[:limit] + "\n# ... (truncated)"
+
     def module_imports_for(self, component: Dict[str, Any]) -> str:
         """Top-level import statements of the component's source file, made absolute."""
         path = component.get("file_path") or ""
@@ -474,7 +560,8 @@ Use pytest syntax with appropriate fixtures."""
             name=component.get("name", "unknown"),
             intent=intent.intent_text,
             import_line=self.import_line_for(component) or "(unknown)",
-            source_code=(component.get("source_code") or "")[:6000],
+            source_code=(component.get("source_code") or "")[:16000],
+            related_api=self.related_api_for(component) or "# none",
             imports="\n".join(test_file.imports),
             fixtures="\n\n".join(test_file.fixtures) or "# none",
             failures=failures,

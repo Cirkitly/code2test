@@ -1,0 +1,10 @@
+# LaTeX build output (main.pdf is kept so the paper can be read without building it)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+arxiv/
+arxiv.tar.gz

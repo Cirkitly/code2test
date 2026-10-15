@@ -96,6 +96,8 @@ class IntentAgent:
                 self.model,
                 system_prompt=INTENT_SYSTEM_PROMPT,
                 output_type=IntentInferenceResult,
+                # some models need more than one try to produce valid structured output
+                retries=3,
             )
         return self._agent
     

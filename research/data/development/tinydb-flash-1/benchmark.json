@@ -1,0 +1,349 @@
+{
+  "generation": {
+    "components": 26,
+    "components_with_tests": 24,
+    "acceptance_rate": 0.923,
+    "tests_generated": 541,
+    "first_run_passed": 375,
+    "first_run_pass_rate": 0.693,
+    "tests_kept": 504,
+    "tests_xfail": 0,
+    "tests_dropped": 37,
+    "files_removed": 2,
+    "repair_rounds": 29,
+    "diagnoses": {
+      "TEST_WRONG": 37
+    },
+    "llm_failures": 0
+  },
+  "mutation_score": 0.7875,
+  "mutants_total": 80,
+  "mutants_killed": 63,
+  "diagnosis_accuracy": 0.9333333333333333,
+  "diagnosis_by_expected_cause": {
+    "CODE_BUG": {
+      "cases": 15,
+      "correct": 13
+    },
+    "TEST_WRONG": {
+      "cases": 15,
+      "correct": 15
+    }
+  },
+  "survivors": [
+    {
+      "file": "tinydb/mypy_plugin.py",
+      "line": 28,
+      "component": "tinydb.mypy_plugin.TinyDBPlugin",
+      "mutation": "IsNot -> Is"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 105,
+      "component": "tinydb.queries.QueryInstance",
+      "mutation": "'QueryInstance' -> 'QueryInstanc'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 115,
+      "component": "tinydb.queries.QueryInstance",
+      "mutation": "'QueryInstance' -> 'QueryInstanc'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 192,
+      "component": "tinydb.queries.Query",
+      "mutation": "'path' -> 'pat'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 222,
+      "component": "tinydb.queries.Query",
+      "mutation": "'Query has no path' -> 'Query has no pat'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 266,
+      "component": "tinydb.queries.Query",
+      "mutation": "'!=' -> '!'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 292,
+      "component": "tinydb.queries.Query",
+      "mutation": "'<=' -> '<'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 332,
+      "component": "tinydb.queries.Query",
+      "mutation": "0 -> 1"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 428,
+      "component": "tinydb.queries.Query",
+      "mutation": "'QueryInstance' -> 'QueryInstanc'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 458,
+      "component": "tinydb.queries.Query",
+      "mutation": "'all' -> 'al'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 484,
+      "component": "tinydb.queries.Query",
+      "mutation": "'fragment' -> 'fragmen'"
+    },
+    {
+      "file": "tinydb/storages.py",
+      "line": 112,
+      "component": "tinydb.storages.JSONStorage",
+      "mutation": "'w' -> 'W'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 250,
+      "component": "tinydb.table.Table",
+      "mutation": "IsNot -> Is"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 528,
+      "component": "tinydb.table.Table",
+      "mutation": "'doc_id' -> 'doc_i'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 694,
+      "component": "tinydb.table.Table",
+      "mutation": "1 -> 2"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 719,
+      "component": "tinydb.table.Table",
+      "mutation": "return value -> None"
+    },
+    {
+      "file": "tinydb/utils.py",
+      "line": 33,
+      "component": "tinydb.utils.with_typehint",
+      "mutation": "return value -> None"
+    }
+  ],
+  "diagnosis_cases": [
+    {
+      "test": "test_insert_returns_incrementing_document_ids",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test's expectation matches TinyDB's documented contract: the first `insert()` returns doc_id 1 and the second returns 2 (IDs are 1-based and strictly incrementing). The first assertion (`first_id == 1`) passed, but the second one failed with `assert 0 == 2`, i.e. the table returned 0 for the sec",
+      "correct": true
+    },
+    {
+      "test": "test_call_returns_true_when_test_function_matches",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test asserts the documented contract of QueryInstance.__call__: it should evaluate the stored test callable against the supplied mapping and return a boolean indicating whether the value matches. The implementation instead has `return None` \u2014 it never invokes `self._test(value)` at all. This is ",
+      "correct": true
+    },
+    {
+      "test": "test_new_cache_is_empty",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `lru` property is a stub that unconditionally `return None`, yet the class is explicitly documented as a \"least-recently used (LRU) cache\" and the rest of the implementation (OrderedDict with `move_to_end(key, last=True)` on access, `popitem(last=False)` eviction) is fully built around maintaini",
+      "correct": true
+    },
+    {
+      "test": "test_decrement_reduces_field_by_one",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test asserts that a field starting at 5 becomes 4 after applying the transform, which exactly matches the stated intent (\"Decrement a given field in the document by 1\"). However, the component implements `doc[field] -= 2`, which reduces the value by 2 (5 -> 3), contradicting both the docstring a",
+      "correct": true
+    },
+    {
+      "test": "test_get_marks_entry_as_most_recently_used",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "Reading the pytest output carefully (the harness \"Expected/Actual\" labels are swapped): pytest prints `assert <left=actual> == <right=expected>`, i.e. `filled_cache.lru` is `['a','b','c']` while the test expects `['b','c','a']`.\n\nThe `filled_cache` fixture holds a=1, b=2, c=3 inserted in that order,",
+      "correct": true
+    },
+    {
+      "test": "test_get_by_doc_id_returns_document",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test calls `populated_table.get(where('age') > 21)` \u2014 i.e. `get(cond=<query>)`, the documented public API of TinyDB's `Table.get(cond=None, doc_id=None, doc_ids=None)`. The test code itself is valid (single positional arg = `cond`, and the assertions match the documented behavior of returning th",
+      "correct": true
+    },
+    {
+      "test": "test_non_read_access_mode_emits_a_warning",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The warning condition in `JSONStorage.__init__` is inverted. It currently warns when the access mode *is* one of the safe read modes (`if access_mode in ('r', 'rb', 'r+', 'rb+')`), and stays silent for the dangerous modes like `'w'`, `'a'`, `'wb'`, etc. The docstring (\"Using an access mode other tha",
+      "correct": true
+    },
+    {
+      "test": "test_insert_with_explicit_id_resets_next_id",
+      "expected": "CODE_BUG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test asserts an undocumented internal implementation detail: that inserting a Document with an explicit ID synchronously resets the internal next-ID counter so the next auto-assigned ID equals max(existing ids)+1. The stated intent (\"Represents a single TinyDB table\") makes no such claim, and Ti",
+      "correct": false
+    },
+    {
+      "test": "test_any_with_a_list_of_values",
+      "expected": "CODE_BUG",
+      "actual": "TEST_WRONG",
+      "explanation": "The query object was constructed and executed successfully (the failure output shows the evaluated QueryImpl), so this is not a construction/execution bug. TinyDB's `any(cond)` tests whether the value at the resolved path is a list containing any of the given *values* (membership over whole elements",
+      "correct": false
+    },
+    {
+      "test": "test_setitem_and_getitem_round_trip",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test is a straightforward round-trip check of the MutableMapping interface: after `empty_cache['key'] = 'value'`, retrieving the same key must return `'value'`, and the length must be 1. That matches both the stated intent (\"acts as a dictionary\") and the class contract of `abc.MutableMapping`.\n",
+      "correct": true
+    },
+    {
+      "test": "test_and_matches_only_documents_matching_both_operands",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly encodes the documented AND semantics: `QueryInstance.__and__` should produce a query that matches only when both operands match, and the class docstring explicitly states that query instances can be combined using logical OR and AND. The failure trace shows the query `QueryImpl('a",
+      "correct": true
+    },
+    {
+      "test": "test_all_with_a_subquery",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly encodes the documented semantics of `Query.all(cond)`: it must return True only when *every* sub-document satisfies the subquery. For `{'f1': [{'f2': 1}, {'f2': 0}]}` one element fails, so `False` is required \u2014 exactly as asserted (and as upstream TinyDB and the component's own do",
+      "correct": true
+    },
+    {
+      "test": "test_all_with_a_subquery",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test builds a standard TinyDB query (`Query().f1.all(Query().f2 == 1)`) and invokes it as documented (\"Queries are executed by calling the resulting object ... return True or False\"), so the test's intent and API usage are correct. The failure is `TypeError: 'NoneType' object is not callable`, m",
+      "correct": true
+    },
+    {
+      "test": "test_insert_with_existing_id_raises_value_error",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The tests describe a consistent, coherent contract: inserting a `Document` that carries an already-used explicit ID must raise `ValueError('... already exists')`, for both `insert()` and `insert_multiple()`, and `insert_multiple()` must do so atomically (no partial writes). The first test in the blo",
+      "correct": true
+    },
+    {
+      "test": "test_insert_rejects_non_mapping_documents",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The behavior contract exercised by both tests is: insert()/insert_multiple() must raise ValueError with the message \"Document is not a Mapping\" for non-Mapping documents. The first test (insert, passing) and the second (insert_multiple, failing) share the same regex, so the test's expectation is con",
+      "correct": true
+    },
+    {
+      "test": "test_decrement_reduces_field_by_one",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The stated intent is \"Decrement a given field in the document by 1\", and the component implements exactly that: `doc[field] -= 1` turns 5 into 4. The test, however, asserts `doc['value'] == 5` after calling the transform \u2014 which asserts no change at all, directly contradicting both the intent and th",
+      "correct": true
+    },
+    {
+      "test": "test_drop_tables_removes_all_data",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "Let me trace through what the test does and what TinyDB actually implements.\n\nThe test inserts data into two tables, calls `db.drop_tables()`, and asserts that all tables are removed and that the default table is empty.\n\nTinyDB's documented data model stores documents per-table:\n```\n{\n  'table1': {0",
+      "correct": true
+    },
+    {
+      "test": "test_increment_then_decrement_round_trip_restores_value",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component code matches its stated intent exactly: `decrement(field)` subtracts 1 from `doc[field]`, and the round trip 10 -> 11 (increment) -> 10 (decrement) correctly restores the original value. The test's assertion is self-contradictory with its own name (\"round_trip_restores_value\") and the ",
+      "correct": true
+    },
+    {
+      "test": "test_flush_after_reading_does_not_write_unchanged_data_to_the_storage",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test docstring and intent state that \"Reading only populates the cache; it does not count as a modification,\" so after only a read + flush, nothing should be written to storage. The implementation matches this exactly: `read()` sets `self.cache` but never touches `_cache_modified_count`, and `fl",
+      "correct": true
+    },
+    {
+      "test": "test_subtract_can_be_applied_repeatedly_to_same_document",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component's behavior is correct: `subtract('value', 5)` returns a transform that decrements `doc['value']` by 5 on each application. Starting from 20 and applying the transform twice yields 20 - 5 - 5 = 10, which is exactly what the code produces (the failure output shows the actual value is 10)",
+      "correct": true
+    },
+    {
+      "test": "test_querylike_structural_typing_with_custom_callable_hashable_class",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test builds `cache = {obj: 'cached'}` and then asserts `cache[obj] == 'cache'`. The lookup correctly returns the value that was stored ('cached'), so the actual behavior is right; the asserted expected value in the test is a typo/inconsistency with the line above it. All other assertions pass: `",
+      "correct": true
+    },
+    {
+      "test": "test_update_all_documents_with_fields",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test itself contains a self-contradictory expectation. It calls `populated_table.update({'name': 'Jane'}, where('age') == 22)` and asserts `updated_ids == [1]` (doc 1 was updated), then asserts `populated_table.get(doc_id=1)['name'] == 'Jan'` \u2014 i.e. it expects the very field it just set to have ",
+      "correct": true
+    },
+    {
+      "test": "test_frozendict_supports_read_only_mapping_access",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The `FrozenDict` class simply subclasses `dict` and only blocks mutating operations; read-only access (`keys()`, `values()`, `items()`, `get()`, iteration) is inherited unchanged from `dict` and works correctly, as confirmed by the first three assertions in the test which pass for the fixture `{'a':",
+      "correct": true
+    },
+    {
+      "test": "test_setdefault_with_key_and_default_raises_type_error",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component correctly disables all mutating operations (`__setitem__`, `__delitem__`, `clear`, `setdefault`, `popitem`, `update`, `pop`) by raising `TypeError('object is immutable')`. The failing assertion compares the raised message against the truncated string `'object is immutabl'` \u2014 a typo in ",
+      "correct": true
+    },
+    {
+      "test": "test_only_the_latest_state_is_kept_in_the_cache",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test asserts `cache.storage.write_count == 1` immediately after three `cache.write(...)` calls, but `CachingMiddleware.write()` never touches storage: it only stores the data in `self.cache` and increments `_cache_modified_count`, flushing only when the count reaches `WRITE_CACHE_SIZE` (1000). S",
+      "correct": true
+    },
+    {
+      "test": "test_operations_set_shadows_the_builtin_set",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The failing assertion is `assert set.__name__ == 'se'` \u2014 a typo/truncated literal that contradicts both the actual code (`def set(field, val)`) and the stated intent, which explicitly describes the operation as being named `set` and shadowing the builtin `set`. The component defines the function as ",
+      "correct": true
+    },
+    {
+      "test": "test_transform_accepts_any_mutable_mapping",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component `set(field, val)` returns a closure that assigns `val` verbatim: `doc[field] = val`. In the test, `val` is the string `'bar'`, so after `set('foo','bar')(defaulted)` the defaultdict (which creates the missing key on access) must yield `'bar'`. The failing assertion compares against `'b",
+      "correct": true
+    },
+    {
+      "test": "test_frozendict_is_a_dict_subclass_with_dict_equality",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test constructs `FrozenDict({'a': 1, 'b': 2})`, which contains exactly two key/value pairs, and then asserts `len(d) == 3`. The failure output confirms `assert 2 == 3` (left operand `len(d)` is 2), so the actual component behavior is correct: FrozenDict is a proper dict subclass, it compares equ",
+      "correct": true
+    },
+    {
+      "test": "test_frozendict_can_be_built_from_a_mapping",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test constructs FrozenDict({'a': 1, 'b': 2}) and then asserts d['a'] == 2. Since 'a' maps to 1, the correct value is 1. The component under test simply subclasses dict, so its lookup behavior is exactly dict's: FrozenDict({'a': 1})['a'] == 1. The failure output confirms the code returns 1 and th",
+      "correct": true
+    },
+    {
+      "test": "test_equal_frozendicts_are_deduplicated_in_a_set",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's own name (\"equal frozendicts are deduplicated in a set\") contradicts its assertion (`len(items) == 3`). `FrozenDict` is a plain `dict` subclass, so it inherits `dict.__eq__` (content-based equality) and adds `__hash__` based on the sorted items tuple. Two `FrozenDict({'a': 1})` instances ",
+      "correct": true
+    }
+  ]
+}

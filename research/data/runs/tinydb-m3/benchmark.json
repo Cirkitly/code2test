@@ -1,0 +1,369 @@
+{
+  "generation": {
+    "components": 26,
+    "components_with_tests": 25,
+    "acceptance_rate": 0.962,
+    "tests_generated": 297,
+    "first_run_passed": 294,
+    "first_run_pass_rate": 0.99,
+    "tests_kept": 296,
+    "tests_xfail": 0,
+    "tests_dropped": 1,
+    "components_reused": 0,
+    "skipped_low_confidence": 0,
+    "files_removed": 1,
+    "repair_rounds": 4,
+    "diagnoses": {
+      "TEST_WRONG": 1
+    },
+    "llm_failures": 0
+  },
+  "mutation_score": 0.7625,
+  "mutants_total": 80,
+  "mutants_killed": 61,
+  "own_tests_mutation_score": 0.7625,
+  "mutants_killed_by_own_tests": 61,
+  "diagnosis_accuracy": 1.0,
+  "diagnosis_by_expected_cause": {
+    "CODE_BUG": {
+      "cases": 15,
+      "correct": 15,
+      "unscored": 0
+    },
+    "TEST_WRONG": {
+      "cases": 15,
+      "correct": 15,
+      "unscored": 0
+    }
+  },
+  "diagnosis_error": null,
+  "restored_files": [],
+  "survivors": [
+    {
+      "file": "tinydb/queries.py",
+      "line": 126,
+      "component": "tinydb.queries.QueryInstance",
+      "mutation": "'not' -> 'no'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 192,
+      "component": "tinydb.queries.Query",
+      "mutation": "'path' -> 'pat'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 366,
+      "component": "tinydb.queries.Query",
+      "mutation": "'search' -> 'searc'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 471,
+      "component": "tinydb.queries.Query",
+      "mutation": "'one_of' -> 'one_o'"
+    },
+    {
+      "file": "tinydb/storages.py",
+      "line": 84,
+      "component": "tinydb.storages.JSONStorage",
+      "mutation": "False -> True"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 151,
+      "component": "tinydb.table.Table",
+      "mutation": "'Document is not a Mapping' -> 'Document is not a Mappin'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 168,
+      "component": "tinydb.table.Table",
+      "mutation": "'Document with ID ' -> 'Document with ID'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 168,
+      "component": "tinydb.table.Table",
+      "mutation": "' already exists' -> ' already exist'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 195,
+      "component": "tinydb.table.Table",
+      "mutation": "'Document is not a Mapping' -> 'Document is not a Mappin'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 201,
+      "component": "tinydb.table.Table",
+      "mutation": "'Document with ID ' -> 'Document with ID'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 275,
+      "component": "tinydb.table.Table",
+      "mutation": "'is_cacheable' -> 'is_cacheabl'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 344,
+      "component": "tinydb.table.Table",
+      "mutation": "'You have to pass either cond or doc_id or doc_ids' -> 'You have to pass either cond or doc_id or doc_id'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 534,
+      "component": "tinydb.table.Table",
+      "mutation": "Is -> IsNot"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 552,
+      "component": "tinydb.table.Table",
+      "mutation": "return value -> None"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 566,
+      "component": "tinydb.table.Table",
+      "mutation": "IsNot -> Is"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 583,
+      "component": "tinydb.table.Table",
+      "mutation": "return value -> None"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 615,
+      "component": "tinydb.table.Table",
+      "mutation": "'Use truncate() to remove all documents' -> 'Use truncate() to remove all document'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 683,
+      "component": "tinydb.table.Table",
+      "mutation": "1 -> 2"
+    },
+    {
+      "file": "tinydb/utils.py",
+      "line": 33,
+      "component": "tinydb.utils.with_typehint",
+      "mutation": "return value -> None"
+    }
+  ],
+  "diagnosis_cases": [
+    {
+      "test": "test_matches_returns_false_for_non_string_values",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `matches()` method in the source code returns `None` for non-string values, while the analogous `search()` method returns `False` for the same case. This is an internal inconsistency in the source code. A query function should always return a proper boolean (`True`/`False`), never `None`. The te",
+      "correct": true
+    },
+    {
+      "test": "test_set_and_get_stores_and_retrieves_values",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `set()` method has `if self.capacity is not None or self.length > self.capacity:` which is ALWAYS True when capacity is set (e.g., 3 is not None). This means every `set()` call immediately evicts the just-inserted entry, leaving the cache empty. The logical operator should be `and`, not `or`. Ad",
+      "correct": true
+    },
+    {
+      "test": "test_where_returns_callable_query_instance",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The docstring states that `where(key)` is \"A shorthand for `Query()[key]`\". The test correctly verifies this intent by checking that the return value is a `QueryInstance` (which is what `Query()[key]` is documented to return) and is callable. However, the implementation simply returns `None`, which ",
+      "correct": true
+    },
+    {
+      "test": "test_fragment_returns_false_when_shared_value_differs",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `fragment` method in the source code has a clear bug. Looking at the test function:\n\n```python\ndef test(value):\n    for key in document:\n        if key not in value or value[key] != document[key]:\n            return True\n    return True\n```\n\nBoth branches return `True` \u2014 the loop body returns `T",
+      "correct": true
+    },
+    {
+      "test": "test_increment_increments_integer_field_by_one",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The docstring and stated intent both say \"Increment a given field in the document by 1\", but the implementation uses `doc[field] += 2`, which adds 2 instead of 1. The test correctly implements the stated intent (5 + 1 = 6), and the actual output (7) matches what the buggy code would produce (5 + 2 =",
+      "correct": true
+    },
+    {
+      "test": "test_greater_than_compares_numerically",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `__gt__` method (which implements the `>` operator) contains a copy-paste bug from the `__le__` method. Instead of using `value > rhs`, it uses `value <= rhs`. This means when you query `Query().age > 30`, it actually tests `age <= 30`, which is why `q({'age': 40})` returns `False` (40 is NOT <=",
+      "correct": true
+    },
+    {
+      "test": "test_no_warning_issued_for_standard_access_modes",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The code's check for standard access modes contains a typo: it tests `access_mode not in ('r', 'rb', 'r+', 'rb')`, where `'rb'` is listed twice and `'rb+'` is missing. This is evident from the warning message itself, which explicitly states the safe modes are `'r', 'rb', 'r+' or 'rb+'`. When the use",
+      "correct": true
+    },
+    {
+      "test": "test_comparison_operators_on_empty_path_raise_value_error",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `__lt__` method is broken - it simply returns `None` instead of calling `_generate_test` like all the other comparison operators do. When `Query() < 1` is called, it returns `None` instead of raising `ValueError('Query has no path')`. The other five comparison operators (`__eq__`, `__ne__`, `__l",
+      "correct": true
+    },
+    {
+      "test": "test_get_by_doc_id_returns_document",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The branching logic in the `get` method is inverted. The condition `if doc_id is None:` should be `if doc_id is not None:`. With the current code, when a user calls `table.get(doc_id=doc_id)` with an integer, the `doc_id is None` check evaluates to `False`, so execution falls through all `elif` bran",
+      "correct": true
+    },
+    {
+      "test": "test_increment_increments_integer_field_by_one",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The component defines an inner `transform(doc)` function that correctly increments the specified field by 1, matching both the docstring (\"Increment a given field in the document by 1\") and the stated intent. However, the function returns `None` instead of returning the `transform` callable. The tes",
+      "correct": true
+    },
+    {
+      "test": "test_set_and_get_stores_and_retrieves_values",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `get()` method has inverted logic. When the key IS found in the cache and the value is not `None`, the method returns `default` instead of the actual cached value. The `if value is None:` block should be the \"missing key\" branch that returns `default`, and the `return value` should be the \"found",
+      "correct": true
+    },
+    {
+      "test": "test_matches_requires_full_string_match",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `matches` method in the Query class defines a correct `test` function but fails to wrap it in `self._generate_test(...)`, instead returning `None`. This is a clear bug \u2014 the method's docstring and signature promise a `QueryInstance`, and the sibling `search` method (which is nearly identical) co",
+      "correct": true
+    },
+    {
+      "test": "test_no_warning_issued_for_standard_access_modes",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The validation tuple in JSONStorage.__init__ is `('r', 'r', 'r+', 'rb+')` which is clearly a typo/bug \u2014 it duplicates 'r' and omits 'rb'. As a result, the standard 'rb' mode incorrectly triggers the data-loss warning. The warning message text itself confirms the intent: it says modes OTHER than 'r',",
+      "correct": true
+    },
+    {
+      "test": "test_where_shorthand_builds_query_with_path",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `Query.__getitem__` method returns `None` instead of constructing a sub-query with the extended path. Since `where(key)` is documented as shorthand for `Query()[key]`, and `__getitem__` just returns `None`, the entire `where()` shorthand is broken. The correct implementation should mirror `__get",
+      "correct": true
+    },
+    {
+      "test": "test_write_and_read_data_roundtrip",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly implements the stated intent (write data, read it back, verify equality). The intent correctly describes what the component should do (store data in JSON format). However, the read() method has a clear bug: in the else branch where the file has content, it seeks to the beginning b",
+      "correct": true
+    },
+    {
+      "test": "test_frozen_dict_construction_from_mapping",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The FrozenDict is constructed with `{'a': 1, 'b': 2, 'c': 3}`, so `fd['a']` should be `1`. The test asserts `fd['a'] == 2`, which is a typo/error in the test. The code correctly stores the value as `1` and the intent (\"An immutable dictionary\") matches the code's purpose. This is clearly a test bug.",
+      "correct": true
+    },
+    {
+      "test": "test_update_with_fields_mapping_by_doc_id",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test has a typo in the assertion. It inserts `{'foo': 'bar'}` and then calls `update({'baz': 'qux'}, doc_ids=[doc_id])` which should merge fields (adding 'baz' while preserving 'foo'). After the update, `doc['foo']` should still be `'bar'`, not `'ba'`. The code's behavior is correct - it properl",
+      "correct": true
+    },
+    {
+      "test": "test_frozen_dict_empty_construction",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test is internally inconsistent. Three of the four assertions (keys, values, items) correctly expect empty collections for an empty FrozenDict, but one assertion (`len(fd) == 1`) contradicts them - if keys/values/items are all empty, the length must be 0, not 1. The `== 1` is a typo. The code's ",
+      "correct": true
+    },
+    {
+      "test": "test_decrement_only_affects_named_field",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test correctly imports the `decrement` function, applies it to a document with `count=3`, and then incorrectly asserts that `count` should still equal 3 after decrementing. The intent (\"Decrement a given field in the document by 1\") and the code (`doc[field] -= 1`) are perfectly consistent \u2014 the",
+      "correct": true
+    },
+    {
+      "test": "test_close_without_pending_data_only_closes_storage",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's name and docstring explicitly state \"close() should not write to storage if there is nothing pending,\" which logically means write_calls should be 0. However, the assertion `assert storage.write_calls == 1` contradicts the test's own stated intent. The code correctly implements the behavi",
+      "correct": true
+    },
+    {
+      "test": "test_insert_multiple_returns_list_of_ids",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test `test_insert_multiple_returns_list_of_ids` is self-contradictory. Its docstring states \"insert_multiple returns a list with one id per inserted document,\" but it inserts only 2 documents `[{'a': 1}, {'b': 2}]` and then asserts `len(ids) == 3`. This is logically inconsistent: 2 documents can",
+      "correct": true
+    },
+    {
+      "test": "test_frozen_dict_can_be_used_as_dict_key",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test contains a typo in the assertion: it checks `cache[fd2] == 'result_for_'` (missing the 'a' character) when the actual stored value is `'result_for_a'`. The diff output confirms this \u2014 only a single 'a' character is missing from the expected string. The FrozenDict code works correctly: fd1 a",
+      "correct": true
+    },
+    {
+      "test": "test_frozen_dict_setdefault_raises_typeerror",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test contains a logically contradictory assertion. It correctly verifies that 'b' not in fd (because setdefault raises TypeError on the immutable dict), but then incorrectly asserts len(fd) == 2. Since the dict is immutable and setdefault raised TypeError, the key 'b' was never added, so the len",
+      "correct": true
+    },
+    {
+      "test": "test_freeze_dict_returns_frozendict",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test starts with the dict `{'a': 1, 'b': 2}`, which means `result['a']` should equal `1` and `result['b']` should equal `2`. The first assertion `assert dict(result) == {'a': 1, 'b': 2}` passes, confirming the values are preserved correctly. However, the third assertion `assert result['a'] == 2`",
+      "correct": true
+    },
+    {
+      "test": "test_default_write_cache_size_is_one_thousand",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test name (\"test_default_write_cache_size_is_one_thousand\"), its docstring (\"WRITE_CACHE_SIZE should be the documented default of 1000\"), and the code's implementation (WRITE_CACHE_SIZE = 1000) all consistently indicate that the correct value is 1000. However, the assertion incorrectly checks fo",
+      "correct": true
+    },
+    {
+      "test": "test_subtract_negative_n_increases_field",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The code correctly implements subtraction: doc[field] -= n means doc['count'] = 10 - (-5) = 15. The test asserts the result should be 16, but the correct mathematical result of subtracting -5 from 10 is 15, not 16. The test's expected value is off by 1 (likely an arithmetic mistake in the test itsel",
+      "correct": true
+    },
+    {
+      "test": "test_explicit_flush_writes_pending_data_to_storage",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test expects `storage.write_calls == 2`, but the actual behavior is 1. The purpose of this caching middleware is to avoid writing to storage on every `write()` call \u2014 it only writes when `_cache_modified_count >= WRITE_CACHE_SIZE` (1000) or when explicitly `flush()`ed. \n\nIn the test:\n1. `mw.writ",
+      "correct": true
+    },
+    {
+      "test": "test_frozen_dict_update_with_kwargs_raises_typeerror",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test incorrectly asserts `assert len(fd) == 2`. The FrozenDict is initialized with one item `{'a': 1}` (length 1), and since `update()` correctly raises TypeError due to immutability, the dict should still have length 1. The assertion value of 2 is inconsistent with both scenarios: if update suc",
+      "correct": true
+    },
+    {
+      "test": "test_data_persists_across_table_instances_sharing_storage",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test inserts exactly one document (`{'x': 1}`) into `t1`, then creates a new `Table` instance `t2` reading from the same storage. The test correctly verifies persistence (since the failure shows `len(docs) == 1`, meaning the document does persist). However, the assertion `assert len(docs) == 2` ",
+      "correct": true
+    },
+    {
+      "test": "test_insert_returns_integer_id",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's stated intent is \"A document inserted via insert() becomes visible via all()\". It inserts exactly one document (`{'foo': 'bar'}`) and then asserts `len(docs) == 2`. This assertion contradicts both the test's docstring and the action performed. After inserting one document, `table.all()` s",
+      "correct": true
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 # Real-model run against `inflection` 0.5.1
 
+> This document records the first real-model runs, made during development with earlier versions of Code2Test. The failures they exposed were fixed before the final measurements. For the current results, see the [README](../README.md#results) and [`research/`](../research/).
+
 code2test was run end to end on a real open-source library with a real LLM, with
 no fake or scripted model anywhere in the loop.
 

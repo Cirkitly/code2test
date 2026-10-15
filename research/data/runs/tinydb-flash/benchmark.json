@@ -1,0 +1,363 @@
+{
+  "generation": {
+    "components": 26,
+    "components_with_tests": 25,
+    "acceptance_rate": 0.962,
+    "tests_generated": 471,
+    "first_run_passed": 411,
+    "first_run_pass_rate": 0.873,
+    "tests_kept": 458,
+    "tests_xfail": 0,
+    "tests_dropped": 13,
+    "components_reused": 0,
+    "skipped_low_confidence": 0,
+    "files_removed": 0,
+    "repair_rounds": 22,
+    "diagnoses": {
+      "TEST_WRONG": 13
+    },
+    "llm_failures": 1
+  },
+  "mutation_score": 0.775,
+  "mutants_total": 80,
+  "mutants_killed": 62,
+  "own_tests_mutation_score": 0.7625,
+  "mutants_killed_by_own_tests": 61,
+  "diagnosis_accuracy": 1.0,
+  "diagnosis_by_expected_cause": {
+    "CODE_BUG": {
+      "cases": 15,
+      "correct": 15,
+      "unscored": 0
+    },
+    "TEST_WRONG": {
+      "cases": 15,
+      "correct": 15,
+      "unscored": 0
+    }
+  },
+  "diagnosis_error": null,
+  "restored_files": [],
+  "survivors": [
+    {
+      "file": "tinydb/database.py",
+      "line": 109,
+      "component": "tinydb.database.TinyDB",
+      "mutation": "'<{} {}>' -> '<{} {}'"
+    },
+    {
+      "file": "tinydb/database.py",
+      "line": 109,
+      "component": "tinydb.database.TinyDB",
+      "mutation": "', ' -> ','"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 120,
+      "component": "tinydb.queries.QueryInstance",
+      "mutation": "'or' -> 'o'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 253,
+      "component": "tinydb.queries.Query",
+      "mutation": "'==' -> '='"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 266,
+      "component": "tinydb.queries.Query",
+      "mutation": "'!=' -> '!'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 292,
+      "component": "tinydb.queries.Query",
+      "mutation": "'<=' -> '<'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 329,
+      "component": "tinydb.queries.Query",
+      "mutation": "'exists' -> 'exist'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 366,
+      "component": "tinydb.queries.Query",
+      "mutation": "'search' -> 'searc'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 425,
+      "component": "tinydb.queries.Query",
+      "mutation": "'any' -> 'an'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 458,
+      "component": "tinydb.queries.Query",
+      "mutation": "'all' -> 'al'"
+    },
+    {
+      "file": "tinydb/queries.py",
+      "line": 471,
+      "component": "tinydb.queries.Query",
+      "mutation": "'one_of' -> 'one_o'"
+    },
+    {
+      "file": "tinydb/storages.py",
+      "line": 112,
+      "component": "tinydb.storages.JSONStorage",
+      "mutation": "'w' -> 'W'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 528,
+      "component": "tinydb.table.Table",
+      "mutation": "'doc_id' -> 'doc_i'"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 534,
+      "component": "tinydb.table.Table",
+      "mutation": "Is -> IsNot"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 548,
+      "component": "tinydb.table.Table",
+      "mutation": "return value -> None"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 583,
+      "component": "tinydb.table.Table",
+      "mutation": "return value -> None"
+    },
+    {
+      "file": "tinydb/table.py",
+      "line": 615,
+      "component": "tinydb.table.Table",
+      "mutation": "'Use truncate() to remove all documents' -> 'Use truncate() to remove all document'"
+    },
+    {
+      "file": "tinydb/utils.py",
+      "line": 33,
+      "component": "tinydb.utils.with_typehint",
+      "mutation": "return value -> None"
+    }
+  ],
+  "diagnosis_cases": [
+    {
+      "test": "test_query_comparison_operators_across_all_comparisons",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The failure is a TypeError raised when calling the result of `(Query().f >= 2)`, meaning `Query.__ge__` returned None. Inspecting the component under test confirms this: `__ge__` is the only comparison operator whose body is empty \u2014 it documents `Query().f1 >= 42` and is annotated `-> QueryInstance`",
+      "correct": true
+    },
+    {
+      "test": "test_insert_rejects_non_mapping_documents",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test's expectations are correct and match the documented behavior: `insert()` explicitly raises `ValueError('Document is not a Mapping')` for non-Mapping input (that part of the test passed), and reading an empty/unwritten table should yield an empty document list.\n\nThe failure happens in `table",
+      "correct": true
+    },
+    {
+      "test": "test_query_fragment_matches_documents_containing_given_mapping",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly asserts the documented behavior: `fragment({'f1': 1, 'f2': 2})` should return `True` for a document containing those key/value pairs, and `False` otherwise. The failure shows the query returns `None` for the matching document.\n\nLooking at the implementation of `Query.fragment`:\n\n ",
+      "correct": true
+    },
+    {
+      "test": "test_query_fragment_matches_documents_containing_given_mapping",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly implements the documented semantics of `Query.fragment`: it should match documents that contain all the given key/value pairs (and reject documents missing a key or having a different value). The implementation in the component under test has a clear logic error in `fragment`'s in",
+      "correct": true
+    },
+    {
+      "test": "test_call_creates_storage_instance_and_returns_itself",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test asserts that `Middleware.__call__` returns the middleware instance itself, which matches both the stated intent (\"The base class for all Middlewares\" whose `__call__` is invoked by TinyDB in place of the storage class) and the method's own docstring, which explicitly explains that \"Returnin",
+      "correct": true
+    },
+    {
+      "test": "test_query_comparison_operators_across_all_comparisons",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "In `Query.__gt__`, the body simply does `return None` instead of returning a `QueryInstance` via `self._generate_test(...)`. Every other comparison operator (`__eq__`, `__ne__`, `__lt__`, `__le__`, `__ge__`) correctly builds a query with `self._generate_test(lambda value: value <op> rhs, ('<op>', se",
+      "correct": true
+    },
+    {
+      "test": "test_warns_for_access_modes_other_than_read_variants",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The docstring explicitly states the intended behavior: \"Using an access mode other than `r` or `r+` will probably lead to data loss or data corruption!\" The test parametrizes over 'w' and 'a' (write/append modes, i.e., not read variants) and expects a UserWarning matching 'can cause data loss or cor",
+      "correct": true
+    },
+    {
+      "test": "test_query_comparison_operators_across_all_comparisons",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The `Query.__ne__` method is a stub that returns `None` instead of building a query: \n\n```python\ndef __ne__(self, rhs: Any):\n    \\\"\\\"\\\"\n    Test a dict value for inequality.\n\n    >>> Query().f1 != 42\n\n    :param rhs: The value to compare against\n    \\\"\\\"\\\"\n    return None\n```\n\nThis directly contradi",
+      "correct": true
+    },
+    {
+      "test": "test_insert_multiple_rejects_duplicate_document_ids",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The failure is a message-text mismatch: the test expects 'Document with ID 1 already exists' but the code raises 'Document with ID 1 already exist'. Inspecting the component, `Table.insert` raises f'Document with ID {doc_id} already exists' (correct grammar, plural verb), while `Table.insert_multipl",
+      "correct": true
+    },
+    {
+      "test": "test_call_instantiates_storage_and_returns_the_middleware",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The failing test `test_repeated_flush_does_not_write_the_same_data_twice` writes once (with the default WRITE_CACHE_SIZE of 1000, so nothing is flushed automatically), then calls `mw.flush()` twice and expects exactly one storage write.\n\nThe bug is in `flush()`:\n\n```python\ndef flush(self):\n    if se",
+      "correct": true
+    },
+    {
+      "test": "test_insert_assigns_incrementing_ids_starting_at_one",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The test correctly encodes the documented behavior of `Table.insert`: \"Insert a new document into the table ... :returns: the inserted document's ID\", with IDs handed out sequentially starting at 1. The first insert returns 1 (correct), but the second returns 3 instead of 2.\n\nRoot cause is an off-by",
+      "correct": true
+    },
+    {
+      "test": "test_query_test_on_empty_path_raises_value_error",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The component's `exists()` method is stubbed out \u2014 it simply does `return None` instead of building a query test. Upstream TinyDB implements it as `return self._generate_test(lambda _: True, ('exists', self._path))`, which is what routes through `_generate_test`, whose first action is `if not self._",
+      "correct": true
+    },
+    {
+      "test": "test_abstract_write_raises_not_implemented_error_when_delegated_to_super",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The behavior under test (delegating `write()` to the abstract base implementation raises `NotImplementedError`) works correctly \u2014 the failure is purely in the message text. In `Storage.write`, the message is `'To be overridden'` (no exclamation mark), while the sibling abstract method `Storage.read`",
+      "correct": true
+    },
+    {
+      "test": "test_equality_with_non_query_instance_is_always_false",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The component's `__eq__` implementation explicitly returns `True` when `other` is not a `QueryInstance`:\n\n    def __eq__(self, other: object):\n        if isinstance(other, QueryInstance):\n            return self._hash == other._hash\n        return True   # <-- should be False / NotImplemented\n\nThis ",
+      "correct": true
+    },
+    {
+      "test": "test_repr_contains_name_total_and_storage",
+      "expected": "CODE_BUG",
+      "actual": "CODE_BUG",
+      "explanation": "The failure is a `ValueError: unmatched '{' in format spec` raised from inside `Table.__repr__` itself, at the very first format string it evaluates. The line is:\n\n    args = ['name={!r'.format(self.name), 'total={}'.format(len(self)), 'storage={}'.format(self._storage)]\n\nThe literal `'name={!r'` is",
+      "correct": true
+    },
+    {
+      "test": "test_increment_nested_field_via_dotted_path",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component under test (`increment`) performs a plain top-level key update: `doc[field] += 1`. Given `field='stats.hits'` and `nested_doc = {'stats': {'hits': 0}}`, the lookup fails and Python raises `KeyError('stats.hits')` \u2014 exactly the field name that was requested. The test itself asserts `exc",
+      "correct": true
+    },
+    {
+      "test": "test_subtract_transform_is_reusable_across_documents",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test performs an incorrect arithmetic expectation. With `transform = subtract('hp', 3)` and `first = {'hp': 10}`, the transform executes `doc['hp'] -= 3`, producing `7` \u2014 which is exactly the observed actual value (`assert 7 == 8`). The test's expectation of `8` is simply wrong (it would be the ",
+      "correct": true
+    },
+    {
+      "test": "test_default_table_name_default_value",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test's own docstring states \"The default table is named ``_default``\", but the assertion compares against the typo'd string `'_defaul'` (missing the trailing `t`). The component under test defines `default_table_name = '_default'`, which matches both the test's stated intent and the documented d",
+      "correct": true
+    },
+    {
+      "test": "test_flush_writes_pending_changes_to_the_storage",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The failing assertion expects `write_calls == 2` after a single `mw.write(data)` followed by `mw.flush()`, but only one write to the storage should occur \u2014 the flush. Nothing in the code path writes twice: `CachingMiddleware.__call__` (inherited from `Middleware`) merely instantiates the storage, it",
+      "correct": true
+    },
+    {
+      "test": "test_repr_of_non_cacheable_query_shows_none",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test contains an obvious typo: it asserts `repr(non_cacheable_query) == 'QueryImplNon'` \u2014 a truncated/typo'd string missing the trailing \"e\". The component's `__repr__` is `'QueryImpl{}'.format(self._hash)`, and for a non-cacheable query `self._hash` is `None`, so `'QueryImplNone'` is exactly th",
+      "correct": true
+    },
+    {
+      "test": "test_subtract_mutates_document_in_place",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The arithmetic in the test's expected value is wrong. With `doc = {'count': 8}` and `subtract('count', 3)`, the correct result is 8 - 3 = 5, which is exactly what the component produces (`doc[field] -= n`). The test asserts `doc['count'] == 6`, which corresponds to subtracting 2, not 3 (the failure ",
+      "correct": true
+    },
+    {
+      "test": "test_add_creates_missing_field_from_zero",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test asserts that the KeyError's first argument is the truncated string 'valu', while the code raises KeyError('value') because it indexes `doc[field] += n` with `field == 'value'`. The component's behavior is the only sensible one here: the KeyError must name the field that was requested, and t",
+      "correct": true
+    },
+    {
+      "test": "test_table_exposes_name_and_storage",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The failure is a plain typo in the test's expected value. The assertion compares `table.name` against the string literal `'_defaul'` (missing the trailing `t`), while the component under test correctly returns the table name it was constructed with \u2014 `'_default'`, TinyDB's standard default table nam",
+      "correct": true
+    },
+    {
+      "test": "test_freeze_makes_unhashable_dict_hashable",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The final assertion compares the dict lookup result against the misspelled literal 'valu' instead of 'value'. The test itself stores 'value' in the mapping (`{frozen: 'value'}[...]`), so it can never equal 'valu'. Everything the intent claims is verified successfully before the typo: `freeze(origina",
+      "correct": true
+    },
+    {
+      "test": "test_query_cache_is_cleared_when_data_changes",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test inserts exactly two documents ({'a': 1} and {'a': 2}), so any correct search result must contain 2 items. The failure output confirms the search returned `[{'a': 1}, {'a': 2}]` \u2014 i.e., the correct post-write result \u2014 and the first assertion (`query.calls > calls_before_write`) passed, demon",
+      "correct": true
+    },
+    {
+      "test": "test_document_id_is_exposed_via_get_with_default",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component under test is straightforward and matches its docstring: `Document.__init__` copies the mapping into the dict and stores the passed `doc_id` (17) as the `doc_id` attribute, leaving no `'doc_id'` key in the dict itself. The first assertion (`doc.get('doc_id', None) is None`) passes and ",
+      "correct": true
+    },
+    {
+      "test": "test_touch_with_create_dirs_on_existing_file_and_missing_dirs_preserves_content",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The production code behaves correctly: opening the file in append mode ('a') creates it if missing and leaves existing content untouched, and the create_dirs branch only acts on the parent directory (which exists here, so it is a no-op). The file content after the call is exactly what the test itsel",
+      "correct": true
+    },
+    {
+      "test": "test_get_by_doc_ids_returns_matching_documents",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test is self-contradictory: it asserts `len(docs) == 3` while immediately afterwards asserting that the doc_ids are exactly `[1, 3]` (2 documents) and the values are `[1, 3]`. Three documents were inserted (ids 1, 2, 3) but only ids 1 and 3 were requested, so the correct result is 2 documents. T",
+      "correct": true
+    },
+    {
+      "test": "test_all_returns_documents_with_ids",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The test inserts exactly two documents (`{'a': 1}` and `{'a': 2}`) into a fresh table, then asserts `len(docs) == 3`. There is no operation in the test that could create a third document, so the expected count of 3 is simply wrong; the failure output confirms the code returned 2 documents, which is ",
+      "correct": true
+    },
+    {
+      "test": "test_write_only_updates_the_cache_until_the_cache_size_is_reached",
+      "expected": "TEST_WRONG",
+      "actual": "TEST_WRONG",
+      "explanation": "The component under test caches writes and only flushes to storage once `WRITE_CACHE_SIZE` (1000) write operations have accumulated, as stated in its own docstring (\"writing only the last DB state every WRITE_CACHE_SIZE time\"). After a single `mw.write(data)`, `_cache_modified_count` is 1, far below",
+      "correct": true
+    }
+  ]
+}

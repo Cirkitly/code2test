@@ -1,0 +1,35 @@
+% Code2Test pipeline (Figure 1). Requires TikZ libraries: arrows.meta, positioning, shapes.geometric.
+\begin{tikzpicture}[
+  font=\small,
+  node distance=6mm and 11mm,
+  stage/.style={draw, rounded corners=3pt, align=center, minimum width=44mm, minimum height=11mm, inner sep=3pt},
+  side/.style={draw, rounded corners=3pt, align=center, minimum width=40mm, minimum height=11mm, inner sep=3pt},
+  final/.style={stage, very thick, fill=black!6},
+  decision/.style={draw, diamond, aspect=2.2, align=center, inner sep=1pt},
+  flow/.style={-{Stealth[length=2.2mm]}, semithick},
+  note/.style={font=\footnotesize\itshape, text=black!70},
+]
+  \node[stage] (analyze) {\textbf{1 Analyze the repository}\\[-1pt]\footnotesize dependency graph; functions and classes};
+  \node[stage, below=of analyze] (intent) {\textbf{2 Infer intent}\\[-1pt]\footnotesize static signals + confidence; LLM if unsure};
+  \node[stage, below=of intent] (generate) {\textbf{3 Generate tests}\\[-1pt]\footnotesize intent, source, import line, related API};
+  \node[stage, below=of generate] (run) {\textbf{4 Run each file}\\[-1pt]\footnotesize pytest; result per test};
+  \node[decision, below=of run] (pass) {All pass?};
+  \node[stage, below=8mm of pass] (suite) {\textbf{7 Run the whole suite}\\[-1pt]\footnotesize drop tests failing only alongside others};
+  \node[final, below=of suite] (written) {\textbf{Written test suite}\\[-1pt]\footnotesize passes, or explicit xfail};
+
+  \node[side, right=of pass] (repair) {\textbf{5 Repair}\\[-1pt]\footnotesize pytest output to the model;\\[-1pt]\footnotesize up to 2 rounds};
+  \node[side, right=of suite] (diagnose) {\textbf{6 Diagnose}\\[-1pt]\footnotesize code bug: keep as xfail\\[-1pt]\footnotesize wrong test or intent: drop};
+  \node[side, left=of intent] (dev) {\textbf{Developer}\\[-1pt]\footnotesize reviews and edits intents};
+
+  \draw[flow] (analyze) -- (intent);
+  \draw[flow] (intent) -- (generate);
+  \draw[flow] (generate) -- (run);
+  \draw[flow] (run) -- (pass);
+  \draw[flow] (pass) -- node[note, right] {yes} (suite);
+  \draw[flow] (suite) -- (written);
+  \draw[flow] (pass) -- node[note, above] {no} (repair);
+  \draw[flow] (repair.north) |- node[note, pos=0.25, right] {run again} (run.east);
+  \draw[flow] (repair) -- node[note, right] {still failing} (diagnose);
+  \draw[flow] (diagnose) -- node[note, above] {kept} (suite);
+  \draw[flow] (dev) -- (intent);
+\end{tikzpicture}

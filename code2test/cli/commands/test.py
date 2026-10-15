@@ -230,7 +230,10 @@ def test_command(
             
             suite = asyncio.run(run_batch())
             
-            display.show_summary_table(generator.get_stats())
+            if not dry_run:
+                show_run_metrics(generator.metrics)
+            else:
+                display.show_summary_table(generator.get_stats())
             
             if not dry_run:
                 display.success(f"Generated {suite.total_tests} tests in {len(suite.test_files)} files")
@@ -314,3 +317,41 @@ def _is_within(file_path: str, repo_path: Path, target: Path) -> bool:
         path = repo_path / path
     path = path.resolve()
     return path == target or target in path.parents
+
+
+def show_run_metrics(metrics) -> None:
+    """Print what the run produced, against the MVP targets."""
+    from rich.table import Table
+    from code2test.core.metrics import target_rows
+
+    summary = metrics.summary()
+    table = Table(title="Generation Results")
+    table.add_column("Metric")
+    table.add_column("Value", justify="right")
+    def pct(value) -> str:
+        return "n/a" if value is None else f"{value:.0%}"
+
+    table.add_row("Components", str(summary["components"]))
+    table.add_row("Components with passing tests", f"{summary['components_with_tests']} ({pct(summary['acceptance_rate'])})")
+    if summary["components_reused"]:
+        table.add_row("  of which verified in an earlier run", str(summary["components_reused"]))
+    if summary["skipped_low_confidence"]:
+        table.add_row("Skipped (intent below --confidence)", str(summary["skipped_low_confidence"]))
+    table.add_row("Tests generated", str(summary["tests_generated"]))
+    table.add_row("Passed on first run", f"{summary['first_run_passed']} ({pct(summary['first_run_pass_rate'])})")
+    table.add_row("Tests kept", str(summary["tests_kept"]))
+    table.add_row("  of which xfail (possible bugs)", str(summary["tests_xfail"]))
+    table.add_row("Tests dropped", str(summary["tests_dropped"]))
+    table.add_row("Repair rounds", str(summary["repair_rounds"]))
+    if summary["llm_failures"]:
+        table.add_row("Components where generation failed", str(summary["llm_failures"]))
+    console.print(table)
+
+    for name, value, target, met in target_rows({
+        "acceptance_rate": summary["acceptance_rate"],
+        "first_run_pass_rate": summary["first_run_pass_rate"],
+    }):
+        if value is None:
+            continue
+        mark = "[green]✓[/green]" if met else "[yellow]✗[/yellow]"
+        console.print(f"{mark} {name.replace('_', ' ')}: {value:.0%} (MVP target {target:.0%})")

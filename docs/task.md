@@ -114,13 +114,13 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
   - [x] pytest test file generation
   - [x] Fixture generation
   - [x] Test execution and result parsing
-- [x] Create `code2test/adapters/javascript/jest_adapter.py`:
-  - [x] Jest test file generation
-  - [x] Mock generation
-  - [x] Test execution and result parsing
-- [x] Create `code2test/adapters/java/junit_adapter.py`:
-  - [x] JUnit 5 test file generation
-  - [x] Test execution and result parsing
+- [ ] Create `code2test/adapters/javascript/jest_adapter.py` *(post-v1: adapter code exists but is not wired into generation or verification)*:
+  - [ ] Jest test file generation
+  - [ ] Mock generation
+  - [ ] Test execution and result parsing
+- [ ] Create `code2test/adapters/java/junit_adapter.py` *(post-v1: adapter code exists but is not wired into generation or verification)*:
+  - [ ] JUnit 5 test file generation
+  - [ ] Test execution and result parsing
 
 ### 4.2 Language-Specific Intent Extraction
 - [x] Refactor IntentExtractor for pluggable strategies
@@ -165,13 +165,19 @@ Transform CodeWiki (documentation generator) into Code2Test (test generator) usi
 - LLM Agents (Intent, Test, Diagnosis)
 - Verification System
 - CLI (Refactored & Interactive)
-- Adapters (Pytest, Jest, JUnit)
+- Pytest adapter and verification (Python)
 - Template System
 - CI/CD & Reporting
 - Batch Processing
 
-### 🆕 Planned
-- Phase 6: Gap Filling (Proposal Compliance)
+### Scope of v1
+- **Python only.** Test generation, verification and repair target pytest. Other
+  languages are analysed (dependency graph, intents) but get no tests; the CLI says so.
+- Jest/JUnit generation is planned for after v1.
+
+### MVP metrics (measured, see docs/real_model_run.md)
+- `code2test test` reports acceptance rate and first-run pass rate on every run.
+- `code2test benchmark` reports mutation score and diagnosis accuracy.
 
 ---
 
