@@ -8,7 +8,7 @@ Dependency analysis derived from FSoft AI4Code's CodeWiki.
 """
 
 __version__ = "0.1.0"
-__author__ = "Code2Test Contributors"
+__author__ = "Utkarsh Maurya"
 __license__ = "MIT"
 
 from code2test.cli.main import cli
