@@ -5,6 +5,7 @@ Main orchestrator for the test generation pipeline.
 """
 
 import logging
+import re
 import asyncio
 import os
 from pathlib import Path
@@ -522,8 +523,16 @@ class TestGenerator:
 
 
 def _first_line(text: Optional[str]) -> str:
-    """First non-empty line of a failure message, for logs."""
-    for line in (text or "").splitlines():
-        if line.strip():
-            return line.strip()[:200]
-    return "unknown failure"
+    """The most informative line of a failure message, for logs.
+
+    pytest prefixes the actual error with boilerplate ("collection failure",
+    tracebacks), so prefer the last `E   ...` line or a line naming an error.
+    """
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    for line in reversed(lines):
+        if line.startswith("E "):
+            return line[1:].strip()[:200]
+    for line in reversed(lines):
+        if re.search(r"\w+(Error|Exception):", line):
+            return line[:200]
+    return lines[0][:200] if lines else "unknown failure"

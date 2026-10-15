@@ -108,6 +108,8 @@ class DiagnosisAgent:
                 self.model,
                 system_prompt=DIAGNOSIS_SYSTEM_PROMPT,
                 output_type=DiagnosisResult,
+                # some models need more than one try to produce valid structured output
+                retries=3,
             )
         return self._agent
     

@@ -52,15 +52,15 @@ def test_mutants_change_one_site_each(tmp_path):
     assert "Gt -> LtE" in descriptions
     assert "Add -> Sub" in descriptions
     assert "3 -> 4" in descriptions
-    assert "'low' -> 'low_mutated'" in descriptions
+    assert "'low' -> 'lo'" in descriptions
     assert "return value -> None" in descriptions
     assert all(m.component_id == "m.check" for m in mutants)  # untested() is never mutated
-    assert not any("Doc._mutated" in m.source for m in mutants)  # docstrings are left alone
+    assert all('"""Doc."""' in m.source or "'Doc.'" in m.source for m in mutants)  # docstrings are left alone
 
 
 def test_break_expected_value():
     assert break_expected_value("def test_x():\n    assert f(2) == 5\n") == "def test_x():\n    assert f(2) == 6"
-    assert "'ab_wrong'" in break_expected_value("def test_x():\n    assert f() == 'ab'\n")
+    assert "== 'a'" in break_expected_value("def test_x():\n    assert f() == 'ab'\n")
     assert break_expected_value("def test_x():\n    assert f()\n") is None
 
 

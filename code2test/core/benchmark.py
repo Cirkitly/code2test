@@ -99,7 +99,7 @@ def _apply(node: ast.AST, kind: str) -> str:
         elif isinstance(old, int):
             node.value = old + 1
         else:
-            node.value = old + "_mutated"
+            node.value = _perturb_string(old)
         return f"{old!r} -> {node.value!r}"
     if kind == "return":
         node.value = ast.Constant(value=None)
@@ -146,6 +146,13 @@ def generate_mutants(repo_root: Path, rel_file: str, component_names: Dict[str, 
     return mutants
 
 
+def _perturb_string(value: str) -> str:
+    """A plausible-looking change to a string (no tell-tale markers like "_wrong")."""
+    if len(value) > 1:
+        return value[:-1]                      # drop the last character
+    return value.swapcase() if value.swapcase() != value else value + value
+
+
 # ---------------------------------------------------------------------------
 # Wrong tests (for TEST_WRONG diagnosis cases)
 # ---------------------------------------------------------------------------
@@ -170,7 +177,7 @@ def break_expected_value(test_code: str) -> Optional[str]:
                     elif isinstance(value.value, float):
                         value.value += 1.5
                     elif isinstance(value.value, str):
-                        value.value += "_wrong"
+                        value.value = _perturb_string(value.value)
                     else:
                         continue
                     return ast.unparse(tree)
@@ -282,13 +289,16 @@ class Benchmark:
             result.mutants_killed += 1
 
             failed = [c for c in run.cases if c.outcome == "failed"]
-            if failed and len(code_bug_cases) < max_diagnoses:
+            if failed:
                 case = failed[0]
                 test_case = self._find_test_case(mutant.component_id, case.name)
                 if test_case is not None:
                     component = dict(self.components.get(mutant.component_id, {}))
                     component["source_code"] = _component_source(mutant.source, mutant.component_id)
                     code_bug_cases.append((test_case, case.message, component))
+
+        if len(code_bug_cases) > max_diagnoses:
+            code_bug_cases = self.random.sample(code_bug_cases, max_diagnoses)
 
         if self.diagnosis_agent is not None:
             for test_case, message, component in code_bug_cases:
