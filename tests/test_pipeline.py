@@ -225,3 +225,20 @@ def test_low_confidence_intent_is_refined_by_llm(tmp_path):
     intent = intents["calc.ops.add"]
     assert intent.intent_text == INTENT["intent_text"]
     assert intent.confidence == 0.9
+
+
+def test_module_imports_are_resolved_to_absolute(tmp_path):
+    pkg = tmp_path / "shop"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "cart.py").write_text(
+        "import math\nfrom .models import Item\nfrom . import utils\nfrom typing import List\n\ndef total(items):\n    return 0\n"
+    )
+    agent = test_agent_mod.TestAgent(model="test", repo_path=str(tmp_path))
+    component = {"name": "total", "file_path": str(pkg / "cart.py"), "relative_path": "shop/cart.py"}
+    assert agent.module_imports_for(component).splitlines() == [
+        "import math",
+        "from shop.models import Item",
+        "from shop import utils",
+        "from typing import List",
+    ]

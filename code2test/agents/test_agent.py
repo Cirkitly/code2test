@@ -4,6 +4,7 @@ Code2Test Test Agent
 LLM-powered agent for generating tests from inferred intents.
 """
 
+import ast
 import logging
 import asyncio
 import os
@@ -66,6 +67,11 @@ PYTEST_GENERATION_PROMPT = """Generate pytest tests for the following component 
 **Confidence:** {confidence:.0%}
 
 **Import it with:** `{import_line}`
+
+**Imports at the top of its module (use them to import the types it works with):**
+```python
+{module_imports}
+```
 
 **Signature:**
 ```python
@@ -182,6 +188,7 @@ class TestAgent:
             signature=component.get("signature") or "",
             source_code=(component.get("source_code") or "")[:6000],  # Limit size
             import_line=self.import_line_for(component) or "(not importable: test via its module)",
+            module_imports=self.module_imports_for(component) or "# none",
         )
         
         try:
@@ -363,6 +370,35 @@ Use pytest syntax with appropriate fixtures."""
         if not module or not name.isidentifier():
             return None
         return f"from {module} import {name}"
+
+    def module_imports_for(self, component: Dict[str, Any]) -> str:
+        """Top-level import statements of the component's source file, made absolute."""
+        path = component.get("file_path") or ""
+        if self.repo_path and path and not os.path.isabs(path):
+            path = os.path.join(self.repo_path, path)
+        try:
+            with open(path, encoding="utf-8") as f:
+                tree = ast.parse(f.read())
+        except (OSError, SyntaxError, ValueError):
+            return ""
+
+        package = (self.module_path_for(component) or "").split(".")
+        if not str(path).endswith("__init__.py"):
+            package = package[:-1]
+
+        lines = []
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                lines.append(ast.unparse(node))
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:  # resolve relative imports so tests can use them
+                    base = package[: len(package) - node.level + 1] if node.level <= len(package) else []
+                    module = ".".join(base + ([node.module] if node.module else []))
+                    names = ", ".join(a.name + (f" as {a.asname}" if a.asname else "") for a in node.names)
+                    lines.append(f"from {module} import {names}" if module else ast.unparse(node))
+                else:
+                    lines.append(ast.unparse(node))
+        return "\n".join(lines[:40])
 
     def _ensure_import(self, imports: List[str], component: Dict[str, Any]) -> List[str]:
         """Make sure the component under test is imported."""
