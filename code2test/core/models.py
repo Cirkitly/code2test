@@ -263,3 +263,14 @@ class GenerationConfig(BaseModel):
     framework: TestFramework = TestFramework.PYTEST
     model: Any = "openai:gpt-4o-mini"  # pydantic-ai model name or Model instance
     max_fix_attempts: int = 2
+
+
+def is_xfail(test_case: TestCase) -> bool:
+    """A test kept as an expected failure (suspected code bug)."""
+    return (bool(test_case.diagnosis and test_case.diagnosis.cause == DiagnosisCause.CODE_BUG)
+            or "pytest.mark.xfail" in test_case.test_code)
+
+
+def passing_count(test_file: TestFile) -> int:
+    """Tests that really pass: not skipped, not expected failures."""
+    return sum(1 for tc in test_file.test_cases if tc.status == TestStatus.PASSED and not is_xfail(tc))

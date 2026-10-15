@@ -27,6 +27,7 @@ Python only. Test generation, verification and repair target pytest. Files in ot
 - [x] `intent show|edit|export`
 - [x] `benchmark`: mutation score and diagnosis accuracy on failures of known cause
 - [x] `report summary`: intents by confidence
+- [x] `report coverage` and the `--report` output: behavioral coverage (behaviors tested, mutants caught) and diagnostic accuracy per component
 - [x] `init`: writes a starter `.code2test/config.json`
 - [x] `config set|show|validate`: API key and model; `validate` sends the model one test request
 
@@ -47,8 +48,8 @@ Python only. Test generation, verification and repair target pytest. Files in ot
 
 ## Not done
 
-- [ ] `code2test report coverage` (the command says it is not implemented)
 - [ ] Markdown run reports
+- [ ] Intent Alignment Score (proposal Section 7.1), which needs semantic similarity between tests and intents
 - [ ] Settings from `.code2test/config.json` (written by `init`, not read by other commands)
 - [ ] Incremental generation for changed files only (re-runs reuse verified tests per component, whether or not the code changed)
 - [ ] An experiment on code with known bugs, to test whether intent-first generation avoids locking bugs into the suite (see the paper's Discussion)

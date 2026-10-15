@@ -242,21 +242,24 @@ def test_command(
                 if report != "none":
                     display.info(f"Generating {report} report...")
                     try:
+                        from code2test.core.quality import quality_report
                         from code2test.reporting import HTMLReportGenerator, JSONReportGenerator
-                        
+
                         report_dir = Path(output_dir) / "reports"
                         report_dir.mkdir(parents=True, exist_ok=True)
-                        
+                        intents = generator.intent_db.get_all_intents_dict()
+                        quality = quality_report(repo_path, generator.test_registry.get_all_tests(), intents)
+
                         if report in ["html", "all"]:
                             html_path = report_dir / "report.html"
                             html_gen = HTMLReportGenerator()
-                            html_gen.generate_report(suite, generator.intent_db.get_all_intents_dict(), str(html_path))
+                            html_gen.generate_report(suite, intents, str(html_path), quality=quality)
                             display.success(f"HTML report generated: {html_path}")
-                            
+
                         if report in ["json", "all"]:
                             json_path = report_dir / "report.json"
                             json_gen = JSONReportGenerator()
-                            json_gen.generate_report(suite, generator.intent_db.get_all_intents_dict(), str(json_path))
+                            json_gen.generate_report(suite, intents, str(json_path), quality=quality)
                             display.success(f"JSON report generated: {json_path}")
                             
                     except Exception as e:

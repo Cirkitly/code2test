@@ -20,6 +20,8 @@ from code2test.core.models import (
     VerificationResult,
     GenerationConfig,
     DiagnosisCause,
+    is_xfail,
+    passing_count,
 )
 from code2test.core.intent import IntentExtractor
 from code2test.core.metrics import RunMetrics
@@ -251,7 +253,7 @@ class TestGenerator:
                                  reused = self.metrics.file(comp_id, existing.path)
                                  reused.reused = True
                                  reused.kept = len(existing.test_cases)
-                                 reused.passing = _passing(existing)
+                                 reused.passing = passing_count(existing)
                          return None
 
                 # Skip low-confidence intents in auto mode
@@ -372,8 +374,8 @@ class TestGenerator:
                     self.verifier.write_test_file(tf)
                     file_metrics = self.metrics.file(tf.component_id, tf.path)
                     file_metrics.kept = len(tf.test_cases)
-                    file_metrics.xfail = sum(1 for tc in tf.test_cases if _is_xfail(tc))
-                    file_metrics.passing = _passing(tf)
+                    file_metrics.xfail = sum(1 for tc in tf.test_cases if is_xfail(tc))
+                    file_metrics.passing = passing_count(tf)
                     self.test_registry.register_test(tf)
                     if tf.verified:
                         self.test_registry.mark_verified(tf.path)
@@ -510,8 +512,8 @@ class TestGenerator:
 
         test_file.verified = result.all_passed
         file_metrics.kept = len(test_file.test_cases)
-        file_metrics.xfail = sum(1 for tc in test_file.test_cases if _is_xfail(tc))
-        file_metrics.passing = _passing(test_file)
+        file_metrics.xfail = sum(1 for tc in test_file.test_cases if is_xfail(tc))
+        file_metrics.passing = passing_count(test_file)
         self.test_registry.register_test(test_file)
         if test_file.verified:
             self.test_registry.mark_verified(test_file.path)
@@ -556,13 +558,3 @@ def _first_line(text: Optional[str]) -> str:
         if re.search(r"\w+(Error|Exception):", line):
             return line[:200]
     return lines[0][:200] if lines else "unknown failure"
-
-
-def _is_xfail(tc) -> bool:
-    """A test kept as an expected failure (suspected code bug)."""
-    return bool(tc.diagnosis and tc.diagnosis.cause == DiagnosisCause.CODE_BUG) or "pytest.mark.xfail" in tc.test_code
-
-
-def _passing(test_file: TestFile) -> int:
-    """Tests that really pass: not skipped, not expected failures."""
-    return sum(1 for tc in test_file.test_cases if tc.status == TestStatus.PASSED and not _is_xfail(tc))

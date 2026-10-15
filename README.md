@@ -99,7 +99,7 @@ The suite Code2Test writes therefore always passes: every test either passes or 
 | `code2test verify [PATH]` | Run tests; optionally diagnose or repair failures |
 | `code2test benchmark [PATH]` | Measure mutation score and diagnosis accuracy of the generated tests |
 | `code2test intent show\|edit\|export [NAME]` | Review or correct inferred intents |
-| `code2test report` | Summarize stored intents by confidence |
+| `code2test report summary\|coverage` | Summarize stored intents, or report behavioral coverage and diagnostic accuracy |
 | `code2test init` | Write a starter `.code2test/config.json` (the other commands take their settings from options, not from this file) |
 | `code2test config set\|show\|validate` | Store the API key and model (`--api-key`, `--main-model`); `validate` sends the model one test request |
 | `code2test version` | Show the installed version |
@@ -149,6 +149,16 @@ The benchmark also scores the diagnosis agent on failures whose cause is known. 
 | `--diagnoses N` | 10 | Diagnosis cases per expected cause; 0 skips the LLM step |
 | `--timeout SECONDS` | 120 | pytest timeout per run |
 
+### `code2test report coverage`
+
+Reports test quality per component:
+
+- **Behaviors tested.** The distinct behaviors that the component's passing tests check, as stated for each generated test, next to its inferred intent.
+- **Mutants killed.** The share of injected bugs in the component that the generated suite catches.
+- **Diagnostic accuracy.** How often the diagnosis agent named the right cause of a failure with a known cause.
+
+The last two come from the most recent `code2test benchmark` run; the report says when that run predates the current tests. `--format html` or `json` writes the report to `tests/reports/`; `code2test test --report` includes the same section.
+
 ### Continuous integration
 
 `code2test test --auto --exit-code` and `code2test verify` both exit non-zero on failure. Examples for GitHub Actions and GitLab CI are in [`examples/ci`](examples/ci).
@@ -164,6 +174,7 @@ The benchmark also scores the diagnosis agent on failures whose cause is known. 
 | `.code2test/dependency_graphs/` | The analyzed dependency graph |
 | `.code2test/config.json` | Starter settings written by `code2test init` (not read by other commands) |
 | `tests/reports/report.html`, `report.json` | Run reports, when `--report` is used |
+| `tests/reports/coverage.html`, `coverage.json` | Coverage reports from `code2test report coverage --format html\|json` |
 
 ## Results
 

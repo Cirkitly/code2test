@@ -1,21 +1,14 @@
 """
 HTML Reporting Module.
 """
-import os
 import datetime
-from typing import Dict, Any, List
-from jinja2 import Environment, BaseLoader
+from typing import Any, Dict, Optional
 
-from code2test.core.models import TestSuite, Intent
+from jinja2 import DictLoader, Environment
 
-class HTMLReportGenerator:
-    """Generates HTML reports for test generation results."""
-    
-    TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Code2Test Report - {{ suite.module_path }}</title>
+from code2test.core.models import Intent, TestSuite
+
+STYLE = """
     <style>
         body { font-family: sans-serif; margin: 2rem; background: #f5f5f5; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -34,7 +27,93 @@ class HTMLReportGenerator:
         .badge-success { background: #d1e7dd; color: #0f5132; }
         .badge-danger { background: #f8d7da; color: #842029; }
         .badge-warning { background: #fff3cd; color: #664d03; }
+        .note { color: #666; font-size: 0.9rem; }
+        details summary { cursor: pointer; }
     </style>
+"""
+
+# Behavioral coverage and diagnostic accuracy (code2test.core.quality.quality_report)
+QUALITY_SECTION = """
+        <h2>Test Quality</h2>
+        {% set b = quality.benchmark %}
+        <div class="summary">
+            <div class="card">
+                <h3>Behaviors Tested</h3>
+                <div class="value">{{ quality.summary.behaviors_tested }}</div>
+            </div>
+            <div class="card">
+                <h3>Mutation Score</h3>
+                <div class="value">{% if b.mutation_score is not none %}{{ "%.0f"|format(b.mutation_score * 100) }}%{% else %}n/a{% endif %}</div>
+            </div>
+            <div class="card">
+                <h3>Diagnostic Accuracy</h3>
+                <div class="value">{% if b.diagnosis_accuracy is not none %}{{ "%.0f"|format(b.diagnosis_accuracy * 100) }}%{% else %}n/a{% endif %}</div>
+            </div>
+        </div>
+        <p class="note">
+            Behaviors tested: distinct behaviors checked by passing tests, as stated for each generated test.
+            Mutation score: share of injected single-site behavior changes the generated suite detects.
+            Diagnostic accuracy: share of failures with a known cause that the diagnosis agent classified correctly.
+            {% if not b.available %}
+            Mutation score and diagnostic accuracy come from <code>code2test benchmark</code>, which has not been run.
+            {% else %}
+            From the <code>code2test benchmark</code> run of {{ b.created_at or "an unknown date" }}.
+            {% if b.stale %}<strong>That run predates the last <code>code2test test</code> run, so it measured an earlier suite.</strong>{% endif %}
+            {% endif %}
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Component</th>
+                    <th>Intent</th>
+                    <th>Passing tests</th>
+                    <th>Behaviors tested</th>
+                    <th>Mutants killed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in quality.components %}
+                <tr>
+                    <td>{{ c.component }}</td>
+                    <td>{{ c.intent or "" }}</td>
+                    <td>{{ c.tests_passing }}{% if c.tests_xfail %} (+{{ c.tests_xfail }} xfail){% endif %}</td>
+                    <td>
+                        {% if c.behaviors_tested %}
+                        <details><summary>{{ c.behaviors_tested|length }}</summary>
+                            <ul>{% for item in c.behaviors_tested %}<li>{{ item }}</li>{% endfor %}</ul>
+                        </details>
+                        {% else %}0{% endif %}
+                    </td>
+                    <td>{% if c.mutants %}{{ c.mutants_killed }}/{{ c.mutants }} ({{ "%.0f"|format(c.mutation_score * 100) }}%){% else %}n/a{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+"""
+
+COVERAGE_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Code2Test Coverage Report</title>
+    {% include "style" %}
+</head>
+<body>
+    <div class="container">
+        <h1>Code2Test Coverage Report</h1>
+        <p>Generated on: {{ timestamp }}</p>
+        {% include "quality" %}
+    </div>
+</body>
+</html>
+"""
+
+TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Code2Test Report - {{ suite.module_path }}</title>
+    {% include "style" %}
 </head>
 <body>
     <div class="container">
@@ -59,6 +138,7 @@ class HTMLReportGenerator:
                 <div class="value">{{ "%.1f"|format(success_rate) }}%</div>
             </div>
         </div>
+        {% if quality %}{% include "quality" %}{% endif %}
         
         <h2>Test Files</h2>
         <table>
@@ -115,36 +195,57 @@ class HTMLReportGenerator:
     </div>
 </body>
 </html>
-    """
+"""
 
-    def generate_report(self, test_suite: TestSuite, intents: Dict[str, Intent], output_path: str) -> str:
+
+class HTMLReportGenerator:
+    """Generates HTML reports for test generation results."""
+
+    TEMPLATE = TEMPLATE
+
+    def _env(self) -> Environment:
+        loader = DictLoader({"style": STYLE, "quality": QUALITY_SECTION,
+                             "report": self.TEMPLATE, "coverage": COVERAGE_TEMPLATE})
+        return Environment(loader=loader, autoescape=True)
+
+    def generate_report(self, test_suite: TestSuite, intents: Dict[str, Intent], output_path: str,
+                        quality: Optional[Dict[str, Any]] = None) -> str:
         """
         Generate comprehensive HTML report.
-        
+
         Args:
             test_suite: The generated test suite
             intents: Dictionary of detected intents
             output_path: Path to write the HTML report to
-            
+            quality: Behavioral coverage and diagnostic accuracy (code2test.core.quality.quality_report)
+
         Returns:
             The generated HTML content
         """
-        env = Environment(loader=BaseLoader(), autoescape=True)
-        template = env.from_string(self.TEMPLATE)
-        
         verified_count = sum(1 for f in test_suite.test_files if f.verified)
         total_files = len(test_suite.test_files)
         success_rate = (verified_count / total_files * 100) if total_files > 0 else 0
-        
-        html_content = template.render(
+
+        html_content = self._env().get_template("report").render(
             suite=test_suite,
             intents=intents,
+            quality=quality,
             timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             verified_count=verified_count,
             success_rate=success_rate
         )
-        
+
         with open(output_path, 'w') as f:
             f.write(html_content)
-            
+
+        return html_content
+
+    def generate_quality_report(self, quality: Dict[str, Any], output_path: str) -> str:
+        """Write a standalone page with behavioral coverage and diagnostic accuracy."""
+        html_content = self._env().get_template("coverage").render(
+            quality=quality,
+            timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        )
+        with open(output_path, "w") as f:
+            f.write(html_content)
         return html_content

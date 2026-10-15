@@ -17,6 +17,7 @@ import ast
 import logging
 import random
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -228,6 +229,9 @@ class BenchmarkResult:
     diagnosis_cases: List[DiagnosisCase] = field(default_factory=list)
     diagnosis_error: Optional[str] = None     # set when the model could not be reached
     restored_files: List[str] = field(default_factory=list)  # left mutated by an earlier, killed run
+    # Per component: mutants run, killed by the whole suite, killed by the component's own tests
+    by_component: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
     @property
     def mutation_score(self) -> Optional[float]:
@@ -252,6 +256,7 @@ class BenchmarkResult:
             row["cases"] += 1
             row["correct"] += int(c.correct)
         return {
+            "created_at": self.created_at,
             "mutation_score": self.mutation_score,
             "mutants_total": self.mutants_total,
             "mutants_killed": self.mutants_killed,
@@ -262,6 +267,7 @@ class BenchmarkResult:
             "diagnosis_error": self.diagnosis_error,
             "restored_files": self.restored_files,
             "survivors": self.survivors,
+            "by_component": self.by_component,
             "diagnosis_cases": [{**asdict(c), "correct": c.correct} for c in self.diagnosis_cases],
         }
 
@@ -358,11 +364,14 @@ class Benchmark:
                 backup.unlink(missing_ok=True)
 
             result.mutants_total += 1
+            counts = result.by_component.setdefault(mutant.component_id, {"mutants": 0, "killed": 0, "killed_by_own_tests": 0})
+            counts["mutants"] += 1
             if run.ok or run.returncode == 5:
                 result.survivors.append({"file": mutant.file, "line": mutant.line,
                                          "component": mutant.component_id, "mutation": mutant.description})
                 continue
             result.mutants_killed += 1
+            counts["killed"] += 1
 
             # Failures in the mutated component's own tests: the per-component score,
             # and the only failures shown to the diagnosis agent (its intent matches)
@@ -371,6 +380,7 @@ class Benchmark:
                       and test_file_for_classname(self.repo_root, c.classname) in mine]
             if failed:
                 result.mutants_killed_by_own_tests += 1
+                counts["killed_by_own_tests"] += 1
                 case = failed[0]
                 test_case = self._find_test_case(mutant.component_id, case.name)
                 source, offset = _component_source(mutant.source, mutant.component_id, mutant.line)

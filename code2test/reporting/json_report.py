@@ -3,14 +3,15 @@ JSON Reporting Module.
 """
 import json
 import datetime
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
 from code2test.core.models import TestSuite, Intent
 
 class JSONReportGenerator:
     """Generates JSON reports for machine consumption."""
     
-    def generate_report(self, test_suite: TestSuite, intents: Dict[str, Intent], output_path: str) -> Dict[str, Any]:
+    def generate_report(self, test_suite: TestSuite, intents: Dict[str, Intent], output_path: str,
+                        quality: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Generate JSON report data.
         
@@ -18,6 +19,7 @@ class JSONReportGenerator:
             test_suite: The generated test suite
             intents: Dictionary of intents
             output_path: Path to write the JSON report to
+            quality: Behavioral coverage and diagnostic accuracy (code2test.core.quality.quality_report)
             
         Returns:
             The report dictionary
@@ -57,10 +59,21 @@ class JSONReportGenerator:
                     "confidence": intent.confidence,
                     "user_edited": intent.user_edited
                 } for comp_id, intent in intents.items()
-            }
+            },
+            "quality": quality,
         }
         
         with open(output_path, 'w') as f:
             json.dump(report_data, f, indent=2)
             
+        return report_data
+
+    def generate_quality_report(self, quality: Dict[str, Any], output_path: str) -> Dict[str, Any]:
+        """Write behavioral coverage and diagnostic accuracy as JSON."""
+        report_data = {
+            "metadata": {"timestamp": datetime.datetime.now().isoformat(), "tool": "code2test", "version": "0.1.0"},
+            **quality,
+        }
+        with open(output_path, "w") as f:
+            json.dump(report_data, f, indent=2)
         return report_data

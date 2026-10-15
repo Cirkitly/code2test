@@ -39,7 +39,8 @@ graph TD
 | `code2test/storage/` | SQLite intent database and test registry in `.code2test/code2test.db` |
 | `code2test/core/metrics.py` | Per-run metrics written to `.code2test/metrics.json` |
 | `code2test/core/benchmark.py` | Mutation testing and diagnosis-accuracy evaluation for `code2test benchmark` |
-| `code2test/reporting/` | HTML and JSON run reports |
+| `code2test/core/quality.py` | Behavioral coverage and diagnostic accuracy per component, from the test registry and the last benchmark |
+| `code2test/reporting/` | HTML and JSON run and coverage reports |
 
 ## Intent extraction
 
@@ -96,4 +97,4 @@ All three agents use pydantic-ai with typed structured output and up to three ou
 
    The changes leave no marker, such as a `_wrong` suffix, that would give the answer away.
 
-Results are written to `.code2test/benchmark.json`, including every surviving mutant and every diagnosis case.
+Results are written to `.code2test/benchmark.json`, including every surviving mutant, every diagnosis case and the mutants run and caught per component. `code2test report coverage` and the `--report` output show them per component, next to the behaviors each component's passing tests check.

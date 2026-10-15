@@ -2,9 +2,12 @@
 
 import json
 
+import os
+
 from code2test.core.models import (
-    Intent, TestCase as Case, TestFile as File, TestStatus as Status, TestSuite as Suite,
+    Diagnosis, DiagnosisCause, Intent, TestCase as Case, TestFile as File, TestStatus as Status, TestSuite as Suite,
 )
+from code2test.core.quality import quality_report
 from code2test.reporting import HTMLReportGenerator, JSONReportGenerator
 
 
@@ -70,3 +73,78 @@ def test_html_report_escapes_code_text(tmp_path):
     assert "tests/test_b.py" in html and "pkg.a" in html
     assert "<script>x</script>" not in html
     assert "a &lt; b" in html
+
+
+
+def _quality_repo(tmp_path, benchmark=True):
+    state = tmp_path / ".code2test"
+    state.mkdir(parents=True)
+    (state / "metrics.json").write_text("{}")
+    if benchmark:
+        (state / "benchmark.json").write_text(json.dumps({
+            "created_at": "2026-10-15T12:00:00+00:00", "mutation_score": 0.75, "mutants_killed": 3,
+            "mutants_total": 4, "diagnosis_accuracy": 0.5,
+            "diagnosis_by_expected_cause": {"CODE_BUG": {"cases": 2, "correct": 1, "unscored": 0}},
+            "by_component": {"pkg.a": {"mutants": 4, "killed": 3, "killed_by_own_tests": 2}},
+        }))
+        os.utime(state / "metrics.json", (1, 1))  # the benchmark ran after the last generation
+    return tmp_path
+
+
+def _quality_files():
+    def case(name, behavior, status=Status.PASSED, code="assert True", diagnosis=None):
+        return Case(name=name, intent_text=behavior, test_code=f"def {name}():\n    {code}\n",
+                    status=status, diagnosis=diagnosis)
+    bug = Diagnosis(test_name="test_bug", cause=DiagnosisCause.CODE_BUG, confidence=0.9, explanation="wrong output")
+    return [File(path="tests/test_a.py", component_id="pkg.a", component_path="pkg/a.py", test_cases=[
+        case("test_one", "Returns the sum"),
+        case("test_two", "returns  the SUM"),          # same behavior, other wording
+        case("test_three", "Rejects strings"),
+        case("test_skip", "Handles None", status=Status.SKIPPED),
+        case("test_bug", "Rounds halves up", status=Status.XFAIL, diagnosis=bug),
+    ])]
+
+
+def test_quality_report_counts_distinct_behaviors_of_passing_tests(tmp_path):
+    _, intents = make_suite()
+    quality = quality_report(_quality_repo(tmp_path), _quality_files(), intents)
+
+    a = next(c for c in quality["components"] if c["component"] == "pkg.a")
+    assert a["behaviors_tested"] == ["Returns the sum", "Rejects strings"]
+    assert a["tests_passing"] == 3 and a["tests_xfail"] == 1
+    assert (a["mutants"], a["mutants_killed"], a["mutation_score"]) == (4, 3, 0.75)
+    b = next(c for c in quality["components"] if c["component"] == "pkg.b")
+    assert b["behaviors_tested"] == [] and b["mutants"] is None and b["intent"] == "<script>x</script>"
+
+    assert quality["summary"] == {"components": 2, "components_with_passing_tests": 1, "behaviors_tested": 2,
+                                  "mutation_score": 0.75, "diagnosis_accuracy": 0.5}
+    assert quality["benchmark"]["available"] and not quality["benchmark"]["stale"]
+    assert quality["benchmark"]["created_at"] == "2026-10-15T12:00:00+00:00"
+
+
+def test_quality_report_without_benchmark_and_with_a_stale_one(tmp_path):
+    _, intents = make_suite()
+    quality = quality_report(_quality_repo(tmp_path / "none", benchmark=False), _quality_files(), intents)
+    assert quality["benchmark"] == {"available": False, "stale": False}
+    assert quality["summary"]["mutation_score"] is None
+
+    repo = _quality_repo(tmp_path / "stale")
+    os.utime(repo / ".code2test" / "benchmark.json", (0, 0))  # generation ran after the benchmark
+    assert quality_report(repo, _quality_files(), intents)["benchmark"]["stale"]
+
+
+def test_reports_include_quality(tmp_path):
+    suite, intents = make_suite()
+    quality = quality_report(_quality_repo(tmp_path), _quality_files(), intents)
+
+    data = JSONReportGenerator().generate_report(suite, intents, str(tmp_path / "r.json"), quality=quality)
+    assert data["quality"]["summary"]["behaviors_tested"] == 2
+
+    html = HTMLReportGenerator().generate_report(suite, intents, str(tmp_path / "r.html"), quality=quality)
+    assert "Test Quality" in html and "Returns the sum" in html and "3/4 (75%)" in html
+    assert "<script>x</script>" not in html
+
+    page = HTMLReportGenerator().generate_quality_report(quality, str(tmp_path / "c.html"))
+    assert "Diagnostic Accuracy" in page and "50%" in page
+    assert JSONReportGenerator().generate_quality_report(quality, str(tmp_path / "c.json"))["summary"] == quality["summary"]
+

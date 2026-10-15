@@ -1,6 +1,7 @@
 """CLI-level tests: `test`, `verify`, `intent` against a small sample repository."""
 
 import importlib
+import json
 from pathlib import Path
 
 import pytest
@@ -185,6 +186,30 @@ def test_benchmark_command_reports_mutation_score(repo, monkeypatch):
     data = json.loads((repo / ".code2test" / "benchmark.json").read_text())
     assert data["mutants_total"] == 2 and data["mutants_killed"] == 2
     assert data["generation"]["acceptance_rate"] == 1.0
+
+
+
+def test_report_coverage_in_text_json_and_html(repo, monkeypatch):
+    use_model(monkeypatch, scripted([tests_reply(PASSING)]))
+    assert run("test", "--auto", "--confidence", "0", ".").exit_code == 0
+
+    result = run("report", "coverage")
+    assert result.exit_code == 0, result.output
+    assert "calc.ops.add" in result.output and "Run 'code2test benchmark'" in result.output
+
+    # After a benchmark, the mutation score and diagnostic accuracy appear
+    assert run("benchmark", "--diagnoses", "0", ".").exit_code == 0
+    result = run("report", "coverage")
+    assert "Mutation score: 100%" in result.output and "Diagnostic accuracy: n/a" in result.output
+
+    assert run("report", "coverage", "--format", "json").exit_code == 0
+    data = json.loads((repo / "tests/reports/coverage.json").read_text())
+    component = data["components"][0]
+    assert component["component"] == "calc.ops.add" and component["tests_passing"] == 1
+    assert component["mutants"] == component["mutants_killed"] > 0
+
+    assert run("report", "coverage", "--format", "html", "--output", "cov.html").exit_code == 0
+    assert "Test Quality" in (repo / "cov.html").read_text()
 
 
 class _Display:

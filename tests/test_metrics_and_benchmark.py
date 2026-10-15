@@ -98,6 +98,9 @@ def test_benchmark_kills_mutants_and_restores_source(tmp_path):
     assert result.mutants_total == 2  # a + b -> a - b, return value -> None
     assert result.mutants_killed == 2 and result.mutation_score == 1.0
     assert (repo / "calc/ops.py").read_text() == original
+    assert result.by_component == {"calc.ops.add": {"mutants": 2, "killed": 2, "killed_by_own_tests": 2}}
+    data = result.to_dict()
+    assert data["by_component"] == result.by_component and data["created_at"]
 
 
 def test_benchmark_scores_diagnoses_against_known_causes(tmp_path):
