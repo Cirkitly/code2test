@@ -36,6 +36,8 @@ class GeneratedTest(BaseModel):
 
 class TestGenerationResult(BaseModel):
     """Result from test generation."""
+
+    __test__ = False  # not a pytest test class
     tests: List[GeneratedTest]
     imports: List[str] = Field(default_factory=list)
     fixtures: List[str] = Field(default_factory=list)
@@ -132,6 +134,8 @@ class TestAgent:
     
     Generates tests based on inferred intents using the specified test framework.
     """
+
+    __test__ = False  # not a pytest test class
     
     def __init__(
         self,

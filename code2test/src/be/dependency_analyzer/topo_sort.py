@@ -97,25 +97,39 @@ def resolve_cycles(graph: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
     logger.debug(f"Detected {len(cycles)} cycles in the dependency graph")
     
     # Create a copy of the graph to modify
-    new_graph = {node: deps.copy() for node, deps in graph.items()}
-    
-    # Process each cycle
+    new_graph = {node: set(deps) for node, deps in graph.items()}
+
+    # Break every cycle inside each strongly connected component by removing
+    # DFS back edges (edges to a node still on the DFS path). Removing back
+    # edges from a DFS always leaves the subgraph acyclic.
     for i, cycle in enumerate(cycles):
         logger.debug(f"Cycle {i+1}: {' -> '.join(cycle)}")
-        
-        # Strategy: Break the cycle by removing the "weakest" dependency
-        # Here, we just arbitrarily remove the last edge to make the graph acyclic
-        # In a real-world scenario, you might use heuristics to determine which edge to break
-        # For example, removing edges between different modules before edges within the same module
-        for j in range(len(cycle) - 1):
-            current = cycle[j]
-            next_node = cycle[j + 1]
-            
-            if next_node in new_graph[current]:
-                logger.debug(f"Breaking cycle by removing dependency: {current} -> {next_node}")
-                new_graph[current].remove(next_node)
-                break
-    
+        members = set(cycle)
+        visited: Set[str] = set()
+        on_path: Set[str] = set()
+
+        for start in sorted(members):
+            if start in visited:
+                continue
+            # Iterative DFS: stack of (node, iterator over its in-SCC dependencies)
+            visited.add(start)
+            on_path.add(start)
+            stack = [(start, iter(sorted(new_graph.get(start, set()) & members)))]
+            while stack:
+                node, successors = stack[-1]
+                for succ in successors:
+                    if succ in on_path:
+                        logger.debug(f"Breaking cycle by removing dependency: {node} -> {succ}")
+                        new_graph[node].discard(succ)
+                    elif succ not in visited:
+                        visited.add(succ)
+                        on_path.add(succ)
+                        stack.append((succ, iter(sorted(new_graph.get(succ, set()) & members))))
+                        break
+                else:
+                    on_path.discard(node)
+                    stack.pop()
+
     return new_graph
 
 def topological_sort(graph: Dict[str, Set[str]]) -> List[str]:
@@ -132,41 +146,32 @@ def topological_sort(graph: Dict[str, Set[str]]) -> List[str]:
     # First, check for and resolve cycles
     acyclic_graph = resolve_cycles(graph)
     
-    # Initialize in-degree counter for all nodes
-    in_degree = {node: 0 for node in acyclic_graph}
-    
-    # Count in-degrees
-    for node, dependencies in acyclic_graph.items():
-        for dep in dependencies:
-            if dep in in_degree:
-                in_degree[dep] += 1
-    
-    # Queue of nodes with no dependencies (in-degree of 0)
-    queue = deque([node for node, degree in in_degree.items() if degree == 0])
-    
-    # Result list to store the topological order
+    # Kahn's algorithm: a node is ready once all of its dependencies are placed
+    remaining = {
+        node: {dep for dep in deps if dep in acyclic_graph and dep != node}
+        for node, deps in acyclic_graph.items()
+    }
+    dependents: Dict[str, Set[str]] = {node: set() for node in acyclic_graph}
+    for node, deps in remaining.items():
+        for dep in deps:
+            dependents[dep].add(node)
+
+    queue = deque(node for node in acyclic_graph if not remaining[node])
     result = []
-    
-    # Process nodes in topological order
     while queue:
         node = queue.popleft()
         result.append(node)
-        
-        # Reduce in-degree for each node that depends on the current node
-        for dependent, deps in acyclic_graph.items():
-            if node in deps:
-                in_degree[dependent] -= 1
-                if in_degree[dependent] == 0:
-                    queue.append(dependent)
-    
-    # Check if the sort was successful (all nodes included)
+        for dependent in dependents[node]:
+            remaining[dependent].discard(node)
+            if not remaining[dependent]:
+                queue.append(dependent)
+
     if len(result) != len(acyclic_graph):
         logger.warning("Topological sort failed: graph has cycles that weren't resolved")
         # Return all nodes in some order to avoid breaking the process
-        return list(acyclic_graph.keys())
-    
-    # Reverse the result to get dependencies first
-    return result[::-1]
+        return result + [n for n in acyclic_graph if n not in set(result)]
+
+    return result
 
 def dependency_first_dfs(graph: Dict[str, Set[str]]) -> List[str]:
     """

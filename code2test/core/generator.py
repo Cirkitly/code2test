@@ -40,6 +40,8 @@ class TestGenerator:
     2. Test generation
     3. Verification and refinement
     """
+
+    __test__ = False  # not a pytest test class
     
     def __init__(
         self,

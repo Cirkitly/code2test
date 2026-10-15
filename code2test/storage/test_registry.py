@@ -6,6 +6,7 @@ Tracks generated tests per component.
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -15,6 +16,8 @@ from code2test.core.models import TestFile, TestCase, TestStatus, TestFramework
 
 class TestRegistry:
     """Tracks generated tests per component."""
+
+    __test__ = False  # not a pytest test class
     
     def __init__(self, db_path: str):
         """
@@ -27,9 +30,19 @@ class TestRegistry:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
     
+    @contextmanager
+    def _connect(self):
+        """Open a connection that commits on success and is always closed."""
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def _init_database(self) -> None:
         """Initialize database schema."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS test_files (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +78,7 @@ class TestRegistry:
         imports_json = json.dumps(test_file.imports)
         fixtures_json = json.dumps(test_file.fixtures)
         
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute("""
                 INSERT OR REPLACE INTO test_files 
                 (path, component_id, component_path, framework, test_cases, 
@@ -95,7 +108,7 @@ class TestRegistry:
         Returns:
             TestFile if found, None otherwise
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 "SELECT * FROM test_files WHERE path = ?",
@@ -118,7 +131,7 @@ class TestRegistry:
         Returns:
             List of TestFile objects
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 "SELECT * FROM test_files WHERE component_id = ?",
@@ -136,7 +149,7 @@ class TestRegistry:
         Returns:
             True if updated, False if not found
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 "UPDATE test_files SET verified = 1 WHERE path = ?",
                 (test_file_path,)
@@ -151,7 +164,7 @@ class TestRegistry:
         Returns:
             List of unverified TestFile objects
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 "SELECT * FROM test_files WHERE verified = 0"
@@ -165,7 +178,7 @@ class TestRegistry:
         Returns:
             List of all TestFile objects
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 "SELECT * FROM test_files ORDER BY component_path"
@@ -182,7 +195,7 @@ class TestRegistry:
         Returns:
             True if deleted, False if not found
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 "DELETE FROM test_files WHERE path = ?",
                 (path,)
@@ -214,7 +227,7 @@ class TestRegistry:
     
     def get_stats(self) -> Dict[str, Any]:
         """Get registry statistics."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             total_files = conn.execute(
                 "SELECT COUNT(*) FROM test_files"
             ).fetchone()[0]

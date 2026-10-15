@@ -235,6 +235,14 @@ class PythonASTAnalyzer(ast.NodeVisitor):
                 tree = ast.parse(self.content)
             self.visit(tree)
 
+            # Calls are visited in source order, so a call to a function or class
+            # defined further down the file is not resolved yet: resolve it now.
+            module_path = self._get_module_path()
+            for rel in self.call_relationships:
+                if not rel.is_resolved and rel.callee in self.top_level_nodes:
+                    rel.callee = f"{module_path}.{rel.callee}"
+                    rel.is_resolved = True
+
             logger.debug(
                 f"Python analysis complete for {self.file_path}: {len(self.nodes)} nodes, "
                 f"{len(self.call_relationships)} relationships"

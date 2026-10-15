@@ -61,6 +61,8 @@ class TestVerifier:
     so no extra pytest plugins are needed.
     """
 
+    __test__ = False  # not a pytest test class
+
     def __init__(self, repo_path: str, timeout: int = 60):
         """
         Args:
