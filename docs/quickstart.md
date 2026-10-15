@@ -46,11 +46,11 @@ Code2Test infers an intent for each function and class, generates tests, runs th
 ```text
 Components                        13
 Components with passing tests     13 (100%)
-Tests generated                   302
-Passed on first run               231 (76%)
-Tests kept                        300
+Tests generated                   205
+Passed on first run               196 (96%)
+Tests kept                        205
   of which xfail (possible bugs)    0
-Tests dropped                     2
+Tests dropped                     0
 ```
 
 The tests are in `tests/`, one file per component. The same numbers are saved to `.code2test/metrics.json`.

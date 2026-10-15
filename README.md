@@ -4,7 +4,7 @@
 
 Code2Test generates pytest test suites for existing Python code using a large language model (LLM). Before it writes any test, it infers and records what each function and class is meant to do. It then runs every generated test, repairs failing tests from their pytest output, and writes only tests that pass. The one exception is a test that points at a likely bug, which is kept and marked as an expected failure.
 
-On two open-source libraries whose own tests were removed, Code2Test wrote test suites of 573 and 595 passing test cases. Those suites caught 100% and 79% of injected bugs ([results](#results)).
+On two open-source libraries whose own tests were removed, Code2Test produced passing tests for 96% to 100% of functions and classes, and the suites caught 59% to 78% of injected bugs ([results](#results)). A paper describing the tool and these results is in [`research/`](research/).
 
 ## Contents
 
@@ -165,26 +165,32 @@ The benchmark also scores the diagnosis agent on failures whose cause is known. 
 
 ## Results
 
-Measured with MiniMax `MiniMax-M3.1-Flash-Preview` on two open-source libraries, after removing each library's own tests. Details are in [docs/real_model_run.md](docs/real_model_run.md).
+Measured on two open-source libraries after removing each library's own tests, with two MiniMax models: `MiniMax-M3.1-Flash-Preview` (Flash) and `MiniMax-M3` (M3). Each configuration was run once.
 
-| Measure | [inflection](https://pypi.org/project/inflection/) 0.5.1 | [TinyDB](https://pypi.org/project/tinydb/) 4.8.2 | Target |
-| --- | --- | --- | --- |
-| Code under test | 426 lines, 13 components | 2,170 lines, 26 components | |
-| Components with passing tests | 100% (13 of 13) | 92% (24 of 26) | 70% |
-| Generated tests passing before any repair | 76% (231 of 302) | 69% (375 of 541) | 80% |
-| Test cases in the written suite | 573, all passing | 595, all passing | |
-| Injected bugs caught (mutation score) | 100% (80 of 80) | 79% (63 of 80) | |
-| Diagnosis accuracy on failures with a known cause | 97% (29 of 30) | 93% (28 of 30) | 75% |
-| Time to generate, run and repair | 293 s | 466 s | |
+| Measure | inflection, Flash | inflection, M3 | TinyDB, Flash | TinyDB, M3 | Target |
+| --- | --- | --- | --- | --- | --- |
+| Components with passing tests | 100% (13 of 13) | 100% (13 of 13) | 96% (25 of 26) | 96% (25 of 26) | 70% |
+| Generated tests passing before any repair | 96% (196 of 205) | 85% (147 of 172) | 87% (411 of 471) | 99% (294 of 297) | 80% |
+| Test cases in the written suite | 408, all passing | 326, all passing | 531, all passing but 1 skipped | 432, all passing | |
+| Injected bugs caught (mutation score) | 59% (47 of 80) | 73% (58 of 80) | 78% (62 of 80) | 76% (61 of 80) | |
+| Diagnosis accuracy on failures with a known cause | 97% (29 of 30) | 100% (30 of 30) | 100% (30 of 30) | 100% (30 of 30) | 75% |
+| Time to generate, run and repair | 193 s | 407 s | 314 s | 815 s | |
 
-The targets come from the project proposal ([docs/proposal.md](docs/proposal.md)). Two of the three are met. The repair loop brings every written suite to 100% passing, but only 69% to 76% of tests pass before any repair, against a target of 80%. Of TinyDB's 17 uncaught mutants, 11 change string literals that tests rarely observe, such as hash keys and error messages.
+inflection 0.5.1 has 426 lines and 13 components; TinyDB 4.8.2 has 2,170 lines and 26 components. The targets come from the project proposal ([docs/proposal.md](docs/proposal.md)), and every run met all three.
+
+The mutation scores show where the generated suites are weak:
+
+- In inflection, half of the sampled mutants fall in `_irregular`, which builds the rules for irregular words such as *person*/*people*. The Flash run wrote a single test for it that checks only how many rules are added, and caught 9 of its 40 mutants. Outside `_irregular`, the suites caught 38 of 40 (Flash) and 40 of 40 (M3).
+- In TinyDB, most surviving mutants change string literals, such as error messages and the names `Query` uses as hash keys, which tests rarely observe.
+
+On these well-documented libraries, nearly every inferred intent came from the docstring. The paper ([`research/paper/main.pdf`](research/paper/main.pdf)) describes the setup, analyzes these results and compares Code2Test with related tools. The generated suites, intents and raw results are in [`research/data/`](research/data/).
 
 ## Limitations
 
 - **Python only.** Other languages are analyzed but get no tests; the tool says so when it skips them.
 - **Behavior is inferred, not specified.** Expected values come from the inferred intent and the source. Review generated tests before relying on them, as you would review a colleague's.
 - **Each run calls the model.** A run sends source code to the configured provider and costs API usage: one or more calls per component, plus repairs.
-- **Results come from two libraries and one model.** Larger codebases, code with external services, and other models are not yet measured.
+- **Results come from two libraries and two models of one provider, one run each.** Larger codebases, code with external services, other models and run-to-run variance are not yet measured.
 
 ## Development
 
@@ -200,7 +206,8 @@ Further documentation:
 - [docs/architecture.md](docs/architecture.md): components and data flow
 - [docs/quickstart.md](docs/quickstart.md): a step-by-step first run
 - [docs/proposal.md](docs/proposal.md): the original project proposal and its success criteria
-- [docs/real_model_run.md](docs/real_model_run.md): measured runs with a real model
+- [docs/real_model_run.md](docs/real_model_run.md): the first real-model runs and the failures they exposed
+- [research/](research/): the paper, experiment scripts and raw results
 - [docs/task.md](docs/task.md): implementation status
 
 ## License
