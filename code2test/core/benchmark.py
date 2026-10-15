@@ -296,6 +296,15 @@ class Benchmark:
     def backup_dir(self) -> Path:
         return self.repo_root / ".code2test" / "benchmark_backup"
 
+    def _remove_empty_backup_dirs(self) -> None:
+        if not self.backup_dir.is_dir():
+            return
+        for directory in sorted((p for p in self.backup_dir.rglob("*") if p.is_dir()), reverse=True):
+            if not any(directory.iterdir()):
+                directory.rmdir()
+        if not any(self.backup_dir.iterdir()):
+            self.backup_dir.rmdir()
+
     def restore_leftovers(self) -> List[str]:
         """Restore source files an earlier, killed run left mutated (from their on-disk backup)."""
         restored = []
@@ -355,6 +364,8 @@ class Benchmark:
                     component = dict(self.components.get(mutant.component_id, {}))
                     component["source_code"] = source
                     code_bug_cases.append((test_case, case.message, component))
+
+        self._remove_empty_backup_dirs()
 
         if len(code_bug_cases) > max_diagnoses:
             code_bug_cases = self.random.sample(code_bug_cases, max_diagnoses)

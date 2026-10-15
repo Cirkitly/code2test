@@ -174,7 +174,7 @@ def test_benchmark_restores_crlf_source_byte_for_byte(tmp_path):
     asyncio.run(Benchmark(repo, [tf], intents, components).run(max_mutants=10))
 
     assert source.read_bytes() == original
-    assert not list((repo / ".code2test" / "benchmark_backup").rglob("*.py"))
+    assert not (repo / ".code2test" / "benchmark_backup").exists()
 
 
 def test_benchmark_restores_files_left_mutated_by_a_killed_run(tmp_path):
