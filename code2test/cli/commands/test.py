@@ -143,8 +143,11 @@ def test_command(
     # Get configured model
     cli_config = config_manager.get_config()
     main_model = cli_config.main_model if cli_config and cli_config.main_model else None
-    
-    # If no model configured, infer from env/keys
+
+    # Explicit override, e.g. CODE2TEST_MODEL=anthropic:claude-sonnet-5-5 or "test" for an offline dry run
+    if os.environ.get("CODE2TEST_MODEL"):
+        main_model = os.environ["CODE2TEST_MODEL"]
+
     # If no model configured, infer from env/keys
     if not main_model:
         llm_backend = os.environ.get("LLM_BACKEND", "").lower()

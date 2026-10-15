@@ -6,7 +6,8 @@ Executes and verifies generated tests, collecting results and triggering diagnos
 
 import subprocess
 import logging
-import json
+import sys
+import xml.etree.ElementTree as ET
 import os
 import tempfile
 from typing import Dict, List, Any, Optional
@@ -76,59 +77,38 @@ class TestVerifier:
             test_path.parent.mkdir(parents=True, exist_ok=True)
             test_path.write_text(test_file.get_full_content())
         
-        # Create temp file for JSON results
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json_path = f.name
-        
+        # Create temp file for JUnit XML results (built into pytest, no plugin needed)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+            report_path = f.name
+
         try:
-            # Run pytest with JSON report
             result = subprocess.run(
                 [
-                    "python", "-m", "pytest",
+                    sys.executable, "-m", "pytest",
                     str(test_path),
-                    f"--json-report",
-                    f"--json-report-file={json_path}",
+                    f"--junitxml={report_path}",
                     "-v",
                     "--tb=short",
+                    "-p", "no:cacheprovider",
                 ],
                 cwd=str(self.repo_path),
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
             )
-            
+
             stdout = result.stdout
             stderr = result.stderr
-            
-            # Parse JSON report if available
-            passed = []
-            failed = []
-            skipped = []
-            
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path) as f:
-                        report = json.load(f)
-                    
-                    for test in report.get("tests", []):
-                        name = test.get("nodeid", "").split("::")[-1]
-                        outcome = test.get("outcome", "")
-                        
-                        if outcome == "passed":
-                            passed.append(name)
-                        elif outcome == "failed":
-                            failed.append(name)
-                        elif outcome == "skipped":
-                            skipped.append(name)
-                            
-                except Exception as e:
-                    logger.warning(f"Failed to parse JSON report: {e}")
-                    # Fall back to parsing stdout
-                    passed, failed, skipped = self._parse_pytest_output(stdout)
-            else:
-                # Parse stdout for results
+
+            passed, failed, skipped = self._parse_junit_report(report_path)
+            if not (passed or failed or skipped):
                 passed, failed, skipped = self._parse_pytest_output(stdout)
-            
+
+            # pytest exit codes: 0 = all passed, 1 = failures, 2+ = collection/usage errors,
+            # 5 = no tests collected. Anything but 0 means the file is not verified.
+            if result.returncode != 0 and not failed:
+                failed = [f"pytest exited with code {result.returncode}"]
+
             # Update test case statuses
             for tc in test_file.test_cases:
                 if tc.name in passed:
@@ -169,8 +149,29 @@ class TestVerifier:
             
         finally:
             # Cleanup temp file
-            if os.path.exists(json_path):
-                os.unlink(json_path)
+            if os.path.exists(report_path):
+                os.unlink(report_path)
+
+    def _parse_junit_report(self, report_path: str) -> tuple[List[str], List[str], List[str]]:
+        """Parse a pytest JUnit XML report into (passed, failed, skipped) test names."""
+        passed, failed, skipped = [], [], []
+        if not os.path.exists(report_path) or os.path.getsize(report_path) == 0:
+            return passed, failed, skipped
+        try:
+            root = ET.parse(report_path).getroot()
+        except ET.ParseError as e:
+            logger.warning(f"Failed to parse JUnit report: {e}")
+            return passed, failed, skipped
+
+        for case in root.iter("testcase"):
+            name = case.get("name", "").split("[")[0]
+            if case.find("failure") is not None or case.find("error") is not None:
+                failed.append(name)
+            elif case.find("skipped") is not None:
+                skipped.append(name)
+            else:
+                passed.append(name)
+        return passed, failed, skipped
     
     def _parse_pytest_output(self, output: str) -> tuple[List[str], List[str], List[str]]:
         """

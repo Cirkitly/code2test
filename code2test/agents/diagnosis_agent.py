@@ -102,7 +102,7 @@ class DiagnosisAgent:
             self._agent = Agent(
                 self.model,
                 system_prompt=DIAGNOSIS_SYSTEM_PROMPT,
-                result_type=DiagnosisResult,
+                output_type=DiagnosisResult,
             )
         return self._agent
     
@@ -148,14 +148,14 @@ class DiagnosisAgent:
                 "CODE_BUG": DiagnosisCause.CODE_BUG,
                 "INTENT_WRONG": DiagnosisCause.INTENT_WRONG,
             }
-            cause = cause_map.get(result.data.cause, DiagnosisCause.TEST_WRONG)
+            cause = cause_map.get(result.output.cause, DiagnosisCause.TEST_WRONG)
             
             return Diagnosis(
                 test_name=test_case.name,
                 cause=cause,
-                confidence=result.data.confidence,
-                explanation=result.data.explanation,
-                suggested_fix=result.data.suggested_fix,
+                confidence=result.output.confidence,
+                explanation=result.output.explanation,
+                suggested_fix=result.output.suggested_fix,
                 stack_trace=failure_output[:500] if failure_output else None,
             )
             

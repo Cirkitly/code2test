@@ -85,13 +85,17 @@ class TestGenerator:
     @property
     def test_agent(self) -> TestAgent:
         if self._test_agent is None:
-            self._test_agent = TestAgent(model=self.config.model)
+            self._test_agent = TestAgent(
+                model=self.config.model,
+                repo_path=str(self.repo_path),
+                output_dir=self.config.output_dir or "tests",
+            )
         return self._test_agent
     
     @property
     def diagnosis_agent(self) -> DiagnosisAgent:
         if self._diagnosis_agent is None:
-            self._diagnosis_agent = DiagnosisAgent()
+            self._diagnosis_agent = DiagnosisAgent(model=self.config.model)
         return self._diagnosis_agent
     
     async def generate_tests_for_module(
@@ -202,10 +206,6 @@ class TestGenerator:
             List of generated test files
         """
         logger.info("Phase 2: Generating tests...")
-        test_files: List[TestFile] = []
-        
-        logger.info("Phase 2: Generating tests...")
-        test_files: List[TestFile] = []
         
         # Concurrency limit
         semaphore = asyncio.Semaphore(5)

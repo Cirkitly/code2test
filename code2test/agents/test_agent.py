@@ -6,6 +6,8 @@ LLM-powered agent for generating tests from inferred intents.
 
 import logging
 import asyncio
+import os
+import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
@@ -89,14 +91,23 @@ class TestAgent:
     Generates tests based on inferred intents using the specified test framework.
     """
     
-    def __init__(self, model: str = "openai:gpt-4o-mini"):
+    def __init__(
+        self,
+        model: str = "openai:gpt-4o-mini",
+        repo_path: Optional[str] = None,
+        output_dir: str = "tests",
+    ):
         """
         Initialize test agent.
         
         Args:
             model: LLM model to use for generation
+            repo_path: Repository root, used to make source paths relative
+            output_dir: Directory (relative to repo root) where tests are written
         """
         self.model = model
+        self.repo_path = repo_path
+        self.output_dir = output_dir or "tests"
         self._agent = None
     
     def _get_agent(self) -> Agent:
@@ -171,7 +182,7 @@ class TestAgent:
             
             # Build test file path
             component_path = component.get("file_path", "unknown.py")
-            test_path = self._generate_test_path(component_path)
+            test_path = self._generate_test_path(component_path, component)
             
             return TestFile(
                 path=test_path,
@@ -188,7 +199,7 @@ class TestAgent:
             logger.error(f"Test generation failed: {e}")
             # Return empty test file
             return TestFile(
-                path=self._generate_test_path(component.get("file_path", "unknown.py")),
+                path=self._generate_test_path(component.get("file_path", "unknown.py"), component),
                 component_id=component.get("id", component.get("name", "unknown")),
                 component_path=component.get("file_path", ""),
                 test_cases=[],
@@ -267,7 +278,7 @@ Use pytest syntax with appropriate fixtures."""
             ]
             
             module_path = module.get("path", "unknown")
-            test_path = f"tests/integration/test_{module.get('name', 'module')}.py"
+            test_path = os.path.join(self.output_dir, "integration", f"test_{module.get('name', 'module')}.py")
             
             return TestFile(
                 path=test_path,
@@ -282,40 +293,54 @@ Use pytest syntax with appropriate fixtures."""
         except Exception as e:
             logger.error(f"Integration test generation failed: {e}")
             return TestFile(
-                path=f"tests/integration/test_{module.get('name', 'module')}.py",
+                path=os.path.join(self.output_dir, "integration", f"test_{module.get('name', 'module')}.py"),
                 component_id=f"module:{module.get('name', 'unknown')}",
                 component_path=module.get("path", ""),
                 test_cases=[],
                 framework=framework,
             )
     
-    def _generate_test_path(self, source_path: str) -> str:
+    def _generate_test_path(self, source_path: str, component: Optional[Dict[str, Any]] = None) -> str:
         """
         Generate test file path from source path.
-        
+
+        src/pkg/file.py + component "pkg.file.Foo" -> <output_dir>/pkg/test_file_foo.py.
+        Each component gets its own file so several components in one source
+        file don't overwrite each other.
+
         Args:
-            source_path: Path to source file
-            
+            source_path: Path to source file (absolute or relative to repo root)
+            component: Component data, used to make the file name unique
+
         Returns:
-            Path for test file
+            Path for test file, relative to the repo root
         """
-        # Convert src/module/file.py -> tests/module/test_file.py
-        import os
-        
+        if self.repo_path and os.path.isabs(source_path):
+            try:
+                source_path = os.path.relpath(source_path, self.repo_path)
+            except ValueError:
+                pass
+        source_path = source_path.lstrip(os.sep)
+
         dirname = os.path.dirname(source_path)
-        basename = os.path.basename(source_path)
-        
+        name = os.path.splitext(os.path.basename(source_path))[0]
+
         # Handle common patterns
-        if dirname.startswith("src/"):
+        if dirname == "src" or dirname.startswith("src" + os.sep):
             dirname = dirname[4:]  # Remove src/ prefix
-        
-        # Add test_ prefix to filename
-        if not basename.startswith("test_"):
-            name, ext = os.path.splitext(basename)
-            basename = f"test_{name}{ext}"
-        
-        return os.path.join("tests", dirname, basename) if dirname else os.path.join("tests", basename)
-    
+
+        if name.startswith("test_"):
+            name = name[5:]
+
+        comp_name = ""
+        if component:
+            comp_name = str(component.get("name") or component.get("id") or "").split(".")[-1]
+            comp_name = re.sub(r"\W+", "_", comp_name).strip("_").lower()
+
+        basename = f"test_{name}_{comp_name}.py" if comp_name and comp_name != name.lower() else f"test_{name}.py"
+
+        return os.path.join(self.output_dir, dirname, basename)
+
     def format_test_preview(self, test_file: TestFile) -> str:
         """
         Format test file for user preview.

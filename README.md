@@ -62,6 +62,9 @@ code2test test --auto --confidence 0.8 --exit-code src/
 *   `--confidence 0.8`: Only generate tests for intents with >80% confidence.
 *   `--exit-code`: Fail the build (exit 1) if any verification step fails.
 
+### Choosing a model
+Set `CODE2TEST_MODEL` to any [pydantic-ai model string](https://ai.pydantic.dev/models/) to override the configured model, e.g. `CODE2TEST_MODEL=openai:gpt-4o-mini` or `CODE2TEST_MODEL=anthropic:claude-sonnet-5-5`. `CODE2TEST_MODEL=test` runs the whole pipeline offline with a fake model (useful for checking your setup without an API key).
+
 ### 3. Reporting
 Generate detailed reports after a test run.
 

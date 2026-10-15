@@ -27,8 +27,10 @@ from ..utils import validate_mermaid_diagrams
 
 # There are some super strange "ascii can't decode x" errors,
 # that can be solved with setting the default encoding for stdout
-# (note that python3.6 doesn't have the reconfigure method)
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+# Reconfigure in place: replacing sys.stdout with a new wrapper closes the
+# original stream when it is garbage-collected (breaks pytest capture).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 TRUNCATED_MESSAGE: str = "<response clipped><NOTE>To save on context only part of this file has been shown to you. You should retry this tool after you have searched inside the file with `grep -n` in order to find the line numbers of what you are looking for.</NOTE>"
 MAX_RESPONSE_LEN: int = 16000
