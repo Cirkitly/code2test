@@ -60,8 +60,8 @@ before its benchmark started.
 
 ## Submitting to arXiv
 
-1. Replace the author block in `paper/main.tex` (currently "Code2Test Contributors") with the
-   authors' names, affiliations and contact addresses, and rebuild.
+1. Check the author block in `paper/main.tex`. It names Utkarsh Maurya and links the repository;
+   add an affiliation and a contact address if wanted, and rebuild.
 2. Run `make -C research/paper arxiv`. The bundle contains `main.tex`, `results.tex`,
    `figures/pipeline.tex` and the generated `main.bbl`, because arXiv does not run BibTeX.
 3. At <https://arxiv.org/submit>, upload `paper/arxiv.tar.gz`. Suggested primary category:
