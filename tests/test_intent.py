@@ -2,7 +2,7 @@
 
 import pytest
 
-from code2test.core.intent import IntentExtractor
+from code2test.core.intent import IntentExtractor, first_docstring_sentence
 from code2test.core.intent_analyzers import JavaAnalyzer, JavascriptAnalyzer, PythonAnalyzer
 
 TYPED = '''def add(a: int, b: int) -> int:
@@ -159,3 +159,26 @@ def test_clarification_questions_cover_missing_evidence(extractor):
     assert any("primary purpose" in q for q in questions)
     assert any("types of inputs" in q for q in questions)
     assert any("complex logic" in q for q in questions)
+
+
+@pytest.mark.parametrize(
+    "docstring, expected",
+    [
+        ("Return the sum of a and b.", "Return the sum of a and b"),
+        # Decimals and abbreviations do not end the sentence
+        (
+            "Return the total plus tax at rate (0.2 means 20%), rounded.",
+            "Return the total plus tax at rate (0.2 means 20%), rounded",
+        ),
+        ("Format an amount, e.g. '12.50 USD'. More.", "Format an amount, e.g. '12.50 USD'"),
+        # Wrapped lines are joined; later paragraphs are ignored
+        (
+            "Add rules for plurals and singular\nfor irregular words.\n\n:param word: x",
+            "Add rules for plurals and singular for irregular words",
+        ),
+        ("Is it valid? More text.", "Is it valid"),
+        ("No period at all", "No period at all"),
+    ],
+)
+def test_first_docstring_sentence(docstring, expected):
+    assert first_docstring_sentence(docstring) == expected

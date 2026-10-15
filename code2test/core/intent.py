@@ -19,6 +19,24 @@ from code2test.core.intent_analyzers import (
 )
 
 
+_ABBREVIATIONS = ("e.g.", "i.e.", "etc.", "vs.", "cf.")
+
+
+def first_docstring_sentence(docstring: str) -> str:
+    """
+    The first sentence of a docstring's summary paragraph, on one line, without its final period.
+
+    A sentence ends at '.', '!' or '?' followed by a space or the end of the paragraph, so
+    decimals such as 0.2 and abbreviations such as "e.g." do not end it.
+    """
+    paragraph = " ".join(docstring.strip().split("\n\n")[0].split())
+    for match in re.finditer(r"[.!?](?=\s|$)", paragraph):
+        if paragraph[: match.end()].lower().endswith(_ABBREVIATIONS):
+            continue
+        return paragraph[: match.start()].strip()
+    return paragraph.strip()
+
+
 @dataclass
 class IntentSignals:
     """Raw signals extracted from code for intent inference."""
@@ -227,8 +245,7 @@ class IntentExtractor:
 
         # Start with docstring if available
         if signals.docstring:
-            # Extract first sentence
-            first_sentence = signals.docstring.split(".")[0].strip()
+            first_sentence = first_docstring_sentence(signals.docstring)
             if first_sentence:
                 parts.append(first_sentence)
 
