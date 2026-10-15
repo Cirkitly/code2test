@@ -101,10 +101,8 @@ The suite Code2Test writes therefore always passes: every test either passes or 
 | `code2test intent show\|edit\|export [NAME]` | Review or correct inferred intents |
 | `code2test report` | Summarize stored intents by confidence |
 | `code2test init` | Write a starter `.code2test/config.json` (the other commands take their settings from options, not from this file) |
-| `code2test config set\|show\|validate` | Store the API key and model (`--api-key`, `--main-model`) |
+| `code2test config set\|show\|validate` | Store the API key and model (`--api-key`, `--main-model`); `validate` sends the model one test request |
 | `code2test version` | Show the installed version |
-
-The CLI also includes `code2test generate` and `code2test config agent`. They belong to CodeWiki's documentation generator, the project Code2Test's dependency analyzer comes from, and are not part of test generation.
 
 ### `code2test test`
 
@@ -224,4 +222,4 @@ Further documentation:
 
 ## License
 
-MIT
+MIT; see [LICENSE](LICENSE). The dependency analyzer is derived from [CodeWiki](https://github.com/FSoft-AI4Code/CodeWiki) (MIT, copyright 2025 FSoft-AI4Code), whose notice is kept in the LICENSE file.
